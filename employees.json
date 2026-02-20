@@ -1,0 +1,20 @@
+[
+  {
+    "_id": { "$oid": "65b1234567890abcdef00001" },
+    "name": "Noxolo",
+    "email": "nxlbeautybar@gmail.com",
+    "servicesOffered": [],
+    "isActive": true,
+    "createdAt": { "$date": "2024-01-01T09:00:00Z" },
+    "updatedAt": { "$date": "2024-01-01T09:00:00Z" }
+  },
+  {
+    "_id": { "$oid": "65b1234567890abcdef00002" },
+    "name": "Thandi",
+    "email": "thandi@nxlbeautybar.com",
+    "servicesOffered": [],
+    "isActive": true,
+    "createdAt": { "$date": "2024-01-01T09:00:00Z" },
+    "updatedAt": { "$date": "2024-01-01T09:00:00Z" }
+  }
+]

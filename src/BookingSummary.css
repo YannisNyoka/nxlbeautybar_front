@@ -1,0 +1,467 @@
+/* =============================================
+   NXL Beauty Bar — BookingSummary.css
+   Consistent with PaymentPage luxury aesthetic
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ---- Overlay ---- */
+.bs-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(45, 20, 10, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+  animation: bs-overlay-in 0.2s ease both;
+}
+
+@keyframes bs-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ---- Modal Panel ---- */
+.bs-modal {
+  background: #fff;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 2rem 2.2rem 1.6rem;
+  box-shadow: 0 24px 80px rgba(61, 31, 21, 0.3);
+  border: 1px solid rgba(255, 200, 170, 0.3);
+  position: relative;
+  animation: bs-modal-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.1) both;
+  box-sizing: border-box;
+
+  /* Custom scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: #e0ccc4 transparent;
+}
+
+.bs-modal::-webkit-scrollbar {
+  width: 4px;
+}
+.bs-modal::-webkit-scrollbar-track {
+  background: transparent;
+}
+.bs-modal::-webkit-scrollbar-thumb {
+  background: #e0ccc4;
+  border-radius: 4px;
+}
+
+@keyframes bs-modal-in {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ---- Header ---- */
+.bs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.2rem;
+}
+
+.bs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.bs-logo-dot {
+  width: 10px;
+  height: 10px;
+  background: #a0502e;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(160, 80, 46, 0.2);
+  flex-shrink: 0;
+}
+
+.bs-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #3d1f15;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.bs-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid #e0ccc4;
+  background: #fdf8f5;
+  color: #8a5a44;
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.bs-close-btn:hover {
+  background: #6b3528;
+  color: #fff;
+  border-color: #6b3528;
+}
+
+/* ---- Divider ---- */
+.bs-divider {
+  height: 1px;
+  background: #f0e4de;
+  margin: 1rem 0;
+}
+
+/* ---- Section ---- */
+.bs-section {
+  margin-bottom: 0.2rem;
+}
+
+.bs-section-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #b08070;
+  margin-bottom: 0.8rem;
+}
+
+/* ---- Service Chips ---- */
+.bs-services-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.bs-service-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 100%);
+  border: 1px solid #f0d8cc;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+}
+
+.bs-service-chip-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  margin-top: 0.05rem;
+}
+
+.bs-service-chip-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.bs-service-chip-name {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #3d1f15;
+}
+
+.bs-service-chip-meta {
+  font-size: 0.78rem;
+  color: #9e7060;
+  font-weight: 400;
+}
+
+.bs-service-chip-sub {
+  font-size: 0.76rem;
+  color: #a0502e;
+  font-style: italic;
+  margin-top: 0.1rem;
+}
+
+/* ---- Totals ---- */
+.bs-totals {
+  background: linear-gradient(160deg, #3d1f15 0%, #6b3528 100%);
+  border-radius: 12px;
+  padding: 0.9rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bs-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: rgba(255, 232, 214, 0.75);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.bs-total-price {
+  font-size: 0.95rem;
+  color: #ffe8d6;
+  font-weight: 600;
+  padding-top: 0.3rem;
+  border-top: 1px solid rgba(255, 232, 214, 0.15);
+  margin-top: 0.2rem;
+}
+
+/* ---- Appointment Details ---- */
+.bs-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #f5ece8;
+}
+
+.bs-detail-row:last-child {
+  border-bottom: none;
+}
+
+.bs-detail-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.bs-detail-text {
+  font-size: 0.9rem;
+  color: #3d1f15;
+  font-weight: 400;
+  flex: 1;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.bs-edit-btn {
+  background: transparent;
+  border: 1.5px solid #c07a5a;
+  color: #6b3528;
+  border-radius: 6px;
+  padding: 0.25rem 0.7rem;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.bs-edit-btn:hover {
+  background: #6b3528;
+  color: #fff;
+  border-color: #6b3528;
+}
+
+/* ---- Client Details ---- */
+.bs-client-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f5ece8;
+}
+
+.bs-client-row:last-of-type {
+  border-bottom: none;
+}
+
+.bs-phone-row {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.bs-client-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b08070;
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.bs-client-value {
+  font-size: 0.9rem;
+  color: #3d1f15;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ---- Phone Input ---- */
+.bs-phone-wrap {
+  display: flex;
+  align-items: center;
+  border: 1.5px solid #e0ccc4;
+  border-radius: 10px;
+  background: #fdf8f5;
+  overflow: hidden;
+  width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.bs-phone-wrap:focus-within {
+  border-color: #8a4a30;
+  box-shadow: 0 0 0 3px rgba(138, 74, 48, 0.1);
+  background: #fff;
+}
+
+.bs-phone-prefix {
+  padding: 0.65rem 0.8rem;
+  background: #f0e4de;
+  color: #6b3528;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border-right: 1.5px solid #e0ccc4;
+  font-family: 'DM Sans', sans-serif;
+  flex-shrink: 0;
+}
+
+.bs-phone-input {
+  border: none;
+  background: transparent;
+  padding: 0.65rem 0.8rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.92rem;
+  color: #3d1f15;
+  outline: none;
+  width: 100%;
+}
+
+.bs-phone-input::placeholder {
+  color: #c4a898;
+}
+
+.bs-phone-input.bs-phone-error + .bs-phone-wrap {
+  border-color: #e05252;
+}
+
+/* Error/Success states on the wrap when input has error class */
+.bs-phone-wrap:has(.bs-phone-error) {
+  border-color: #e05252;
+  box-shadow: 0 0 0 3px rgba(224, 82, 82, 0.1);
+}
+
+/* ---- Error & Success Messages ---- */
+.bs-error-msg {
+  background: #fff5f5;
+  border: 1px solid #fbb;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  color: #c0392b;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-top: 0.6rem;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.bs-success-msg {
+  background: #f0fff6;
+  border: 1px solid #7dca9e;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  color: #1a7a40;
+  font-size: 0.82rem;
+  font-weight: 500;
+  margin-top: 0.6rem;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ---- Confirm Button ---- */
+.bs-confirm-btn {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  margin-top: 1.4rem;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 20px rgba(93, 45, 25, 0.35);
+}
+
+.bs-confirm-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5c2e1e 0%, #8b4422 100%);
+  box-shadow: 0 6px 28px rgba(93, 45, 25, 0.45);
+  transform: translateY(-1px);
+}
+
+.bs-confirm-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.bs-confirm-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* ---- Spinner ---- */
+.bs-spinner-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.bs-spinner {
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  display: inline-block;
+  animation: bs-spin 0.7s linear infinite;
+}
+
+@keyframes bs-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- Note ---- */
+.bs-note {
+  font-size: 0.75rem;
+  color: #b08070;
+  text-align: center;
+  margin: 0.8rem 0 0;
+  line-height: 1.6;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.bs-note strong {
+  color: #6b3528;
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 480px) {
+  .bs-modal {
+    padding: 1.6rem 1.3rem 1.4rem;
+    border-radius: 16px;
+    max-height: 95vh;
+  }
+
+  .bs-title {
+    font-size: 1.3rem;
+  }
+
+  .bs-client-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.3rem;
+  }
+
+  .bs-phone-row {
+    flex-direction: column;
+  }
+}

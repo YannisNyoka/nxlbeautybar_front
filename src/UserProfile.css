@@ -1,0 +1,541 @@
+/* =============================================
+   NXL Beauty Bar — UserProfile.css
+   Luxury theme consistent with ConfirmationPopup
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ---- Page Background ---- */
+.nxl-profile-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
+  font-family: 'DM Sans', sans-serif;
+  position: relative;
+  overflow-x: hidden;
+  padding: 2rem 17rem 4rem;
+  box-sizing: border-box;
+}
+
+.nxl-profile-bg::before {
+  content: '';
+  position: fixed;
+  top: -120px;
+  right: -120px;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(255, 182, 153, 0.3) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.nxl-profile-bg::after {
+  content: '';
+  position: fixed;
+  bottom: -80px;
+  left: -80px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(255, 210, 185, 0.35) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---- Inner wrapper (centered) ---- */
+.nxl-profile-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ---- Loading state ---- */
+.nxl-profile-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.5rem;
+  color: #6b3528;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
+}
+
+/* ---- Header Panel ---- */
+.nxl-profile-header {
+  background: linear-gradient(160deg, #3d1f15 0%, #6b3528 100%);
+  border-radius: 18px;
+  padding: 1.5rem 3rem;
+  box-shadow: 0 12px 40px rgba(93, 45, 25, 0.3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  animation: nxl-profile-fadein 0.5s ease both;
+}
+
+@keyframes nxl-profile-fadein {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.nxl-profile-greeting {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.nxl-profile-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 179, 128, 0.25);
+  border: 2px solid rgba(255, 179, 128, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  flex-shrink: 0;
+}
+
+.nxl-profile-greeting-text h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #ffe8d6;
+  margin: 0 0 0.15rem;
+  letter-spacing: 0.02em;
+}
+
+.nxl-profile-greeting-text p {
+  font-size: 0.75rem;
+  color: rgba(255, 232, 214, 0.6);
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---- Header Buttons ---- */
+.nxl-profile-header-btns {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.nxl-profile-btn-primary {
+  padding: 0.65rem 1.3rem;
+  background: linear-gradient(135deg, #ffb380 0%, #e8925a 100%);
+  color: #3d1f15;
+  border: none;
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  box-shadow: 0 4px 14px rgba(255, 140, 80, 0.3);
+}
+
+.nxl-profile-btn-primary:hover {
+  background: linear-gradient(135deg, #ffc49a 0%, #f0a070 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 140, 80, 0.4);
+}
+
+.nxl-profile-btn-danger {
+  padding: 0.65rem 1.3rem;
+  background: transparent;
+  color: rgba(255, 232, 214, 0.75);
+  border: 1.5px solid rgba(255, 232, 214, 0.25);
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.22s ease;
+}
+
+.nxl-profile-btn-danger:hover {
+  background: rgba(220, 80, 60, 0.2);
+  border-color: rgba(255, 120, 100, 0.5);
+  color: #ffb3a0;
+}
+
+/* ---- Error Banner ---- */
+.nxl-profile-error-banner {
+  padding: 0.85rem 1.2rem;
+  background: rgba(255, 120, 100, 0.12);
+  border: 1px solid rgba(255, 120, 100, 0.3);
+  border-radius: 10px;
+  color: #c0392b;
+  font-size: 0.85rem;
+  border-left: 3px solid #e74c3c;
+}
+
+/* ---- Section Panels ---- */
+.nxl-profile-section {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  padding: 1.8rem 2rem;
+  box-shadow: 0 8px 30px rgba(93, 45, 25, 0.1);
+  border: 1px solid rgba(255, 210, 185, 0.4);
+  animation: nxl-profile-fadein 0.5s 0.15s ease both;
+}
+
+.nxl-profile-section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #3d1f15;
+  margin: 0 0 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nxl-profile-section-title span {
+  font-size: 1rem;
+}
+
+.nxl-profile-section-count {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9e7060;
+  background: rgba(107, 53, 40, 0.1);
+  border-radius: 20px;
+  padding: 0.15rem 0.6rem;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Empty State ---- */
+.nxl-profile-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #9e7060;
+}
+
+.nxl-profile-empty p {
+  margin: 0 0 1.2rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* ---- Appointment Cards Grid ---- */
+.nxl-profile-appts-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* ---- Appointment Card ---- */
+.nxl-profile-appt-card {
+  background: linear-gradient(160deg, #3d1f15 0%, #5c2e1e 100%);
+  border-radius: 14px;
+  padding: 1.3rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  box-shadow: 0 6px 20px rgba(93, 45, 25, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.nxl-profile-appt-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(93, 45, 25, 0.28);
+}
+
+.nxl-profile-appt-card.past {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(107, 53, 40, 0.15);
+}
+
+/* ---- Card Details ---- */
+.nxl-profile-appt-details h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #ffb380;
+  margin: 0 0 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+.nxl-profile-appt-card.past .nxl-profile-appt-details h3 {
+  color: #6b3528;
+}
+
+.nxl-profile-appt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.83rem;
+}
+
+.nxl-profile-appt-row .nxl-lbl {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 232, 214, 0.55);
+  font-weight: 500;
+  min-width: 60px;
+  padding-top: 0.05rem;
+  flex-shrink: 0;
+}
+
+.nxl-profile-appt-card.past .nxl-lbl {
+  color: #9e7060;
+}
+
+.nxl-profile-appt-row .nxl-val {
+  color: #ffe8d6;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.nxl-profile-appt-card.past .nxl-val {
+  color: #3d1f15;
+}
+
+/* Status badge */
+.nxl-status-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: capitalize;
+}
+
+.nxl-status-badge.completed {
+  background: rgba(125, 202, 158, 0.2);
+  color: #7dca9e;
+  border: 1px solid rgba(125, 202, 158, 0.3);
+}
+
+.nxl-status-badge.cancelled {
+  background: rgba(255, 120, 100, 0.15);
+  color: #ffb3a0;
+  border: 1px solid rgba(255, 120, 100, 0.25);
+}
+
+.nxl-status-badge.pending,
+.nxl-status-badge.confirmed {
+  background: rgba(255, 179, 128, 0.15);
+  color: #ffb380;
+  border: 1px solid rgba(255, 179, 128, 0.25);
+}
+
+/* ---- Card Action Buttons ---- */
+.nxl-profile-appt-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.nxl-profile-btn-reschedule {
+  padding: 0.5rem 1rem;
+  background: rgba(255, 179, 128, 0.15);
+  color: #ffb380;
+  border: 1.5px solid rgba(255, 179, 128, 0.35);
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.nxl-profile-btn-reschedule:hover {
+  background: rgba(255, 179, 128, 0.28);
+  border-color: #ffb380;
+  transform: translateY(-1px);
+}
+
+.nxl-profile-btn-cancel {
+  padding: 0.5rem 1rem;
+  background: rgba(220, 80, 60, 0.1);
+  color: #ffb3a0;
+  border: 1.5px solid rgba(220, 80, 60, 0.25);
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.nxl-profile-btn-cancel:hover:not(:disabled) {
+  background: rgba(220, 80, 60, 0.2);
+  border-color: rgba(220, 80, 60, 0.5);
+  transform: translateY(-1px);
+}
+
+.nxl-profile-btn-cancel:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ---- Reschedule Modal ---- */
+.nxl-profile-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 10, 5, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.nxl-profile-modal {
+  background: linear-gradient(160deg, #3d1f15 0%, #6b3528 100%);
+  border-radius: 18px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 24px 60px rgba(30, 10, 5, 0.5);
+  animation: nxl-profile-fadein 0.3s ease both;
+}
+
+.nxl-profile-modal h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #ffe8d6;
+  margin: 0 0 1.3rem;
+}
+
+.nxl-profile-modal-field {
+  margin-bottom: 1rem;
+}
+
+.nxl-profile-modal-field label {
+  display: block;
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 232, 214, 0.6);
+  margin-bottom: 0.35rem;
+  font-weight: 500;
+}
+
+.nxl-profile-modal-field input,
+.nxl-profile-modal-field select {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 232, 214, 0.2);
+  border-radius: 10px;
+  color: #ffe8d6;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  box-sizing: border-box;
+}
+
+.nxl-profile-modal-field select option {
+  background: #3d1f15;
+  color: #ffe8d6;
+}
+
+.nxl-profile-modal-field input:focus,
+.nxl-profile-modal-field select:focus {
+  border-color: #ffb380;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.nxl-profile-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.4rem;
+}
+
+.nxl-profile-modal-cancel {
+  padding: 0.65rem 1.2rem;
+  background: transparent;
+  color: rgba(255, 232, 214, 0.6);
+  border: 1.5px solid rgba(255, 232, 214, 0.2);
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nxl-profile-modal-cancel:hover {
+  color: rgba(255, 232, 214, 0.9);
+  border-color: rgba(255, 232, 214, 0.4);
+}
+
+.nxl-profile-modal-save {
+  padding: 0.65rem 1.4rem;
+  background: linear-gradient(135deg, #ffb380 0%, #e8925a 100%);
+  color: #3d1f15;
+  border: none;
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  box-shadow: 0 4px 14px rgba(255, 140, 80, 0.3);
+}
+
+.nxl-profile-modal-save:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffc49a 0%, #f0a070 100%);
+  transform: translateY(-1px);
+}
+
+.nxl-profile-modal-save:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ---- Fixed Footer Bar ---- */
+.nxl-profile-footer-bar {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100vw;
+  background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  color: #ffe8d6;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-align: center;
+  padding: 0.7rem 0;
+  z-index: 100;
+  box-shadow: 0 -4px 24px rgba(93, 45, 25, 0.2);
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 640px) {
+  .nxl-profile-bg { padding: 1.2rem 0.9rem 4rem; }
+  .nxl-profile-header { padding: 1.2rem 1.3rem; }
+  .nxl-profile-section { padding: 1.3rem 1.2rem; }
+  .nxl-profile-appt-card { flex-direction: column; }
+  .nxl-profile-appt-actions { flex-direction: row; }
+  .nxl-profile-header-btns { width: 100%; }
+  .nxl-profile-btn-primary,
+  .nxl-profile-btn-danger { flex: 1; text-align: center; }
+}

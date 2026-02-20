@@ -1,0 +1,567 @@
+/* =============================================
+   NXL Beauty Bar — HomePage.css
+   Consistent with PaymentPage luxury aesthetic
+   Warm brown palette · Cormorant + DM Sans
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ---- Variables (shared with entire app) ---- */
+:root {
+  --nxl-bg-start:    #fdf6f0;
+  --nxl-bg-mid:      #fce8db;
+  --nxl-bg-end:      #f9d9c8;
+  --nxl-dark:        #3d1f15;
+  --nxl-dark-mid:    #6b3528;
+  --nxl-accent:      #a0502e;
+  --nxl-light:       #c07a5a;
+  --nxl-muted:       #9e7060;
+  --nxl-border:      #e0ccc4;
+  --nxl-surface:     #fdf8f5;
+  --nxl-cream:       #ffe8d6;
+  --nxl-warm-label:  #b08070;
+  --nxl-shadow-sm:   0 4px 16px rgba(61,31,21,0.10);
+  --nxl-shadow-md:   0 8px 32px rgba(61,31,21,0.14);
+  --nxl-shadow-lg:   0 20px 60px rgba(61,31,21,0.22);
+  --nxl-radius:      18px;
+}
+
+/* ---- Page Shell ---- */
+.home-container {
+  /* Force full viewport width — overrides App.css / index.css constraints */
+  width: 100vw !important;
+  max-width: 100vw !important;
+  min-height: 100vh;
+  margin: 0 !important;
+  /* Override the old padding: 2rem 19rem that causes the half-screen layout */
+  padding: 0 0 5rem !important;
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 55%, var(--nxl-bg-end) 100%) !important;
+  background-color: unset !important;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--nxl-dark);
+  position: relative;
+  overflow-x: hidden;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+/* Decorative blobs — identical to PaymentPage */
+.home-container::before {
+  content: '';
+  position: fixed;
+  top: -120px;
+  right: -120px;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, rgba(255,182,153,0.35) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-container::after {
+  content: '';
+  position: fixed;
+  bottom: -80px;
+  left: -80px;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(255,210,185,0.4) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.home-container > * { position: relative; z-index: 1; }
+
+/* =============================================
+   HERO SECTION
+   ============================================= */
+.hero-section {
+  padding: 4rem 2rem 3rem;
+  margin-bottom: 0;
+  position: relative;
+}
+
+.hero-section h1 {
+  font-family: 'Cormorant Garamond', serif !important;
+  font-size: 4rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  color: var(--nxl-dark) !important;
+  margin-bottom: 0.4rem !important;
+  line-height: 1 !important;
+}
+
+.hero-section p {
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 0.8rem !important;
+  letter-spacing: 0.28em !important;
+  text-transform: uppercase !important;
+  color: var(--nxl-muted) !important;
+  margin-bottom: 2.5rem !important;
+}
+
+/* ---- Artist Image ---- */
+.nail-artist-section {
+  margin: 2rem 0 2.5rem;
+}
+
+.nail-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  margin-bottom: 0;
+}
+
+.artist-image {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 4px solid var(--nxl-light);
+  box-shadow:
+    0 0 0 8px rgba(192,122,90,0.12),
+    var(--nxl-shadow-lg);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.artist-image:hover {
+  transform: scale(1.03);
+  box-shadow:
+    0 0 0 10px rgba(192,122,90,0.18),
+    0 28px 72px rgba(61,31,21,0.28);
+}
+
+.artist-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---- Location Bar ---- */
+.location-bar {
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-dark-mid) 100%) !important;
+  color: var(--nxl-cream) !important;
+  padding: 0.85rem 2rem !important;
+  border-radius: 50px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  font-size: 0.82rem !important;
+  box-shadow: 0 6px 24px rgba(61,31,21,0.3) !important;
+  border: none !important;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  text-decoration: none !important;
+}
+
+.location-bar:hover {
+  box-shadow: 0 8px 32px rgba(61,31,21,0.4) !important;
+  transform: translateY(-2px);
+}
+
+/* ---- Booking Policy Button (overridden inline, but keep base) ---- */
+.hp-policy-btn {
+  background: linear-gradient(135deg, var(--nxl-dark-mid) 0%, var(--nxl-accent) 100%);
+  color: var(--nxl-cream);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  border: none;
+  border-radius: 50px;
+  padding: 0.6rem 1.3rem;
+  cursor: pointer;
+  box-shadow: var(--nxl-shadow-sm);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.hp-policy-btn:hover {
+  box-shadow: 0 6px 20px rgba(61,31,21,0.3);
+  transform: translateY(-1px);
+}
+
+/* Policy dropdown panel */
+.hp-policy-panel {
+  position: absolute;
+  top: calc(100% + 0.6rem);
+  right: 0;
+  width: 360px;
+  max-height: 75vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: var(--nxl-radius);
+  box-shadow: var(--nxl-shadow-lg);
+  border: 1px solid var(--nxl-border);
+  padding: 1.8rem;
+  font-family: 'DM Sans', sans-serif;
+  z-index: 200;
+  text-align: left;
+  scrollbar-width: thin;
+  scrollbar-color: var(--nxl-border) transparent;
+}
+
+.hp-policy-panel::-webkit-scrollbar { width: 4px; }
+.hp-policy-panel::-webkit-scrollbar-thumb { background: var(--nxl-border); border-radius: 4px; }
+
+.hp-policy-panel h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--nxl-dark);
+  margin-bottom: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+.hp-policy-panel p {
+  font-size: 0.85rem;
+  color: #555;
+  margin-bottom: 0.8rem;
+  line-height: 1.6;
+}
+
+.hp-policy-panel ul {
+  padding-left: 1rem;
+  margin: 0 0 1rem;
+}
+
+.hp-policy-panel li {
+  font-size: 0.82rem;
+  color: #333;
+  line-height: 1.9;
+}
+
+.hp-policy-panel li.hp-policy-highlight {
+  color: var(--nxl-accent);
+  font-weight: 700;
+}
+
+.hp-policy-banking {
+  margin-top: 0.8rem;
+  text-align: center;
+  padding: 1rem;
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%);
+  border-radius: 10px;
+  border: 1px solid var(--nxl-border);
+}
+
+.hp-policy-banking h3 {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--nxl-warm-label);
+  margin-bottom: 0.4rem;
+}
+
+.hp-policy-banking .hp-bank-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--nxl-dark);
+}
+
+.hp-policy-social {
+  margin-top: 0.8rem;
+  font-size: 0.8rem;
+  color: var(--nxl-muted);
+  text-align: center;
+  line-height: 1.9;
+}
+
+.hp-policy-close-btn {
+  margin-top: 1rem;
+  width: 100%;
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-accent) 100%);
+  color: var(--nxl-cream);
+  border: none;
+  border-radius: 10px;
+  padding: 0.6rem;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+}
+
+.hp-policy-close-btn:hover {
+  box-shadow: 0 4px 16px rgba(61,31,21,0.3);
+}
+
+/* Glow animation */
+@keyframes hp-glow {
+  0%   { box-shadow: 0 0 8px rgba(160,80,46,0.3); transform: scale(1); }
+  50%  { box-shadow: 0 0 22px rgba(160,80,46,0.7), 0 0 44px rgba(160,80,46,0.4); transform: scale(1.06); }
+  100% { box-shadow: 0 0 8px rgba(160,80,46,0.3); transform: scale(1); }
+}
+
+.hp-glow { animation: hp-glow 1s infinite; }
+
+/* =============================================
+   SECTION TITLE
+   ============================================= */
+.section-title {
+  font-family: 'Cormorant Garamond', serif !important;
+  font-size: 2rem !important;
+  font-weight: 700 !important;
+  color: var(--nxl-dark) !important;
+  letter-spacing: 0.04em !important;
+  margin-bottom: 1.8rem !important;
+}
+
+/* =============================================
+   ABOUT SECTION
+   ============================================= */
+.about-section {
+  max-width: 760px;
+  margin: 0 auto 3rem;
+  padding: 2.5rem 3rem;
+  background: #fff;
+  border-radius: var(--nxl-radius);
+  box-shadow: var(--nxl-shadow-md);
+  border: 1px solid var(--nxl-border);
+  text-align: left;
+  animation: hp-fade-up 0.5s 0.1s ease both;
+}
+
+.about-content p {
+  font-size: 1rem;
+  line-height: 1.85;
+  color: var(--nxl-muted);
+  font-weight: 400;
+}
+
+/* =============================================
+   SERVICES SECTION
+   ============================================= */
+.services-preview {
+  padding: 0 2rem;
+  margin-bottom: 3.5rem;
+}
+
+.services-grid {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+  gap: 1.4rem !important;
+  max-width: 860px !important;
+  margin: 0 auto !important;
+}
+
+/* Service card — flip card host */
+.service-card {
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: var(--nxl-radius) !important;
+  cursor: pointer;
+  transition: transform 0.2s ease !important;
+}
+
+.service-card:hover {
+  transform: translateY(-4px) !important;
+  box-shadow: none !important;
+}
+
+/* Card face shared styles (applied inline in JSX, but help from here) */
+.hp-card-face {
+  background: #fff;
+  border-radius: var(--nxl-radius);
+  box-shadow: var(--nxl-shadow-md);
+  border: 1px solid var(--nxl-border);
+  padding: 1.6rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.25s;
+}
+
+.hp-card-face:hover { border-color: var(--nxl-light); }
+
+/* Image circle */
+.hp-service-img-wrap {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  border: 3px solid var(--nxl-border);
+  box-shadow: var(--nxl-shadow-sm);
+}
+
+.hp-service-img-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Card headings */
+.service-card h3 {
+  font-family: 'Cormorant Garamond', serif !important;
+  font-size: 1.25rem !important;
+  font-weight: 700 !important;
+  color: var(--nxl-dark) !important;
+  margin-bottom: 0.3rem !important;
+}
+
+/* Card back list */
+.hp-card-back-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  text-align: center;
+}
+
+.hp-card-back-list li {
+  font-size: 0.88rem;
+  color: var(--nxl-muted);
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--nxl-border);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.hp-card-back-list li:last-child { border-bottom: none; }
+
+.hp-flip-hint {
+  font-size: 0.7rem;
+  color: var(--nxl-warm-label);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 0.5rem;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* =============================================
+   NAVIGATION / CTA SECTION
+   ============================================= */
+.navigation-section {
+  margin-bottom: 3rem;
+  padding: 0 2rem;
+}
+
+.navigation-links {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+
+/* Primary CTA — matches PaymentPage submit button */
+.nav-link.primary {
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-accent) 100%) !important;
+  color: var(--nxl-cream) !important;
+  border: none !important;
+  box-shadow: 0 6px 24px rgba(61,31,21,0.32) !important;
+  padding: 0.9rem 2.2rem !important;
+  border-radius: 50px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.92rem !important;
+  letter-spacing: 0.04em !important;
+  text-decoration: none !important;
+  display: inline-block;
+  transition: all 0.25s ease !important;
+}
+
+.nav-link.primary:hover {
+  box-shadow: 0 8px 30px rgba(61,31,21,0.44) !important;
+  transform: translateY(-2px) !important;
+  color: var(--nxl-cream) !important;
+  background: linear-gradient(135deg, #2d1510 0%, #8b4422 100%) !important;
+}
+
+/* Secondary — outlined style matching PaymentPage back/cancel buttons */
+.nav-link.secondary {
+  background: transparent !important;
+  color: var(--nxl-dark-mid) !important;
+  border: 1.5px solid var(--nxl-light) !important;
+  box-shadow: none !important;
+  padding: 0.9rem 2.2rem !important;
+  border-radius: 50px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  font-weight: 600 !important;
+  font-size: 0.92rem !important;
+  letter-spacing: 0.04em !important;
+  text-decoration: none !important;
+  display: inline-block;
+  transition: all 0.25s ease !important;
+}
+
+.nav-link.secondary:hover {
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-accent) 100%) !important;
+  color: var(--nxl-cream) !important;
+  border-color: transparent !important;
+  box-shadow: 0 6px 20px rgba(61,31,21,0.3) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* =============================================
+   CONTACT / SOCIAL SECTION
+   ============================================= */
+.contact-info {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  margin: 0 auto;
+  max-width: 600px;
+  padding: 1.8rem 2rem;
+  background: #fff;
+  border-radius: var(--nxl-radius);
+  box-shadow: var(--nxl-shadow-sm);
+  border: 1px solid var(--nxl-border);
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--nxl-dark-mid);
+}
+
+.contact-item a {
+  color: var(--nxl-dark-mid);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.contact-item a:hover { color: var(--nxl-accent); }
+
+/* =============================================
+   ANIMATIONS
+   ============================================= */
+@keyframes hp-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.hero-section        { animation: hp-fade-up 0.5s 0s ease both; }
+.about-section       { animation: hp-fade-up 0.5s 0.1s ease both; }
+.services-preview    { animation: hp-fade-up 0.5s 0.2s ease both; }
+.navigation-section  { animation: hp-fade-up 0.5s 0.3s ease both; }
+.contact-info        { animation: hp-fade-up 0.5s 0.4s ease both; }
+
+/* =============================================
+   RESPONSIVE
+   ============================================= */
+@media (max-width: 640px) {
+  .hero-section h1  { font-size: 2.6rem !important; }
+  .artist-image     { width: 150px; height: 150px; }
+  .about-section    { padding: 1.8rem 1.4rem; margin: 0 1rem 2.5rem; }
+  .services-preview { padding: 0 1rem; }
+  .navigation-links { flex-direction: column; align-items: center; }
+  .nav-link.primary,
+  .nav-link.secondary { width: 220px; text-align: center; }
+  .hp-policy-panel  { width: 92vw; right: -20px; }
+}

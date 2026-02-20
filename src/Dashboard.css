@@ -1,0 +1,741 @@
+/* =============================================
+   NXL Beauty Bar — Dashboard.css
+   Consistent with PaymentPage luxury aesthetic
+   Warm brown palette · Cormorant + DM Sans
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ---- CSS Variables ---- */
+:root {
+  --nxl-bg-start:     #fdf6f0;
+  --nxl-bg-mid:       #fce8db;
+  --nxl-bg-end:       #f9d9c8;
+  --nxl-dark:         #3d1f15;
+  --nxl-dark-mid:     #6b3528;
+  --nxl-accent:       #a0502e;
+  --nxl-light-accent: #c07a5a;
+  --nxl-muted:        #9e7060;
+  --nxl-border:       #e0ccc4;
+  --nxl-surface:      #fdf8f5;
+  --nxl-card-bg:      #ffffff;
+  --nxl-warm-label:   #b08070;
+  --nxl-text:         #3d1f15;
+  --nxl-cream:        #ffe8d6;
+  --nxl-panel-header: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  --nxl-shadow-sm:    0 4px 16px rgba(61, 31, 21, 0.1);
+  --nxl-shadow-md:    0 8px 32px rgba(61, 31, 21, 0.14);
+  --nxl-shadow-lg:    0 20px 60px rgba(61, 31, 21, 0.2);
+  --nxl-radius:       16px;
+  --nxl-font-display: "Cormorant Garamond", serif;
+  --nxl-font-body:    "DM Sans", sans-serif;
+}
+
+/* ==================================================
+   PAGE SHELL
+   Override App.css: padding:1rem 20rem, old gradient
+   ================================================== */
+.dashboard-container {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 100vh !important;
+  margin: 0 !important;
+  /* Kill the old 1rem 20rem padding */
+  padding: 1.5rem 2rem 4rem !important;
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 50%, var(--nxl-bg-end) 100%) !important;
+  background-color: unset !important;
+  font-family: var(--nxl-font-body) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  position: relative !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+
+/* Decorative blobs */
+.dashboard-container::before {
+  content: "";
+  position: fixed;
+  top: -120px;
+  right: -120px;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(255, 182, 153, 0.35) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dashboard-container::after {
+  content: "";
+  position: fixed;
+  bottom: -80px;
+  left: -80px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(255, 210, 185, 0.4) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.dashboard-container > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ==================================================
+   HEADER
+   Override App.css: white gradient, blue text-fill
+   ================================================== */
+.dashboard-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 1200px !important;
+  padding: 1rem 1.8rem !important;
+  /* Kill old white gradient */
+  background: linear-gradient(160deg, var(--nxl-dark) 0%, var(--nxl-dark-mid) 100%) !important;
+  border-radius: var(--nxl-radius) !important;
+  box-shadow: var(--nxl-shadow-lg) !important;
+  margin-bottom: 1.5rem !important;
+  border: none !important;
+}
+
+/* Kill blue webkit text-fill from App.css */
+.dashboard-header .header-left h1,
+.header-left h1 {
+  font-family: var(--nxl-font-display) !important;
+  font-size: 1.7rem !important;
+  font-weight: 700 !important;
+  color: var(--nxl-cream) !important;
+  letter-spacing: 0.05em !important;
+  margin: 0 !important;
+  -webkit-text-fill-color: var(--nxl-cream) !important;
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+}
+
+/* Override blue user-info pill from App.css */
+.dashboard-header .header-right .user-info,
+.header-right .user-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+  padding: 0.5rem 1rem !important;
+  background: rgba(255, 232, 214, 0.15) !important;
+  border: 1px solid rgba(255, 232, 214, 0.25) !important;
+  border-radius: 50px !important;
+  color: var(--nxl-cream) !important;
+  text-decoration: none !important;
+  box-shadow: none !important;
+  transition: background 0.2s !important;
+}
+
+.header-right .user-info:hover {
+  background: rgba(255, 232, 214, 0.28) !important;
+}
+
+.user-icon { font-size: 1rem !important; }
+
+.user-name {
+  font-family: var(--nxl-font-body) !important;
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+  color: var(--nxl-cream) !important;
+  letter-spacing: 0.02em !important;
+}
+
+/* ==================================================
+   WELCOME SECTION
+   Override App.css: old white gradient
+   ================================================== */
+.welcome-section {
+  width: 100% !important;
+  max-width: 1200px !important;
+  padding: 1.4rem 2rem !important;
+  background: var(--nxl-card-bg) !important;
+  border-radius: var(--nxl-radius) !important;
+  box-shadow: var(--nxl-shadow-sm) !important;
+  border: 1px solid var(--nxl-border) !important;
+  margin-bottom: 1.2rem !important;
+  text-align: center !important;
+}
+
+.welcome-section h2 {
+  font-family: var(--nxl-font-display) !important;
+  font-size: 1.6rem !important;
+  font-weight: 700 !important;
+  color: var(--nxl-dark) !important;
+  margin: 0 0 0.3rem !important;
+  letter-spacing: 0.02em !important;
+  /* Remove old blue override */
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: var(--nxl-dark) !important;
+  background-clip: unset !important;
+}
+
+.welcome-section p {
+  font-size: 0.9rem !important;
+  color: var(--nxl-muted) !important;
+  margin: 0 !important;
+  line-height: 1.6 !important;
+}
+
+/* ---- "Time slots for" label ---- */
+.db-slots-label {
+  width: 100%;
+  max-width: 1200px;
+  font-family: var(--nxl-font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--nxl-warm-label);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0.4rem 0 0.8rem;
+}
+
+.db-slots-label span {
+  display: block;
+  font-family: var(--nxl-font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--nxl-dark);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  margin-top: 0.1rem;
+}
+
+/* ==================================================
+   BOOKING INTERFACE GRID
+   Override App.css: width:140%, repeat(3,1fr), max-width:1400px
+   ================================================== */
+.booking-interface {
+  display: grid !important;
+  /* 4 columns (Services, Date, Time, Stylist) */
+  grid-template-columns: repeat(4, 1fr) !important;
+  gap: 1.2rem !important;
+  width: 100% !important;
+  max-width: 1200px !important;
+  margin-bottom: 1.4rem !important;
+  justify-content: unset !important;
+}
+
+@media (max-width: 1100px) {
+  .booking-interface { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+@media (max-width: 600px) {
+  .booking-interface { grid-template-columns: 1fr !important; }
+}
+
+/* ==================================================
+   BOOKING PANEL
+   Override App.css: old white gradient, 400px, border rgba(255,255,255,0.8)
+   ================================================== */
+.booking-panel {
+  background: var(--nxl-card-bg) !important;
+  border-radius: var(--nxl-radius) !important;
+  box-shadow: var(--nxl-shadow-sm) !important;
+  border: 1px solid var(--nxl-border) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  height: 420px !important;
+  transition: box-shadow 0.25s ease, transform 0.25s ease !important;
+}
+
+.booking-panel:hover {
+  box-shadow: var(--nxl-shadow-md) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* ==================================================
+   PANEL HEADER
+   Override App.css: blue gradient, wrong height/padding
+   ================================================== */
+.panel-header {
+  background: var(--nxl-panel-header) !important;
+  color: var(--nxl-cream) !important;
+  padding: 0.8rem 1.1rem !important;
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  cursor: pointer !important;
+  flex-shrink: 0 !important;
+  height: auto !important;
+  box-shadow: none !important;
+  transition: filter 0.2s !important;
+}
+
+.panel-header:hover {
+  /* Kill old blue hover, use brightness only */
+  background: var(--nxl-panel-header) !important;
+  filter: brightness(1.1) !important;
+  transform: none !important;
+}
+
+.panel-header h3 {
+  font-family: var(--nxl-font-body) !important;
+  font-size: 0.78rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  margin: 0 !important;
+  color: var(--nxl-cream) !important;
+  text-shadow: none !important;
+}
+
+.dropdown-arrow {
+  font-size: 0.75rem !important;
+  color: rgba(255, 232, 214, 0.7) !important;
+  transition: transform 0.25s ease !important;
+  font-weight: normal !important;
+  cursor: default !important;
+}
+
+.dropdown-arrow.collapsed { transform: rotate(-90deg) !important; }
+
+/* ---- Date Navigation ---- */
+.date-navigation {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.4rem !important;
+}
+
+.date-navigation button {
+  background: rgba(255, 232, 214, 0.2) !important;
+  border: 1px solid rgba(255, 232, 214, 0.3) !important;
+  color: var(--nxl-cream) !important;
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  width: 26px !important;
+  height: 26px !important;
+  border-radius: 6px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: background 0.2s !important;
+  padding: 0 !important;
+}
+
+.date-navigation button:hover {
+  background: rgba(255, 232, 214, 0.35) !important;
+  transform: none !important;
+}
+
+.date-navigation span {
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  color: var(--nxl-cream) !important;
+  text-shadow: none !important;
+}
+
+/* ==================================================
+   PANEL CONTENT
+   ================================================== */
+.panel-content {
+  padding: 0.9rem !important;
+  flex: 1 !important;
+  overflow-y: auto !important;
+  background: transparent !important;
+  display: flex !important;
+  flex-direction: column !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--nxl-border) transparent !important;
+}
+
+.panel-content::-webkit-scrollbar { width: 4px; }
+.panel-content::-webkit-scrollbar-track { background: transparent; }
+.panel-content::-webkit-scrollbar-thumb {
+  background: var(--nxl-border);
+  border-radius: 4px;
+}
+
+.panel-content label {
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  color: var(--nxl-warm-label) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  display: block !important;
+  margin-bottom: 0.3rem !important;
+}
+
+.panel-content select {
+  padding: 0.45rem 0.7rem !important;
+  border-radius: 8px !important;
+  border: 1.5px solid var(--nxl-border) !important;
+  background: var(--nxl-surface) !important;
+  font-family: var(--nxl-font-body) !important;
+  font-size: 0.83rem !important;
+  color: var(--nxl-dark) !important;
+  cursor: pointer !important;
+  outline: none !important;
+  margin-left: 0 !important;
+}
+
+.panel-content select:focus {
+  border-color: var(--nxl-accent) !important;
+  box-shadow: 0 0 0 3px rgba(160, 80, 46, 0.1) !important;
+}
+
+/* ==================================================
+   SERVICE ITEMS
+   Override App.css: blue hover/selected, border-bottom
+   ================================================== */
+.service-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 0.65rem 0.9rem !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  margin-bottom: 0.35rem !important;
+  border: 1.5px solid transparent !important;
+  border-bottom: 1.5px solid transparent !important;
+  background: var(--nxl-surface) !important;
+  box-shadow: none !important;
+  font-size: inherit !important;
+}
+
+.service-item:hover {
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
+  border-color: var(--nxl-light-accent) !important;
+  transform: translateX(3px) !important;
+  box-shadow: none !important;
+}
+
+.service-item.selected {
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-dark-mid) 100%) !important;
+  border-color: var(--nxl-dark) !important;
+  border-left: 1.5px solid var(--nxl-dark) !important;
+  box-shadow: 0 4px 14px rgba(61, 31, 21, 0.25) !important;
+  color: var(--nxl-cream) !important;
+}
+
+.service-item.selected .service-name,
+.service-item.selected .service-duration,
+.service-item.selected .service-price {
+  color: var(--nxl-cream) !important;
+}
+
+.service-name {
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+  color: var(--nxl-dark) !important;
+}
+
+.service-duration {
+  font-size: 0.75rem !important;
+  color: var(--nxl-muted) !important;
+  opacity: 1 !important;
+}
+
+.service-price {
+  font-size: 0.82rem !important;
+  font-weight: 600 !important;
+  color: var(--nxl-accent) !important;
+}
+
+/* ==================================================
+   CALENDAR
+   Override App.css: blue header background, blue selected
+   ================================================== */
+.calendar { width: 100% !important; flex: unset !important; }
+
+.calendar-header {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  text-align: center !important;
+  margin-bottom: 0.4rem !important;
+  /* Remove old blue rgba background */
+  background: transparent !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+}
+
+.calendar-header span {
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  color: var(--nxl-warm-label) !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.06em !important;
+  padding: 0.3rem 0 !important;
+}
+
+.calendar-grid {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  gap: 2px !important;
+  position: relative !important;
+}
+
+.calendar-day {
+  aspect-ratio: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 0.78rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+  color: var(--nxl-dark) !important;
+  background: transparent !important;
+  line-height: 1.1 !important;
+}
+
+.calendar-day.available {
+  color: var(--nxl-dark) !important;
+  background: transparent !important;
+}
+
+.calendar-day.available:hover {
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
+  transform: scale(1.08) !important;
+  box-shadow: none !important;
+}
+
+/* Override blue selected with warm brown */
+.calendar-day.selected {
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-dark-mid) 100%) !important;
+  color: var(--nxl-cream) !important;
+  box-shadow: 0 4px 12px rgba(61, 31, 21, 0.3) !important;
+  transform: scale(1.05) !important;
+  font-weight: 700 !important;
+}
+
+.calendar-day.empty {
+  background: transparent !important;
+  cursor: default !important;
+}
+
+.calendar-day.fully-booked { cursor: not-allowed !important; }
+
+/* ==================================================
+   TIME SLOTS
+   Override App.css: blue selected, grey h4, max-height constraint
+   ================================================== */
+.time-section { margin-bottom: 1rem !important; }
+
+.time-section h4 {
+  font-size: 0.7rem !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.12em !important;
+  color: var(--nxl-warm-label) !important;
+  margin-bottom: 0.5rem !important;
+  padding: 0.35rem 0.6rem !important;
+  /* Remove grey gradient, use warm */
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
+  border-radius: 6px !important;
+  border-left: 3px solid var(--nxl-accent) !important;
+  text-align: left !important;
+}
+
+.time-slots {
+  display: grid !important;
+  grid-template-columns: repeat(2, 1fr) !important;
+  gap: 0.4rem !important;
+  /* Remove old max-height that truncates slots */
+  max-height: none !important;
+  overflow-y: visible !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+}
+
+.time-slot {
+  padding: 0.5rem 0.4rem !important;
+  font-size: 0.78rem !important;
+  text-align: center !important;
+  cursor: pointer !important;
+  border-radius: 8px !important;
+  transition: all 0.2s ease !important;
+  color: var(--nxl-dark) !important;
+  background: var(--nxl-surface) !important;
+  font-family: var(--nxl-font-body) !important;
+  font-weight: 500 !important;
+  border: 1px solid var(--nxl-border) !important;
+}
+
+/* Kill old blue hover — warm hover handled by time-slot inline styles */
+.time-slot:hover:not(.unavailable) {
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
+  border-color: var(--nxl-light-accent) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: none !important;
+}
+
+/* Kill old blue .time-slot.selected from App.css */
+.time-slot.selected {
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
+  color: var(--nxl-dark) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* ==================================================
+   EMPLOYEE ITEMS
+   ================================================== */
+.employee-item {
+  padding: 0.7rem 0.9rem !important;
+  margin-bottom: 0.35rem !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  border: 1.5px solid var(--nxl-border) !important;
+  background: var(--nxl-surface) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.6rem !important;
+}
+
+.employee-item:hover {
+  border-color: var(--nxl-light-accent) !important;
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
+}
+
+.employee-item.selected {
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-dark-mid) 100%) !important;
+  border-color: var(--nxl-dark) !important;
+  box-shadow: 0 4px 14px rgba(61, 31, 21, 0.25) !important;
+}
+
+.employee-item.selected span {
+  color: var(--nxl-cream) !important;
+}
+
+/* ==================================================
+   BOOK APPOINTMENT BUTTON
+   Override App.css: RED gradient
+   ================================================== */
+.booking-actions {
+  width: 100% !important;
+  max-width: 1200px !important;
+  text-align: center !important;
+  margin-bottom: 1.4rem !important;
+}
+
+.book-appointment-btn {
+  /* Kill the red gradient */
+  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-accent) 100%) !important;
+  color: var(--nxl-cream) !important;
+  border: none !important;
+  padding: 1rem 3.5rem !important;
+  font-family: var(--nxl-font-body) !important;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+  border-radius: 50px !important;
+  cursor: pointer !important;
+  transition: all 0.25s ease !important;
+  box-shadow: 0 6px 24px rgba(61, 31, 21, 0.35) !important;
+}
+
+.book-appointment-btn:hover {
+  background: linear-gradient(135deg, #2d1510 0%, #8b4422 100%) !important;
+  box-shadow: 0 8px 30px rgba(61, 31, 21, 0.45) !important;
+  transform: translateY(-2px) !important;
+}
+
+.book-appointment-btn:active { transform: translateY(0) !important; }
+
+/* ==================================================
+   DASHBOARD NAVIGATION
+   Override App.css: white gradient, max-width 1400px, red logout, blue back-link
+   ================================================== */
+.dashboard-navigation {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  width: 100% !important;
+  max-width: 1200px !important;
+  padding: 1rem 1.5rem !important;
+  background: var(--nxl-card-bg) !important;
+  border-radius: var(--nxl-radius) !important;
+  box-shadow: var(--nxl-shadow-sm) !important;
+  border: 1px solid var(--nxl-border) !important;
+}
+
+/* Kill the red logout button */
+.logout-button {
+  background: transparent !important;
+  color: var(--nxl-muted) !important;
+  border: 1.5px solid var(--nxl-border) !important;
+  padding: 0.55rem 1.3rem !important;
+  border-radius: 50px !important;
+  font-family: var(--nxl-font-body) !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  box-shadow: none !important;
+}
+
+.logout-button:hover {
+  background: #fff5f5 !important;
+  color: #c0392b !important;
+  border-color: #fbb !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Kill blue back-home-link */
+.back-home-link {
+  color: var(--nxl-muted) !important;
+  text-decoration: none !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  padding: 0.5rem 1rem !important;
+  border-radius: 20px !important;
+  border: 1.5px solid var(--nxl-border) !important;
+  transition: all 0.2s ease !important;
+  background: transparent !important;
+}
+
+.back-home-link:hover {
+  color: var(--nxl-dark) !important;
+  border-color: var(--nxl-light-accent) !important;
+  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
+  transform: none !important;
+}
+
+/* ==================================================
+   ANIMATIONS
+   ================================================== */
+@keyframes db-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dashboard-header  { animation: db-fade-up 0.4s 0s ease both; }
+.welcome-section   { animation: db-fade-up 0.4s 0.05s ease both; }
+.booking-interface { animation: db-fade-up 0.4s 0.1s ease both; }
+.booking-panel:nth-child(1) { animation: db-fade-up 0.4s 0.05s ease both; }
+.booking-panel:nth-child(2) { animation: db-fade-up 0.4s 0.1s ease both; }
+.booking-panel:nth-child(3) { animation: db-fade-up 0.4s 0.15s ease both; }
+.booking-panel:nth-child(4) { animation: db-fade-up 0.4s 0.2s ease both; }
+
+/* ==================================================
+   RESPONSIVE
+   ================================================== */
+@media (max-width: 768px) {
+  .dashboard-container  { padding: 1rem 1rem 4rem !important; }
+  .dashboard-header     { padding: 0.9rem 1.2rem !important; }
+  .header-left h1       { font-size: 1.3rem !important; }
+  .booking-interface    { grid-template-columns: 1fr !important; gap: 1rem !important; }
+  .booking-panel        { height: auto !important; min-height: 300px !important; }
+  .dashboard-navigation { flex-direction: column !important; gap: 0.8rem !important; }
+  .book-appointment-btn { padding: 0.9rem 2rem !important; font-size: 0.85rem !important; }
+  .time-slots           { grid-template-columns: 1fr !important; }
+}

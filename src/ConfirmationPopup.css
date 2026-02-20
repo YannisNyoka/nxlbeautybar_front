@@ -1,0 +1,375 @@
+/* =============================================
+   NXL Beauty Bar — ConfirmationPopup.css
+   Consistent with PaymentPage luxury aesthetic
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ---- Full Page Background ---- */
+.cp-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 28rem 8rem;
+  font-family: 'DM Sans', sans-serif;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Decorative blobs — matches PaymentPage */
+.cp-bg::before {
+  content: '';
+  position: fixed;
+  top: -120px;
+  right: -120px;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(255, 182, 153, 0.35) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cp-bg::after {
+  content: '';
+  position: fixed;
+  bottom: -80px;
+  left: -80px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(255, 210, 185, 0.4) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---- Wrapper ---- */
+.cp-wrapper {
+  width: 100%;
+  max-width: 560px;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+/* ---- Success Ring ---- */
+.cp-success-ring {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 10px rgba(138, 74, 48, 0.12),
+    0 0 0 20px rgba(138, 74, 48, 0.06);
+  margin-bottom: 1.8rem;
+  animation: cp-pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+@keyframes cp-pop {
+  from { transform: scale(0.5); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.cp-success-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Heading ---- */
+.cp-heading {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: #3d1f15;
+  margin: 0 0 0.5rem;
+  text-align: center;
+  letter-spacing: 0.01em;
+  animation: cp-fade-up 0.5s 0.15s ease both;
+}
+
+.cp-subheading {
+  font-size: 0.92rem;
+  color: #9e7060;
+  text-align: center;
+  margin: 0 0 2rem;
+  line-height: 1.6;
+  max-width: 380px;
+  animation: cp-fade-up 0.5s 0.25s ease both;
+}
+
+@keyframes cp-fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Summary Card ---- */
+.cp-card {
+  width: 100%;
+  background: linear-gradient(160deg, #3d1f15 0%, #6b3528 100%);
+  border-radius: 20px;
+  padding: 2rem 2rem;
+  color: #fff;
+  box-shadow: 0 20px 60px rgba(93, 45, 25, 0.35);
+  animation: cp-fade-up 0.5s 0.35s ease both;
+  box-sizing: border-box;
+}
+
+.cp-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.cp-logo-dot {
+  width: 12px;
+  height: 12px;
+  background: #ffb380;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 0 4px rgba(255, 179, 128, 0.3);
+  flex-shrink: 0;
+}
+
+.cp-salon-name {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #ffe8d6;
+  letter-spacing: 0.04em;
+}
+
+.cp-divider {
+  height: 1px;
+  background: rgba(255, 232, 214, 0.18);
+  margin: 1.2rem 0;
+}
+
+/* ---- Detail Rows ---- */
+.cp-details {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cp-detail-row {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+}
+
+.cp-detail-icon {
+  font-size: 1rem;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.cp-detail-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 232, 214, 0.6);
+  margin-bottom: 0.15rem;
+  font-weight: 500;
+}
+
+.cp-detail-value {
+  font-size: 0.92rem;
+  color: #ffe8d6;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.cp-detail-subvalue {
+  font-size: 0.8rem;
+  color: rgba(255, 232, 214, 0.7);
+  margin-top: 0.2rem;
+  font-style: italic;
+}
+
+/* ---- Pricing ---- */
+.cp-pricing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.cp-pricing-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cp-pricing-label {
+  font-size: 0.85rem;
+  color: rgba(255, 232, 214, 0.75);
+  font-weight: 400;
+}
+
+.cp-pricing-paid {
+  font-size: 0.9rem;
+  color: #7dca9e;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.cp-pricing-balance {
+  font-size: 0.9rem;
+  color: #ffb380;
+  font-weight: 600;
+}
+
+/* ---- Calendar Button ---- */
+.cp-calendar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.4rem;
+  padding: 0.75rem 1.6rem;
+  border: 1.5px solid #c07a5a;
+  border-radius: 10px;
+  background: transparent;
+  color: #6b3528;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: 0.03em;
+  transition: all 0.2s ease;
+  animation: cp-fade-up 0.5s 0.45s ease both;
+}
+
+.cp-calendar-btn:hover {
+  background: #6b3528;
+  color: #ffe8d6;
+  border-color: #6b3528;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(93, 45, 25, 0.25);
+}
+
+/* ---- Action Buttons ---- */
+.cp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  width: 100%;
+  margin-top: 1.4rem;
+  animation: cp-fade-up 0.5s 0.55s ease both;
+}
+
+.cp-book-btn {
+  width: 100%;
+  padding: 1rem;
+  background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 20px rgba(93, 45, 25, 0.35);
+}
+
+.cp-book-btn:hover {
+  background: linear-gradient(135deg, #5c2e1e 0%, #8b4422 100%);
+  box-shadow: 0 6px 28px rgba(93, 45, 25, 0.45);
+  transform: translateY(-1px);
+}
+
+.cp-print-btn {
+  width: 100%;
+  padding: 0.85rem;
+  background: transparent;
+  color: #6b3528;
+  border: 1.5px solid #c07a5a;
+  border-radius: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: all 0.2s ease;
+}
+
+.cp-print-btn:hover {
+  background: #fdf0e8;
+  border-color: #8a4a30;
+}
+
+.cp-signout-btn {
+  width: 100%;
+  padding: 0.85rem;
+  background: transparent;
+  color: #9e7060;
+  border: 1.5px solid #e0ccc4;
+  border-radius: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: all 0.2s ease;
+}
+
+.cp-signout-btn:hover {
+  background: #fff5f0;
+  color: #6b3528;
+  border-color: #c07a5a;
+}
+
+/* ---- Footer Bar ---- */
+.cp-footer-bar {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100vw;
+  background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  color: #ffe8d6;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-align: center;
+  padding: 1rem 0;
+  z-index: 100;
+  box-shadow: 0 -4px 24px rgba(93, 45, 25, 0.2);
+}
+
+/* ---- Print Styles ---- */
+@media print {
+  .cp-bg {
+    background: #fff !important;
+    padding: 0 !important;
+  }
+  .cp-bg::before,
+  .cp-bg::after { display: none; }
+  .cp-success-ring { box-shadow: none; }
+  .cp-card {
+    background: #3d1f15 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    box-shadow: none;
+  }
+  .cp-actions,
+  .cp-calendar-btn,
+  .cp-footer-bar { display: none !important; }
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 520px) {
+  .cp-heading { font-size: 1.9rem; }
+  .cp-card { padding: 1.6rem 1.4rem; }
+  .cp-footer-bar { font-size: 1.2rem; padding: 0.8rem 0; }
+}

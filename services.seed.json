@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Manicure",
+    "durationMinutes": 45,
+    "price": 150,
+    "isActive": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  },
+  {
+    "name": "Pedicure",
+    "durationMinutes": 20,
+    "price": 100,
+    "isActive": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  },
+  {
+    "name": "Lashes",
+    "durationMinutes": 30,
+    "price": 120,
+    "isActive": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  },
+  {
+    "name": "Tinting",
+    "durationMinutes": 20,
+    "price": 80,
+    "isActive": true,
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "updatedAt": "2024-01-01T00:00:00.000Z"
+  }
+]
