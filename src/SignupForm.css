@@ -1,0 +1,286 @@
+/* =============================================
+   NXL Beauty Bar — SignupForm.css
+   Luxury theme consistent with ConfirmationPopup
+   ============================================= */
+
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+/* ---- Page Background ---- */
+.nxl-signup-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 27rem 5rem;
+  font-family: 'DM Sans', sans-serif;
+  position: relative;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.nxl-signup-bg::before {
+  content: '';
+  position: fixed;
+  top: -120px;
+  right: -120px;
+  width: 480px;
+  height: 480px;
+  background: radial-gradient(circle, rgba(255, 182, 153, 0.35) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.nxl-signup-bg::after {
+  content: '';
+  position: fixed;
+  bottom: -80px;
+  left: -80px;
+  width: 360px;
+  height: 360px;
+  background: radial-gradient(circle, rgba(255, 210, 185, 0.4) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ---- Card ---- */
+.nxl-signup-card {
+  width: 100%;
+  max-width: 460px;
+  position: relative;
+  z-index: 1;
+  animation: nxl-signup-fadein 0.5s ease both;
+}
+
+@keyframes nxl-signup-fadein {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Brand Mark ---- */
+.nxl-signup-brand {
+  text-align: center;
+  margin-bottom: 1.6rem;
+}
+
+.nxl-signup-dot-ring {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 0.9rem;
+  box-shadow:
+    0 0 0 8px rgba(138, 74, 48, 0.12),
+    0 0 0 16px rgba(138, 74, 48, 0.06);
+  font-size: 1.4rem;
+}
+
+.nxl-signup-brand h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #3d1f15;
+  margin: 0 0 0.3rem;
+  letter-spacing: 0.02em;
+}
+
+.nxl-signup-brand p {
+  font-size: 0.82rem;
+  color: #9e7060;
+  margin: 0;
+  line-height: 1.5;
+  max-width: 320px;
+  margin-inline: auto;
+}
+
+/* ---- Form Panel ---- */
+.nxl-signup-panel {
+  background: linear-gradient(160deg, #3d1f15 0%, #6b3528 100%);
+  border-radius: 20px;
+  padding: 2rem 2rem;
+  box-shadow: 0 20px 60px rgba(93, 45, 25, 0.35);
+  box-sizing: border-box;
+}
+
+/* ---- Two-column row for names ---- */
+.nxl-signup-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+/* ---- Field Groups ---- */
+.nxl-signup-field {
+  margin-bottom: 1.1rem;
+}
+
+.nxl-signup-field label {
+  display: block;
+  font-size: 0.67rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 232, 214, 0.65);
+  margin-bottom: 0.35rem;
+  font-weight: 500;
+}
+
+.nxl-signup-field input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 232, 214, 0.2);
+  border-radius: 10px;
+  color: #ffe8d6;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  box-sizing: border-box;
+}
+
+.nxl-signup-field input::placeholder {
+  color: rgba(255, 232, 214, 0.32);
+  font-style: italic;
+}
+
+.nxl-signup-field input:focus {
+  border-color: #ffb380;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.nxl-signup-field input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- Inline Error ---- */
+.nxl-signup-error-inline {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: #ffb3a0;
+  font-style: italic;
+  line-height: 1.3;
+}
+
+/* ---- Submit Button ---- */
+.nxl-signup-submit {
+  width: 100%;
+  padding: 0.88rem;
+  margin-top: 0.4rem;
+  background: linear-gradient(135deg, #ffb380 0%, #e8925a 100%);
+  color: #3d1f15;
+  border: none;
+  border-radius: 12px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 16px rgba(255, 140, 80, 0.35);
+}
+
+.nxl-signup-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffc49a 0%, #f0a070 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 22px rgba(255, 140, 80, 0.45);
+}
+
+.nxl-signup-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ---- Status Messages ---- */
+.nxl-signup-success-msg {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(125, 202, 158, 0.18);
+  border: 1px solid rgba(125, 202, 158, 0.4);
+  border-radius: 8px;
+  color: #7dca9e;
+  font-size: 0.82rem;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.nxl-signup-error-msg {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 120, 100, 0.12);
+  border: 1px solid rgba(255, 120, 100, 0.3);
+  border-radius: 8px;
+  color: #ffb3a0;
+  font-size: 0.82rem;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ---- Footer Links ---- */
+.nxl-signup-footer {
+  margin-top: 1.4rem;
+  text-align: center;
+}
+
+.nxl-signup-footer p {
+  font-size: 0.83rem;
+  color: rgba(255, 232, 214, 0.65);
+  margin: 0 0 0.6rem;
+}
+
+.nxl-signup-footer a {
+  color: #ffb380;
+  text-decoration: none;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.nxl-signup-footer a:hover {
+  color: #ffd4b3;
+  text-decoration: underline;
+}
+
+.nxl-signup-back {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: rgba(255, 232, 214, 0.5);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.nxl-signup-back:hover {
+  color: rgba(255, 232, 214, 0.85);
+}
+
+/* ---- Fixed Footer Bar ---- */
+.nxl-signup-footer-bar {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100vw;
+  background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
+  color: #ffe8d6;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-align: center;
+  padding: 0.7rem 0;
+  z-index: 100;
+  box-shadow: 0 -4px 24px rgba(93, 45, 25, 0.2);
+}
+
+/* ---- Mobile ---- */
+@media (max-width: 480px) {
+  .nxl-signup-brand h1 { font-size: 1.6rem; }
+  .nxl-signup-panel { padding: 1.5rem 1.2rem; }
+  .nxl-signup-row { grid-template-columns: 1fr; gap: 0; }
+}
