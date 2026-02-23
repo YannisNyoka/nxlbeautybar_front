@@ -369,7 +369,15 @@
 
 /* ---- Mobile ---- */
 @media (max-width: 520px) {
-  .cp-heading { font-size: 1.9rem; }
-  .cp-card { padding: 1.6rem 1.4rem; }
-  .cp-footer-bar { font-size: 1.2rem; padding: 0.8rem 0; }
+  .cp-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 5rem 8rem;
+  font-family: 'DM Sans', sans-serif;
+  position: relative;
+  overflow-x: hidden;
+}
 }
