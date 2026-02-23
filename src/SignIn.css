@@ -268,6 +268,16 @@
 
 /* ---- Mobile ---- */
 @media (max-width: 480px) {
-  .nxl-signin-brand h1 { font-size: 1.7rem; }
-  .nxl-signin-panel { padding: 1.6rem 1.3rem; }
+ .nxl-signin-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 5rem 5rem;
+  font-family: 'DM Sans', sans-serif;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
 }

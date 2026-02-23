@@ -280,7 +280,16 @@
 
 /* ---- Mobile ---- */
 @media (max-width: 480px) {
-  .nxl-signup-brand h1 { font-size: 1.6rem; }
-  .nxl-signup-panel { padding: 1.5rem 1.2rem; }
-  .nxl-signup-row { grid-template-columns: 1fr; gap: 0; }
+  .nxl-signup-bg {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 5rem 5rem;
+  font-family: 'DM Sans', sans-serif;
+  position: relative;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
 }
