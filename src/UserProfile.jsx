@@ -60,7 +60,7 @@ function UserProfile() {
         const allAppointments = result.data || [];
         const userAppointments = allAppointments.filter(appt => {
           const apptUserId = typeof appt.userId === 'object' ? appt.userId._id || appt.userId.$oid : appt.userId;
-          const currentUserId = user?._id || user?.userId;
+          const currentUserId = user?._id || user?.userId || user?.id;
           return String(apptUserId) === String(currentUserId);
         });
         const merged = userAppointments.map(a => ({ ...a, totalPrice: normalizePrice(a.totalPrice) }));
