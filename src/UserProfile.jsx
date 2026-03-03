@@ -29,8 +29,8 @@ function UserProfile() {
 
   const getAppointmentDateTime = (appt) => {
     if (!appt?.date) return null;
-    const dateObj = new Date(appt.date);
-    if (isNaN(dateObj)) return null;
+    const [year, month, day] = appt.date.split('-').map(Number);
+    if (!year || !month || !day) return null;
     let hours = 0, minutes = 0;
     if (appt.time) {
       const m = appt.time.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
@@ -42,9 +42,7 @@ function UserProfile() {
         if (ampm === 'am' && hours === 12) hours = 0;
       }
     }
-    const combined = new Date(dateObj);
-    combined.setHours(hours, minutes, 0, 0);
-    return combined;
+    return new Date(year, month - 1, day, hours, minutes, 0, 0);
   };
 
   useEffect(() => { fetchUserAppointments(); }, []);
@@ -76,8 +74,10 @@ function UserProfile() {
     }
   };
 
+  // FIXED: returns YYYY-MM-DD directly if already in that format, avoiding UTC shift
   const normalizeDateForApi = (dateStr) => {
     if (!dateStr) return null;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())) return String(dateStr).trim();
     const d = new Date(dateStr);
     if (Number.isNaN(d.getTime())) return null;
     const yyyy = d.getFullYear();
@@ -137,9 +137,15 @@ function UserProfile() {
     }
   };
 
+  // FIXED: returns date string directly if already YYYY-MM-DD, avoiding UTC shift
   const toDateInputValue = (value) => {
-    try { const d = new Date(value); if (isNaN(d.getTime())) return ''; return d.toISOString().slice(0, 10); }
-    catch { return ''; }
+    try {
+      if (!value) return '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return String(value).trim();
+      const d = new Date(value);
+      if (isNaN(d.getTime())) return '';
+      return d.toISOString().slice(0, 10);
+    } catch { return ''; }
   };
 
   const handleReschedule = (appointmentId) => {
@@ -184,9 +190,14 @@ function UserProfile() {
     }
   };
 
+  // FIXED: parses date parts directly to avoid UTC timezone shift
   const formatDate = (dateString) => {
-    try { return new Date(dateString).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
-    catch { return dateString; }
+    try {
+      const [year, month, day] = dateString.split('-').map(Number);
+      return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      });
+    } catch { return dateString; }
   };
 
   const now = new Date();

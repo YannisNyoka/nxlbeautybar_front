@@ -288,10 +288,12 @@ function Dashboard() {
   const getMonthName = (date) => date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const dayToISO = (day) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
-    return new Date(year, month, day).toISOString().split('T')[0];
-  };
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+  const mm = String(month + 1).padStart(2, '0');
+  const dd = String(day).padStart(2, '0');
+  return `${year}-${mm}-${dd}`;
+};
 
   const getTodayISO = () => new Date().toISOString().split('T')[0];
 

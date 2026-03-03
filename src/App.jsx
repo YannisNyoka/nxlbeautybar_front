@@ -5,6 +5,8 @@ import SignIn from './SignIn';
 import Dashboard from './Dashboard';
 import PaymentPage from './PaymentPage';
 import UserProfile from './UserProfile';
+import PaymentSuccess from './PaymentSuccess';
+import PaymentCancel from './PaymentCancel';
 import './App.css';
 import AdminDashboard from './AdminDashboard';
 import { useAuth } from './AuthContext';
@@ -81,6 +83,8 @@ function App() {
           }
         />
         <Route path="/payment" element={<PaymentPage />} />
+        <Route path="/payment-success" element={<PaymentSuccess />} />
+<Route path="/payment-cancel" element={<PaymentCancel />} />
         <Route
           path="/admin-dashboard"
           element={
