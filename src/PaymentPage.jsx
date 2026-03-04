@@ -144,7 +144,7 @@ const PaymentPage = ({ onSave }) => {
         });
 
         // Save booking details so PaymentSuccess.jsx can send the confirmation email
-        sessionStorage.setItem('pendingBooking', JSON.stringify({
+        localStorage.setItem('pendingBooking', JSON.stringify({
           name,
           appointmentDate,
           appointmentTime,
