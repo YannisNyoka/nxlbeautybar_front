@@ -143,6 +143,19 @@ const PaymentPage = ({ onSave }) => {
           form.appendChild(input);
         });
 
+        // Save booking details so PaymentSuccess.jsx can send the confirmation email
+        sessionStorage.setItem('pendingBooking', JSON.stringify({
+          name,
+          appointmentDate,
+          appointmentTime,
+          selectedServices,
+          selectedEmployee,
+          totalPrice,
+          totalDuration,
+          contactNumber,
+          email,
+        }));
+
         document.body.appendChild(form);
         form.submit();
       } else {
