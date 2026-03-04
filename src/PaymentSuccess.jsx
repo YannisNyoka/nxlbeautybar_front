@@ -8,68 +8,77 @@ const PaymentSuccess = () => {
   const navigate = useNavigate();
   const { logout } = useAuth();
   const [bookingDetails, setBookingDetails] = useState(null);
-  const [countdown, setCountdown] = useState(10);
+  const [emailStatus, setEmailStatus] = useState('');
 
   useEffect(() => {
     emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'l7AiKNhYSfG_q4eot');
 
-    // Load booking details from localStorage
-    const stored = localStorage.getItem('pendingBooking');
-    const details = stored ? JSON.parse(stored) : {};
+    // Try localStorage first, then sessionStorage as fallback
+    let details = {};
+    try {
+      const fromLocal = localStorage.getItem('pendingBooking');
+      const fromSession = sessionStorage.getItem('pendingBooking');
+      if (fromLocal) details = JSON.parse(fromLocal);
+      else if (fromSession) details = JSON.parse(fromSession);
+    } catch (e) {
+      console.error('Could not parse booking details:', e);
+    }
+
+    console.log('Booking details loaded:', details);
     setBookingDetails(details);
 
     const sendConfirmationEmail = async () => {
       try {
-        if (!details.email) return;
+        if (!details.email) {
+          console.warn('No email found in booking details, skipping email');
+          setEmailStatus('no-email');
+          return;
+        }
 
-        const { name, appointmentDate, appointmentTime, selectedServices,
-                selectedEmployee, totalPrice, totalDuration, contactNumber, email } = details;
+        const {
+          name, appointmentDate, appointmentTime, selectedServices,
+          selectedEmployee, totalPrice, totalDuration, contactNumber, email
+        } = details;
 
-        const mins = totalDuration % 60;
-        const hrs = Math.floor(totalDuration / 60);
-        const durationStr = hrs > 0 ? `${hrs}h ${mins > 0 ? mins + 'min' : ''}` : `${mins}min`;
+        const totalDur = Number(totalDuration) || 0;
+        const mins = totalDur % 60;
+        const hrs = Math.floor(totalDur / 60);
+        const durationStr = hrs > 0
+          ? `${hrs}h ${mins > 0 ? mins + 'min' : ''}`.trim()
+          : `${mins}min`;
 
         const emailParams = {
-          customer_name: name,
-          appointment_date: appointmentDate,
-          appointment_time: appointmentTime,
+          customer_name: name || '',
+          appointment_date: appointmentDate || '',
+          appointment_time: appointmentTime || '',
           services: Array.isArray(selectedServices) ? selectedServices.join(', ') : '',
-          employee: selectedEmployee,
-          total_price: `R${totalPrice}`,
+          employee: selectedEmployee || '',
+          total_price: `R${totalPrice || 0}`,
           total_duration: durationStr,
-          contact_number: String(contactNumber).replace(/\D/g, ''),
+          contact_number: String(contactNumber || '').replace(/\D/g, ''),
           salon_email: 'nxlbeautybar@gmail.com',
           salon_phone: '0685113394',
-          email: email || 'nxlbeautybar@gmail.com',
+          email: email,
         };
+
+        console.log('Sending email with params:', emailParams);
 
         const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_f0lbtzg';
         const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_sbxxbii';
 
         await emailjs.send(serviceId, templateId, emailParams);
-        console.log('Confirmation email sent');
+        console.log('Confirmation email sent successfully');
+        setEmailStatus('sent');
         localStorage.removeItem('pendingBooking');
+        sessionStorage.removeItem('pendingBooking');
       } catch (err) {
         console.error('EmailJS error:', err);
+        setEmailStatus('error');
       }
     };
 
     sendConfirmationEmail();
-
-    // Countdown timer
-    const interval = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          navigate('/dashboard');
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [navigate]);
+  }, []);
 
   // --- Build Google Calendar link ---
   const buildCalendarLink = () => {
@@ -78,7 +87,7 @@ const PaymentSuccess = () => {
       const { appointmentDate, appointmentTime, selectedServices, selectedEmployee, totalPrice, totalDuration } = bookingDetails;
       const startDate = new Date(`${appointmentDate}T${appointmentTime}`);
       if (isNaN(startDate.getTime())) return '#';
-      const durationMs = (totalDuration || 60) * 60 * 1000;
+      const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
       const endDate = new Date(startDate.getTime() + durationMs);
 
       const pad = (n) => String(n).padStart(2, '0');
@@ -93,10 +102,10 @@ const PaymentSuccess = () => {
         selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
         `Total: R${totalPrice}`,
       ].filter(Boolean);
-      const details = encodeURIComponent(detailLines.join('\n'));
+      const calDetails = encodeURIComponent(detailLines.join('\n'));
       const location = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
 
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${details}&location=${location}&ctz=Africa/Johannesburg`;
+      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${location}&ctz=Africa/Johannesburg`;
     } catch {
       return '#';
     }
@@ -109,8 +118,8 @@ const PaymentSuccess = () => {
 
   const d = bookingDetails || {};
   const durationStr = d.totalDuration
-    ? d.totalDuration >= 60
-      ? `${Math.floor(d.totalDuration / 60)}h ${d.totalDuration % 60 > 0 ? (d.totalDuration % 60) + 'min' : ''}`.trim()
+    ? Number(d.totalDuration) >= 60
+      ? `${Math.floor(Number(d.totalDuration) / 60)}h ${Number(d.totalDuration) % 60 > 0 ? (Number(d.totalDuration) % 60) + 'min' : ''}`.trim()
       : `${d.totalDuration}min`
     : '';
 
@@ -136,8 +145,10 @@ const PaymentSuccess = () => {
         {/* Heading */}
         <h1 className="cp-heading">Payment Successful!</h1>
         <p className="cp-subheading">
-          Your appointment is secured. A confirmation email has been sent to you.
-          Redirecting to dashboard in {countdown}s...
+          Your appointment is secured.{' '}
+          {emailStatus === 'sent' && 'A confirmation email has been sent to you.'}
+          {emailStatus === 'error' && 'Email could not be sent, but your booking is confirmed.'}
+          {emailStatus === 'no-email' && 'Your booking is confirmed.'}
         </p>
 
         {/* Summary Card */}
@@ -217,19 +228,21 @@ const PaymentSuccess = () => {
             {d.totalPrice > 0 && (
               <div className="cp-pricing-row">
                 <span className="cp-pricing-label">Balance Due at Salon</span>
-                <span className="cp-pricing-balance">R{Math.max(0, d.totalPrice - 100).toFixed(2)}</span>
+                <span className="cp-pricing-balance">
+                  R{Math.max(0, Number(d.totalPrice) - 100).toFixed(2)}
+                </span>
               </div>
             )}
           </div>
         </div>
 
         {/* Calendar Link */}
-        
+        <a
           href={buildCalendarLink()}
           target="_blank"
           rel="noopener noreferrer"
           className="cp-calendar-btn"
-        <a>
+        >
           <span>📆</span> Add to Google Calendar
         </a>
 
