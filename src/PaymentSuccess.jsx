@@ -82,34 +82,49 @@ const PaymentSuccess = () => {
 
   // --- Build Google Calendar link ---
   const buildCalendarLink = () => {
-    if (!bookingDetails?.appointmentDate || !bookingDetails?.appointmentTime) return '#';
-    try {
-      const { appointmentDate, appointmentTime, selectedServices, selectedEmployee, totalPrice, totalDuration } = bookingDetails;
-      const startDate = new Date(`${appointmentDate}T${appointmentTime}`);
-      if (isNaN(startDate.getTime())) return '#';
-      const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
-      const endDate = new Date(startDate.getTime() + durationMs);
+  if (!bookingDetails?.appointmentDate || !bookingDetails?.appointmentTime) return '#';
+  try {
+    const { appointmentDate, appointmentTime, selectedServices, selectedEmployee, totalPrice, totalDuration } = bookingDetails;
 
-      const pad = (n) => String(n).padStart(2, '0');
-      const toGoogleDate = (d) =>
-        `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
-        `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+    // Convert "09:30 am" / "01:30 pm" to 24-hour "09:30" / "13:30"
+    const convertTo24Hour = (timeStr) => {
+      const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+      if (!m) return timeStr;
+      let hh = parseInt(m[1], 10);
+      const mm = m[2];
+      const ampm = m[3]?.toLowerCase();
+      if (ampm === 'pm' && hh !== 12) hh += 12;
+      if (ampm === 'am' && hh === 12) hh = 0;
+      return `${String(hh).padStart(2, '0')}:${mm}`;
+    };
 
-      const dates = `${toGoogleDate(startDate)}/${toGoogleDate(endDate)}`;
-      const text = encodeURIComponent('NXL Beauty Bar Appointment');
-      const detailLines = [
-        `Services: ${(selectedServices || []).join(', ')}`,
-        selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
-        `Total: R${totalPrice}`,
-      ].filter(Boolean);
-      const calDetails = encodeURIComponent(detailLines.join('\n'));
-      const location = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
+    const time24 = convertTo24Hour(appointmentTime);
+    const startDate = new Date(`${appointmentDate}T${time24}`);
+    if (isNaN(startDate.getTime())) return '#';
 
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${location}&ctz=Africa/Johannesburg`;
-    } catch {
-      return '#';
-    }
-  };
+    const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
+    const endDate = new Date(startDate.getTime() + durationMs);
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const toGoogleDate = (d) =>
+      `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
+      `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+
+    const dates = `${toGoogleDate(startDate)}/${toGoogleDate(endDate)}`;
+    const text = encodeURIComponent('NXL Beauty Bar Appointment');
+    const detailLines = [
+      `Services: ${(selectedServices || []).join(', ')}`,
+      selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
+      `Total: R${totalPrice}`,
+    ].filter(Boolean);
+    const calDetails = encodeURIComponent(detailLines.join('\n'));
+    const location = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${location}&ctz=Africa/Johannesburg`;
+  } catch {
+    return '#';
+  }
+};
 
   const handleSignOut = () => {
     logout();
