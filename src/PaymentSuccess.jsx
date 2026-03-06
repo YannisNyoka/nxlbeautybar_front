@@ -35,6 +35,13 @@ const PaymentSuccess = () => {
           return;
         }
 
+        // Prevent duplicate emails on refresh
+        if (localStorage.getItem('emailSent') === details.email) {
+          console.log('Email already sent for this booking, skipping');
+          setEmailStatus('sent');
+          return;
+        }
+
         const {
           name, appointmentDate, appointmentTime, selectedServices,
           selectedEmployee, totalPrice, totalDuration, contactNumber, email
@@ -63,16 +70,19 @@ const PaymentSuccess = () => {
 
         console.log('Sending email with params:', emailParams);
 
+        // Mark as sent before sending to prevent duplicates on fast refresh
+        localStorage.setItem('emailSent', details.email);
+
         const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_f0lbtzg';
         const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_sbxxbii';
 
         await emailjs.send(serviceId, templateId, emailParams);
         console.log('Confirmation email sent successfully');
         setEmailStatus('sent');
-        localStorage.removeItem('pendingBooking');
-        sessionStorage.removeItem('pendingBooking');
       } catch (err) {
         console.error('EmailJS error:', err);
+        // Remove the sent flag if email actually failed so it can retry
+        localStorage.removeItem('emailSent');
         setEmailStatus('error');
       }
     };
@@ -80,53 +90,60 @@ const PaymentSuccess = () => {
     sendConfirmationEmail();
   }, []);
 
+  const clearBookingData = () => {
+    localStorage.removeItem('pendingBooking');
+    localStorage.removeItem('emailSent');
+    sessionStorage.removeItem('pendingBooking');
+  };
+
   // --- Build Google Calendar link ---
   const buildCalendarLink = () => {
-  if (!bookingDetails?.appointmentDate || !bookingDetails?.appointmentTime) return '#';
-  try {
-    const { appointmentDate, appointmentTime, selectedServices, selectedEmployee, totalPrice, totalDuration } = bookingDetails;
+    if (!bookingDetails?.appointmentDate || !bookingDetails?.appointmentTime) return '#';
+    try {
+      const { appointmentDate, appointmentTime, selectedServices, selectedEmployee, totalPrice, totalDuration } = bookingDetails;
 
-    // Convert "09:30 am" / "01:30 pm" to 24-hour "09:30" / "13:30"
-    const convertTo24Hour = (timeStr) => {
-      const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
-      if (!m) return timeStr;
-      let hh = parseInt(m[1], 10);
-      const mm = m[2];
-      const ampm = m[3]?.toLowerCase();
-      if (ampm === 'pm' && hh !== 12) hh += 12;
-      if (ampm === 'am' && hh === 12) hh = 0;
-      return `${String(hh).padStart(2, '0')}:${mm}`;
-    };
+      // Convert "09:30 am" / "01:30 pm" to 24-hour "09:30" / "13:30"
+      const convertTo24Hour = (timeStr) => {
+        const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+        if (!m) return timeStr;
+        let hh = parseInt(m[1], 10);
+        const mm = m[2];
+        const ampm = m[3]?.toLowerCase();
+        if (ampm === 'pm' && hh !== 12) hh += 12;
+        if (ampm === 'am' && hh === 12) hh = 0;
+        return `${String(hh).padStart(2, '0')}:${mm}`;
+      };
 
-    const time24 = convertTo24Hour(appointmentTime);
-    const startDate = new Date(`${appointmentDate}T${time24}`);
-    if (isNaN(startDate.getTime())) return '#';
+      const time24 = convertTo24Hour(appointmentTime);
+      const startDate = new Date(`${appointmentDate}T${time24}`);
+      if (isNaN(startDate.getTime())) return '#';
 
-    const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
-    const endDate = new Date(startDate.getTime() + durationMs);
+      const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
+      const endDate = new Date(startDate.getTime() + durationMs);
 
-    const pad = (n) => String(n).padStart(2, '0');
-    const toGoogleDate = (d) =>
-      `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
-      `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+      const pad = (n) => String(n).padStart(2, '0');
+      const toGoogleDate = (d) =>
+        `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
+        `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
 
-    const dates = `${toGoogleDate(startDate)}/${toGoogleDate(endDate)}`;
-    const text = encodeURIComponent('NXL Beauty Bar Appointment');
-    const detailLines = [
-      `Services: ${(selectedServices || []).join(', ')}`,
-      selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
-      `Total: R${totalPrice}`,
-    ].filter(Boolean);
-    const calDetails = encodeURIComponent(detailLines.join('\n'));
-    const location = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
+      const dates = `${toGoogleDate(startDate)}/${toGoogleDate(endDate)}`;
+      const text = encodeURIComponent('NXL Beauty Bar Appointment');
+      const detailLines = [
+        `Services: ${(selectedServices || []).join(', ')}`,
+        selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
+        `Total: R${totalPrice}`,
+      ].filter(Boolean);
+      const calDetails = encodeURIComponent(detailLines.join('\n'));
+      const location = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
 
-    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${location}&ctz=Africa/Johannesburg`;
-  } catch {
-    return '#';
-  }
-};
+      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${location}&ctz=Africa/Johannesburg`;
+    } catch {
+      return '#';
+    }
+  };
 
   const handleSignOut = () => {
+    clearBookingData();
     logout();
     navigate('/', { replace: true });
   };
@@ -263,7 +280,10 @@ const PaymentSuccess = () => {
 
         {/* Actions */}
         <div className="cp-actions">
-          <button className="cp-book-btn" onClick={() => navigate('/dashboard', { replace: true })}>
+          <button className="cp-book-btn" onClick={() => {
+            clearBookingData();
+            navigate('/dashboard', { replace: true });
+          }}>
             Book Another Appointment
           </button>
           <button className="cp-print-btn" onClick={() => window.print()}>
