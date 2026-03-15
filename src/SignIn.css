@@ -281,3 +281,10 @@
   box-sizing: border-box;
 }
 }
+
+/*-----Mobile Deskop View*/
+@media (min-width: 481px) and (max-width: 1024px) {
+  .nxl-signin-bg {
+    padding: 2rem 14rem 5rem;
+  }
+}

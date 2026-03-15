@@ -465,3 +465,11 @@
     flex-direction: column;
   }
 }
+
+/* ---- Tablet / Desktop mode on mobile ---- */
+@media (min-width: 481px) and (max-width: 1024px) {
+  .bs-modal {
+    max-width: 90vw;
+    padding: 1.8rem 1.6rem 1.4rem;
+  }
+}

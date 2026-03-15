@@ -739,3 +739,14 @@
   .book-appointment-btn { padding: 0.9rem 2rem !important; font-size: 0.85rem !important; }
   .time-slots           { grid-template-columns: 1fr !important; }
 }
+
+/*----Mobile Deskop View*/
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .dashboard-container {
+    padding: 1rem 1rem 4rem !important;
+  }
+  .booking-interface {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}

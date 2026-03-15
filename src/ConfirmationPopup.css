@@ -375,9 +375,16 @@
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 3rem 5rem 8rem;
+  padding: 3rem 1rem 8rem;
   font-family: 'DM Sans', sans-serif;
   position: relative;
   overflow-x: hidden;
 }
+}
+
+/* ---- Tablet / Desktop mode on mobile ---- */
+@media (min-width: 521px) and (max-width: 1024px) {
+  .cp-bg {
+    padding: 3rem 2rem 8rem;
+  }
 }
