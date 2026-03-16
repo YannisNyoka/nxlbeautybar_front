@@ -186,7 +186,7 @@ function Dashboard() {
         if (response.ok && result.success && Array.isArray(result.data)) {
           const active = result.data
             .filter(s => s.isActive !== false)
-            .map(s => ({ _id: s._id || s.id, name: s.name, duration: s.durationMinutes, price: decimalToFloat(s.price) }));
+            .map(s => ({ _id: s._id || s.id, name: s.name, duration: s.durationMinutes, price: decimalToFloat(s.price), category: s.category || '' }));
           if (active.length > 0) { setServices(active); return; }
         }
         setServices(defaultServices);
@@ -613,35 +613,34 @@ function Dashboard() {
           {!collapsedPanels.services && (
             <div className="panel-content">
               {servicesError && <div style={{ color: '#c07a5a', marginBottom: '0.5rem', fontSize: '0.78rem' }}>{servicesError}</div>}
-              {services.map((service, index) => (
-                <div
-                  key={index}
-                  className={`service-item ${selectedServices.includes(service.name) ? 'selected' : ''}`}
-                  onClick={() => handleServiceSelect(service)}
-                >
-                  <span className="service-name">{service.name}</span>
-                  <span className="service-duration">{service.duration} min</span>
-                  <span className="service-price">R{(decimalToFloat(service.price) || 0).toFixed(0)}</span>
-                </div>
-              ))}
-              {selectedServices.includes('Manicure') && (
-                <div style={{ marginTop: '0.8rem' }}>
-                  <label htmlFor="manicure-type">Manicure Type</label>
-                  <select id="manicure-type" value={selectedManicureType} onChange={e => setSelectedManicureType(e.target.value)} style={{ marginTop: '0.3rem', width: '100%' }}>
-                    <option value="">— Choose —</option>
-                    {manicureTypes.map((type, idx) => <option key={idx} value={type}>{type}</option>)}
-                  </select>
-                </div>
-              )}
-              {selectedServices.includes('Pedicure') && (
-                <div style={{ marginTop: '0.8rem' }}>
-                  <label htmlFor="pedicure-type">Pedicure Type</label>
-                  <select id="pedicure-type" value={selectedPedicureType} onChange={e => setSelectedPedicureType(e.target.value)} style={{ marginTop: '0.3rem', width: '100%' }}>
-                    <option value="">— Choose —</option>
-                    {pedicureTypes.map((type, idx) => <option key={idx} value={type}>{type}</option>)}
-                  </select>
-                </div>
-              )}
+              {(() => {
+  // Group services by category
+  const categoryOrder = ['Manicure', 'Pedicure', 'Eyelashes', 'Extras'];
+  const grouped = {};
+
+  services.forEach(service => {
+  const rawCat = (service.category || '').trim().toLowerCase();
+  const cat = rawCat ? rawCat.charAt(0).toUpperCase() + rawCat.slice(1) : 'Extras';
+  if (!grouped[cat]) grouped[cat] = [];
+  grouped[cat].push(service);
+});
+
+  // Include any categories not in our order list
+  const allCats = [
+    ...categoryOrder.filter(c => grouped[c]),
+    ...Object.keys(grouped).filter(c => !categoryOrder.includes(c))
+  ];
+
+  return allCats.map(category => (
+    <ServiceCategory
+      key={category}
+      category={category}
+      services={grouped[category] || []}
+      selectedServices={selectedServices}
+      onSelect={handleServiceSelect}
+    />
+  ));
+})()}
             </div>
           )}
         </div>
@@ -771,6 +770,95 @@ function Dashboard() {
         <button onClick={handleLogout} className="logout-button">Sign Out</button>
         <Link to="/" className="back-home-link">← Back to Home</Link>
       </div>
+    </div>
+  );
+}
+
+function ServiceCategory({ category, services, selectedServices, onSelect }) {
+  const [open, setOpen] = useState(true);
+  const hasSelected = services.some(s => selectedServices.includes(s.name));
+
+  const categoryIcons = {
+    Manicure: '💅',
+    Pedicure: '🦶',
+    Eyelashes: '👁️',
+    Extras: '✨',
+  };
+
+  return (
+    <div style={{ marginBottom: '0.5rem' }}>
+      {/* Category Header */}
+      <div
+        onClick={() => setOpen(prev => !prev)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0.5rem 0.7rem',
+          background: hasSelected
+            ? 'linear-gradient(135deg, #3d1f15, #6b3528)'
+            : 'linear-gradient(135deg, #fdf6f0, #fce8db)',
+          borderRadius: '8px',
+          cursor: 'pointer',
+          border: '1px solid #e0ccc4',
+          marginBottom: open ? '0.4rem' : 0,
+          transition: 'all 0.2s ease',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '1rem' }}>
+            {categoryIcons[category] || '💄'}
+          </span>
+          <span style={{
+            fontSize: '0.82rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.08em',
+            color: hasSelected ? '#ffe8d6' : '#3d1f15',
+          }}>
+            {category}
+          </span>
+          {hasSelected && (
+            <span style={{
+              fontSize: '0.65rem',
+              background: 'rgba(255,179,128,0.3)',
+              color: '#ffb380',
+              padding: '0.1rem 0.5rem',
+              borderRadius: '20px',
+              fontWeight: 600,
+            }}>
+              {services.filter(s => selectedServices.includes(s.name)).length} selected
+            </span>
+          )}
+        </div>
+        <span style={{
+          fontSize: '0.7rem',
+          color: hasSelected ? 'rgba(255,232,214,0.7)' : '#9e7060',
+          transition: 'transform 0.2s',
+          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
+          display: 'inline-block',
+        }}>
+          ▼
+        </span>
+      </div>
+
+      {/* Services List */}
+      {open && (
+        <div style={{ paddingLeft: '0.3rem' }}>
+          {services.map((service, index) => (
+            <div
+              key={index}
+              className={`service-item ${selectedServices.includes(service.name) ? 'selected' : ''}`}
+              onClick={() => onSelect(service)}
+              style={{ marginBottom: '0.25rem' }}
+            >
+              <span className="service-name">{service.name}</span>
+              <span className="service-duration">{service.duration} min</span>
+              <span className="service-price">R{(Number(service.price) || 0).toFixed(0)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

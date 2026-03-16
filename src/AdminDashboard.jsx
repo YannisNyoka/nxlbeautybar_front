@@ -769,33 +769,39 @@ function AdminDashboard() {
   );
 
   const renderStaff = () => (
-    <section className="panel">
-      <header>
-        <h3>Staff Management</h3>
-        <button className="btn primary" onClick={() => {
-          setEditingStaff(null);
-          setShowStaffModal(true);
-        }}>
-          ➕ Add Technician
-        </button>
-      </header>
-      <div className="table-responsive">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Services</th>
-              <th>Working Hours</th>
-              <th>Active</th>
-              <th>Workload</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {staff.map(emp => (
+  <section className="panel">
+    <header>
+      <h3>Staff Management</h3>
+      <button className="btn primary" onClick={() => {
+        setEditingStaff(null);
+        setShowStaffModal(true);
+      }}>
+        ➕ Add Technician
+      </button>
+    </header>
+    <div className="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Services</th>
+            <th>Working Hours</th>
+            <th>Active</th>
+            <th>Workload</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {staff.map(emp => {
+            const empServices = (emp.servicesOffered || [])
+              .map(id => services.find(s => String(s._id) === String(id))?.name)
+              .filter(Boolean)
+              .join(', ') || '—';
+
+            return (
               <tr key={emp._id}>
                 <td>{emp.name}</td>
-                <td>{(emp.servicesOffered || []).map(id => services.find(s => s._id === id)?.name).join(', ')}</td>
+                <td>{empServices}</td>
                 <td>{emp.workingHours ? 'Custom' : 'Default'}</td>
                 <td>{emp.isActive ? 'Yes' : 'No'}</td>
                 <td>{staffWorkload[emp._id] || 0} appts</td>
@@ -806,26 +812,47 @@ function AdminDashboard() {
                   }}>
                     Edit
                   </button>
-                  <button onClick={() => mutateStaff(emp._id, { isActive: !emp.isActive }, 'PUT')}>
+                  <button onClick={async () => {
+                    const action = emp.isActive ? 'deactivate' : 'activate';
+                    if (!window.confirm(`Are you sure you want to ${action} ${emp.name}?`)) return;
+                    try {
+                      await mutateStaff(emp._id, { isActive: !emp.isActive }, 'PUT');
+                      sendNotification(`${emp.name} ${emp.isActive ? 'deactivated' : 'activated'} successfully`);
+                    } catch (err) {
+                      alert('Failed to update staff: ' + err.message);
+                    }
+                  }}>
                     {emp.isActive ? 'Deactivate' : 'Activate'}
                   </button>
-                  <button onClick={() => mutateStaff(emp._id, {}, 'DELETE')}>Remove</button>
+                  <button onClick={async () => {
+                    if (!window.confirm(
+                      `Are you sure you want to remove ${emp.name}?\n\nThis cannot be undone and may affect existing appointments.`
+                    )) return;
+                    try {
+                      await mutateStaff(emp._id, {}, 'DELETE');
+                      sendNotification(`${emp.name} removed successfully`);
+                    } catch (err) {
+                      alert('Failed to remove staff: ' + err.message);
+                    }
+                  }}>
+                    Remove
+                  </button>
                 </td>
               </tr>
-            ))}
-            {!staff.length && (
-              <tr>
-                <td colSpan="6" className="empty-row">
-                  No staff members yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-
+            );
+          })}
+          {!staff.length && (
+            <tr>
+              <td colSpan="6" className="empty-row">
+                No staff members yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  </section>
+);
   const renderClients = () => (
     <section className="panel">
       <header>
