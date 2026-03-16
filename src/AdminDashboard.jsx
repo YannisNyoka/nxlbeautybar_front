@@ -617,17 +617,29 @@ function AdminDashboard() {
                   >
                     Edit
                   </button>
-                  <button onClick={async (e) => {
-                    e.preventDefault();
-                    try {
-                      await mutateService(service._id, { isActive: !service.isActive }, 'PUT');
-                      sendNotification(`Service ${service.isActive ? 'disabled' : 'enabled'} successfully`);
-                    } catch (err) {
-                      alert('Failed to update service: ' + err.message);
-                    }
-                  }}>
-                    {service.isActive ? 'Disable' : 'Enable'}
-                  </button>
+                 <button onClick={async (e) => {
+  e.preventDefault();
+  try {
+    await mutateService(service._id, { isActive: !service.isActive }, 'PUT');
+    sendNotification(`Service ${service.isActive ? 'disabled' : 'enabled'} successfully`);
+  } catch (err) {
+    alert('Failed to update service: ' + err.message);
+  }
+}}>
+  {service.isActive ? 'Disable' : 'Enable'}
+</button>
+<button onClick={async (e) => {
+  e.preventDefault();
+  if (!window.confirm(`Are you sure you want to delete "${service.name}"? This cannot be undone.`)) return;
+  try {
+    await mutateService(service._id, {}, 'DELETE');
+    sendNotification(`Service "${service.name}" deleted successfully`);
+  } catch (err) {
+    alert('Failed to delete service: ' + err.message);
+  }
+}}>
+  Delete
+</button>
                 </td>
               </tr>
             ))}
