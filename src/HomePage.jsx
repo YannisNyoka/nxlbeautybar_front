@@ -193,7 +193,7 @@ function HomePage() {
             label="Manicure"
             desc="Long-lasting, chip-resistant polish"
             image={manicureImage}
-            backItems={['Rubberbase', 'Acrylic', 'Polygel', 'Shellac', 'Dip']}
+            backItems={['Rubberbase', 'Acrylic', 'Polygel']}
             flipped={flipped.manicure}
             onFlip={() => flip('manicure')}
           />
@@ -201,7 +201,7 @@ function HomePage() {
             label="Pedicure"
             desc="Custom designs and treatments"
             image={pedicureImage}
-            backItems={['Classic Pedicure', 'Basic Pedicure', 'Acrylic Pedi', 'French Pedi', 'Spa Pedi']}
+            backItems={['Rubberbase','Polygel','Gelish']}
             flipped={flipped.pedicure}
             onFlip={() => flip('pedicure')}
           />
@@ -209,7 +209,7 @@ function HomePage() {
             label="Eye Lashes"
             desc="Professional extensions"
             image={eyelashesImage}
-            backItems={['Classic Set', 'Volume Set', 'Hybrid']}
+            backItems={['Classic Set', 'Volume Set', 'Hybrid Set']}
             flipped={flipped.lashes}
             onFlip={() => flip('lashes')}
           />
