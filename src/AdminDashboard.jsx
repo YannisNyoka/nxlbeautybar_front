@@ -19,7 +19,7 @@ const API_ENDPOINTS = {
   services: `${API_BASE_URL}/services`,
   staff: `${API_BASE_URL}/employees`,
   availability: `${API_BASE_URL}/availability`,
-  clients: `${API_BASE_URL}/users`,
+  clients: `${API_BASE_URL}/users?limit=500`,
   payments: `${API_BASE_URL}/payments`
 };
 
@@ -53,7 +53,6 @@ function AdminDashboard() {
 
   // --- UI state ------------------------------------------------------------
   const [activeSection, setActiveSection] = useState(() => {
-    // Restore active section from localStorage on initial load
     return localStorage.getItem('adminActiveSection') || 'overview';
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -105,17 +104,9 @@ function AdminDashboard() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
 
-  // --- Access control ------------------------------------------------------ 
-  // REMOVED: This conflicts with App.jsx ProtectedRoute
-  // The route is already protected by <ProtectedRoute adminOnly>
-  // No need to check again here - it creates a redirect loop
-
   // --- Initial load --------------------------------------------------------
   useEffect(() => {
     if (!isAuthenticated || authLoading) return;
-    
-    console.log('AdminDashboard - Loading data for user:', user);
-    
     const loadAll = async () => {
       try {
         setLoading(true);
@@ -137,7 +128,6 @@ function AdminDashboard() {
         );
         setStaff(staffData.data || []);
         setAvailability(availabilityData.data || []);
-        // Filter admin-only from clients list if backend enforces; front-end still guards usage.
         setClients((clientData.data || []).filter(c => c.role !== 'admin'));
         setPayments((paymentData.data || []).map(pay => ({
           ...pay,
@@ -154,22 +144,23 @@ function AdminDashboard() {
     loadAll();
   }, [isAuthenticated, authLoading, user]);
 
-  // Persist active section to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('adminActiveSection', activeSection);
   }, [activeSection]);
 
   // --- Derived stats -------------------------------------------------------
+  // FIX #5: Use String comparison for ObjectId matching
   const filteredAppointments = useMemo(() => {
     return appointments.filter(appt => {
-      const matchesStaff = filters.staff === 'all' || appt.employeeId === filters.staff;
-      const matchesService =
-        filters.service === 'all' || (appt.serviceIds || []).includes(filters.service);
+      const matchesStaff = filters.staff === 'all' || String(appt.employeeId) === String(filters.staff);
+      const matchesService = filters.service === 'all' || (appt.serviceIds || []).some(id => String(id) === String(filters.service));
       const matchesStatus = filters.status === 'all' || appt.status === filters.status;
       const matchesClient =
         !filters.client ||
+        appt.userName?.toLowerCase().includes(filters.client.toLowerCase()) ||
         appt.clientName?.toLowerCase().includes(filters.client.toLowerCase()) ||
-        appt.clientEmail?.toLowerCase().includes(filters.client.toLowerCase());
+        appt.clientEmail?.toLowerCase().includes(filters.client.toLowerCase()) ||
+        appt.user?.email?.toLowerCase().includes(filters.client.toLowerCase());
       let matchesDate = true;
       if (filters.dateRange.start && filters.dateRange.end) {
         const apptDate = new Date(appt.date);
@@ -181,11 +172,13 @@ function AdminDashboard() {
     });
   }, [appointments, filters]);
 
+  // FIX #6: Use String comparison for workload counting
   const staffWorkload = useMemo(() => {
     const workload = {};
-    staff.forEach(s => (workload[s._id] = 0));
+    staff.forEach(s => (workload[String(s._id)] = 0));
     filteredAppointments.forEach(appt => {
-      if (workload[appt.employeeId] !== undefined) workload[appt.employeeId] += 1;
+      const key = String(appt.employeeId);
+      if (workload[key] !== undefined) workload[key] += 1;
     });
     return workload;
   }, [filteredAppointments, staff]);
@@ -209,7 +202,9 @@ function AdminDashboard() {
       d1.getFullYear() === d2.getFullYear() &&
       d1.getMonth() === d2.getMonth() &&
       d1.getDate() === d2.getDate();
-    const withinDays = (date, days) => (new Date(date) - today) / (1000 * 60 * 60 * 24) < days;
+
+    // FIX #9: Correct direction — days SINCE the date, not until
+    const withinDays = (date, days) => (today - new Date(date)) / (1000 * 60 * 60 * 24) < days;
 
     const bookingsToday = apptList.filter(appt => sameDay(new Date(appt.date), today)).length;
     const upcomingBookings = apptList.filter(appt => new Date(appt.date) >= today).length;
@@ -217,13 +212,13 @@ function AdminDashboard() {
     const noShows = apptList.filter(appt => appt.status === 'no-show').length;
 
     const revenueToday = paymentList
-      .filter(pay => sameDay(new Date(pay.createdAt), today))
+      .filter(pay => sameDay(new Date(pay.createdAt), today) && pay.status === 'paid')
       .reduce((sum, pay) => sum + decimalToFloat(pay.amount), 0);
     const revenueWeek = paymentList
-      .filter(pay => withinDays(pay.createdAt, 7))
+      .filter(pay => withinDays(pay.createdAt, 7) && pay.status === 'paid')
       .reduce((sum, pay) => sum + decimalToFloat(pay.amount), 0);
     const revenueMonth = paymentList
-      .filter(pay => withinDays(pay.createdAt, 30))
+      .filter(pay => withinDays(pay.createdAt, 30) && pay.status === 'paid')
       .reduce((sum, pay) => sum + decimalToFloat(pay.amount), 0);
     const unpaidCount = apptList.filter(appt => appt.paymentStatus !== 'paid').length;
 
@@ -244,7 +239,6 @@ function AdminDashboard() {
       method: 'PUT',
       body: JSON.stringify(payload)
     });
-    // re-fetch lightweight
     const apptData = await apiRequest(API_ENDPOINTS.appointments);
     setAppointments(apptData.data || []);
   }
@@ -253,31 +247,18 @@ function AdminDashboard() {
     try {
       const options = { method };
       if (method !== 'DELETE') {
-        // Ensure price is a number, not Decimal128 object
-        if (payload.price !== undefined) {
-          payload.price = Number(payload.price);
-        }
-        if (payload.durationMinutes !== undefined) {
-          payload.durationMinutes = Number(payload.durationMinutes);
-        }
+        if (payload.price !== undefined) payload.price = Number(payload.price);
+        if (payload.durationMinutes !== undefined) payload.durationMinutes = Number(payload.durationMinutes);
         options.body = JSON.stringify(payload);
       }
-      
-      // For updates, make sure we have a valid ID
       const endpoint = (id && method !== 'POST') ? `${API_ENDPOINTS.services}/${id}` : API_ENDPOINTS.services;
-      console.log('Updating service:', { endpoint, method, payload, id });
-      
       const result = await apiRequest(endpoint, options);
-      console.log('Service update result:', result);
-      
-      // Re-fetch services to get updated list without page refresh
       const serviceData = await apiRequest(API_ENDPOINTS.services);
       setServices((serviceData.data || []).map(service => ({
         ...service,
         price: decimalToFloat(service.price),
         durationMinutes: service.durationMinutes || service.duration
       })));
-      
       return result;
     } catch (err) {
       console.error('Service mutation failed:', err);
@@ -288,9 +269,7 @@ function AdminDashboard() {
   async function mutateStaff(id, payload, method = 'PUT') {
     try {
       const options = { method };
-      if (method !== 'DELETE') {
-        options.body = JSON.stringify(payload);
-      }
+      if (method !== 'DELETE') options.body = JSON.stringify(payload);
       await apiRequest(id ? `${API_ENDPOINTS.staff}/${id}` : API_ENDPOINTS.staff, options);
       const staffData = await apiRequest(API_ENDPOINTS.staff);
       setStaff(staffData.data || []);
@@ -303,9 +282,7 @@ function AdminDashboard() {
   async function mutateAvailability(id, payload, method = 'PUT') {
     try {
       const options = { method };
-      if (method !== 'DELETE') {
-        options.body = JSON.stringify(payload);
-      }
+      if (method !== 'DELETE') options.body = JSON.stringify(payload);
       await apiRequest(id ? `${API_ENDPOINTS.availability}/${id}` : API_ENDPOINTS.availability, options);
       const availData = await apiRequest(API_ENDPOINTS.availability);
       setAvailability(availData.data || []);
@@ -329,28 +306,26 @@ function AdminDashboard() {
       ['Date', 'Client', 'Staff', 'Services', 'Status', 'Payment', 'Amount'],
       ...appointments.map(appt => [
         appt.date,
-        appt.clientName || appt.clientEmail || 'Unknown',
-        staff.find(s => s._id === appt.employeeId)?.name || '—',
-        (appt.serviceIds || []).map(id => services.find(s => s._id === id)?.name).join('; '),
+        appt.userName || appt.clientName || appt.clientEmail || 'Unknown',
+        // FIX #4: String comparison in export too
+        staff.find(s => String(s._id) === String(appt.employeeId))?.name || appt.employee?.name || '—',
+        (appt.serviceIds || []).map(id => services.find(s => String(s._id) === String(id))?.name).filter(Boolean).join('; '),
         appt.status,
         appt.paymentStatus || 'unpaid',
-        (payments.find(p => p.appointmentId === appt._id)?.amount ?? 0).toFixed(2)
+        (payments.find(p => String(p.appointmentId) === String(appt._id))?.amount ?? 0).toFixed(2)
       ])
     ];
     const csv = rows.map(r => r.map(field => `"${String(field ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], {
-      type: format === 'pdf' ? 'application/pdf' : 'text/csv;charset=utf-8;'
-    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = format === 'pdf' ? 'nxl-report.pdf' : 'nxl-report.csv';
+    link.download = 'nxl-report.csv';
     link.click();
     URL.revokeObjectURL(link.href);
   };
 
   const sendNotification = async message => {
     setNotifications(prev => [...prev, { id: Date.now(), message, createdAt: new Date() }]);
-    // integrate: await apiRequest(`${API_BASE_URL}/notifications`, { method:'POST', body: JSON.stringify({ message }) });
   };
 
   // --- Render fragments ----------------------------------------------------
@@ -374,48 +349,23 @@ function AdminDashboard() {
         <header>
           <h3>Revenue Trend</h3>
           <div className="button-row">
-            <button 
-              className={`btn ${chartRange === 'week' ? 'primary' : 'ghost'}`}
-              onClick={() => setChartRange('week')}
-            >
-              Week
-            </button>
-            <button 
-              className={`btn ${chartRange === 'month' ? 'primary' : 'ghost'}`}
-              onClick={() => setChartRange('month')}
-            >
-              Month
-            </button>
-            <button 
-              className={`btn ${chartRange === 'year' ? 'primary' : 'ghost'}`}
-              onClick={() => setChartRange('year')}
-            >
-              Year
-            </button>
+            <button className={`btn ${chartRange === 'week' ? 'primary' : 'ghost'}`} onClick={() => setChartRange('week')}>Week</button>
+            <button className={`btn ${chartRange === 'month' ? 'primary' : 'ghost'}`} onClick={() => setChartRange('month')}>Month</button>
+            <button className={`btn ${chartRange === 'year' ? 'primary' : 'ghost'}`} onClick={() => setChartRange('year')}>Year</button>
           </div>
         </header>
         <RevenueChart payments={payments} range={chartRange} />
       </section>
-
       <section className="panel">
-        <header>
-          <h3>Bookings Trend</h3>
-        </header>
+        <header><h3>Bookings Trend</h3></header>
         <BookingsChart appointments={appointments} range={chartRange} />
       </section>
-
       <section className="panel quick-actions">
         <h3>Quick Actions</h3>
         <div className="action-buttons">
-          <button className="btn primary" onClick={() => setShowAppointmentModal(true)}>
-            ➕ Add Booking
-          </button>
-          <button className="btn primary" onClick={() => setActiveSection('services')}>
-            💅 Add Service
-          </button>
-          <button className="btn primary" onClick={() => setShowAvailabilityModal(true)}>
-            🚫 Block Time
-          </button>
+          <button className="btn primary" onClick={() => setShowAppointmentModal(true)}>➕ Add Booking</button>
+          <button className="btn primary" onClick={() => setActiveSection('services')}>💅 Add Service</button>
+          <button className="btn primary" onClick={() => setShowAvailabilityModal(true)}>🚫 Block Time</button>
         </div>
       </section>
     </>
@@ -426,32 +376,15 @@ function AdminDashboard() {
       <section className="panel filters">
         <h3>Appointment Filters</h3>
         <div className="filter-grid">
-          <select
-            value={filters.staff}
-            onChange={e => setFilters({ ...filters, staff: e.target.value })}
-          >
+          <select value={filters.staff} onChange={e => setFilters({ ...filters, staff: e.target.value })}>
             <option value="all">All Staff</option>
-            {staff.map(s => (
-              <option key={s._id} value={s._id}>
-                {s.name}
-              </option>
-            ))}
+            {staff.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
           </select>
-          <select
-            value={filters.service}
-            onChange={e => setFilters({ ...filters, service: e.target.value })}
-          >
+          <select value={filters.service} onChange={e => setFilters({ ...filters, service: e.target.value })}>
             <option value="all">All Services</option>
-            {services.map(s => (
-              <option key={s._id} value={s._id}>
-                {s.name}
-              </option>
-            ))}
+            {services.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
           </select>
-          <select
-            value={filters.status}
-            onChange={e => setFilters({ ...filters, status: e.target.value })}
-          >
+          <select value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })}>
             <option value="all">All Statuses</option>
             <option value="booked">Booked</option>
             <option value="completed">Completed</option>
@@ -470,29 +403,17 @@ function AdminDashboard() {
         <header>
           <h3>Appointments List</h3>
           <div className="button-row">
-            <button className="btn ghost" onClick={handleExportAppointmentsPDF}>
-              📄 Export PDF
-            </button>
-            <button className="btn ghost" onClick={() => sendNotification('Manual reminder sent')}>
-              Notify
-            </button>
-            <button className="btn primary" onClick={() => setShowAppointmentModal(true)}>
-              ➕ Create Appointment
-            </button>
+            <button className="btn ghost" onClick={handleExportAppointmentsPDF}>📄 Export PDF</button>
+            <button className="btn ghost" onClick={() => sendNotification('Manual reminder sent')}>Notify</button>
+            <button className="btn primary" onClick={() => setShowAppointmentModal(true)}>➕ Create Appointment</button>
           </div>
         </header>
         <div className="table-responsive">
           <table>
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Time</th>
-                <th>Client</th>
-                <th>Services</th>
-                <th>Staff</th>
-                <th>Status</th>
-                <th>Payment</th>
-                <th />
+                <th>Date</th><th>Time</th><th>Client</th><th>Services</th>
+                <th>Staff</th><th>Status</th><th>Payment</th><th />
               </tr>
             </thead>
             <tbody>
@@ -500,41 +421,26 @@ function AdminDashboard() {
                 <tr key={appt._id}>
                   <td>{appt.date}</td>
                   <td>{appt.time}</td>
-                  <td>{appt.clientName}</td>
-                  <td>{(appt.serviceIds || []).map(id => services.find(s => s._id === id)?.name).join(', ')}</td>
-                  <td>{staff.find(s => s._id === appt.employeeId)?.name || '—'}</td>
+                  {/* FIX #2: Use userName from backend */}
+                  <td>{appt.userName || appt.clientName || '—'}</td>
+                  {/* FIX #3: String comparison for service names */}
+                  <td>{(appt.serviceIds || []).map(id => services.find(s => String(s._id) === String(id))?.name).filter(Boolean).join(', ') || '—'}</td>
+                  {/* FIX #4: String comparison for staff name */}
+                  <td>{staff.find(s => String(s._id) === String(appt.employeeId))?.name || appt.employee?.name || '—'}</td>
                   <td className={`status ${appt.status}`}>{appt.status}</td>
                   <td>{appt.paymentStatus || 'unpaid'}</td>
                   <td className="row-actions">
-                    <button onClick={() => {
-                      setEditingAppointment(appt);
-                      setShowEditAppointmentModal(true);
-                    }} title="Edit">
-                      ✏️
-                    </button>
-                    <button onClick={() => mutateAppointment(appt._id, { status: 'completed' })} title="Mark Complete">
-                      ✓
-                    </button>
-                    <button onClick={() => mutateAppointment(appt._id, { status: 'cancelled' })} title="Cancel">
-                      ✕
-                    </button>
+                    <button onClick={() => { setEditingAppointment(appt); setShowEditAppointmentModal(true); }} title="Edit">✏️</button>
+                    <button onClick={() => mutateAppointment(appt._id, { status: 'completed' })} title="Mark Complete">✓</button>
+                    <button onClick={() => mutateAppointment(appt._id, { status: 'cancelled' })} title="Cancel">✕</button>
                     {appt.paymentStatus !== 'paid' && (
-                      <button onClick={() => {
-                        setSelectedAppointment(appt);
-                        setShowPaymentModal(true);
-                      }} title="Record Payment">
-                        💳
-                      </button>
+                      <button onClick={() => { setSelectedAppointment(appt); setShowPaymentModal(true); }} title="Record Payment">💳</button>
                     )}
                   </td>
                 </tr>
               ))}
               {!filteredAppointments.length && (
-                <tr>
-                  <td colSpan="8" className="empty-row">
-                    No appointments match the filters.
-                  </td>
-                </tr>
+                <tr><td colSpan="8" className="empty-row">No appointments match the filters.</td></tr>
               )}
             </tbody>
           </table>
@@ -542,26 +448,18 @@ function AdminDashboard() {
       </section>
 
       <section className="panel calendar-panel">
-        <header>
-          <h3>Calendar View</h3>
-        </header>
+        <header><h3>Calendar View</h3></header>
         {filteredAppointments.length > 0 && (
-          <AppointmentCalendar 
+          <AppointmentCalendar
             appointments={filteredAppointments}
             staff={staff}
             services={services}
-            onSelectSlot={(slotInfo) => {
-              setShowAppointmentModal(true);
-            }}
-            onSelectEvent={(event) => {
-              console.log('Selected appointment:', event.resource);
-            }}
+            onSelectSlot={() => setShowAppointmentModal(true)}
+            onSelectEvent={(event) => console.log('Selected appointment:', event.resource)}
           />
         )}
         {filteredAppointments.length === 0 && (
-          <div className="calendar-placeholder">
-            No appointments to display. Create your first appointment to see it on the calendar.
-          </div>
+          <div className="calendar-placeholder">No appointments to display. Create your first appointment to see it on the calendar.</div>
         )}
       </section>
     </>
@@ -575,21 +473,12 @@ function AdminDashboard() {
           setEditingService(null);
           setServiceForm({ name: '', duration: '', price: '', description: '', category: '' });
           setShowServiceForm(true);
-        }}>
-          + Add Service
-        </button>
+        }}>+ Add Service</button>
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr>
-              <th>Name</th>
-              <th>Category</th>
-              <th>Duration</th>
-              <th>Price</th>
-              <th>Status</th>
-              <th />
-            </tr>
+            <tr><th>Name</th><th>Category</th><th>Duration</th><th>Price</th><th>Status</th><th /></tr>
           </thead>
           <tbody>
             {services.map(service => (
@@ -600,55 +489,38 @@ function AdminDashboard() {
                 <td>R{(decimalToFloat(service.price) || 0).toFixed(2)}</td>
                 <td>{service.isActive ? 'Enabled' : 'Disabled'}</td>
                 <td className="row-actions">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      console.log('Editing service:', service);
-                      setEditingService(service);
-                      setServiceForm({
-                        name: service.name,
-                        duration: service.durationMinutes,
-                        price: decimalToFloat(service.price) || 0,
-                        category: service.category || '',
-                        description: service.description || ''
-                      });
-                      setShowServiceForm(true);
-                    }}
-                  >
-                    Edit
-                  </button>
-                 <button onClick={async (e) => {
-  e.preventDefault();
-  try {
-    await mutateService(service._id, { isActive: !service.isActive }, 'PUT');
-    sendNotification(`Service ${service.isActive ? 'disabled' : 'enabled'} successfully`);
-  } catch (err) {
-    alert('Failed to update service: ' + err.message);
-  }
-}}>
-  {service.isActive ? 'Disable' : 'Enable'}
-</button>
-<button onClick={async (e) => {
-  e.preventDefault();
-  if (!window.confirm(`Are you sure you want to delete "${service.name}"? This cannot be undone.`)) return;
-  try {
-    await mutateService(service._id, {}, 'DELETE');
-    sendNotification(`Service "${service.name}" deleted successfully`);
-  } catch (err) {
-    alert('Failed to delete service: ' + err.message);
-  }
-}}>
-  Delete
-</button>
+                  <button onClick={(e) => {
+                    e.preventDefault();
+                    setEditingService(service);
+                    setServiceForm({
+                      name: service.name,
+                      duration: service.durationMinutes,
+                      price: decimalToFloat(service.price) || 0,
+                      category: service.category || '',
+                      description: service.description || ''
+                    });
+                    setShowServiceForm(true);
+                  }}>Edit</button>
+                  <button onClick={async (e) => {
+                    e.preventDefault();
+                    try {
+                      await mutateService(service._id, { isActive: !service.isActive }, 'PUT');
+                      sendNotification(`Service ${service.isActive ? 'disabled' : 'enabled'} successfully`);
+                    } catch (err) { alert('Failed to update service: ' + err.message); }
+                  }}>{service.isActive ? 'Disable' : 'Enable'}</button>
+                  <button onClick={async (e) => {
+                    e.preventDefault();
+                    if (!window.confirm(`Are you sure you want to delete "${service.name}"?\n\nIf it has future bookings it will be disabled instead.`)) return;
+                    try {
+                      await mutateService(service._id, {}, 'DELETE');
+                      sendNotification(`Service "${service.name}" deleted successfully`);
+                    } catch (err) { alert('Failed to delete service: ' + err.message); }
+                  }}>Delete</button>
                 </td>
               </tr>
             ))}
             {!services.length && (
-              <tr>
-                <td colSpan="6" className="empty-row">
-                  No services defined yet.
-                </td>
-              </tr>
+              <tr><td colSpan="6" className="empty-row">No services defined yet.</td></tr>
             )}
           </tbody>
         </table>
@@ -659,108 +531,33 @@ function AdminDashboard() {
           setEditingService(null);
           setServiceForm({ name: '', duration: '', price: '', description: '', category: '' });
         }}>
-          <form
-            onSubmit={async e => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsSubmitting(true);
-              try {
-                const duration = Number(serviceForm.duration);
-                const price = Number(serviceForm.price);
-                
-                // Validate duration is multiple of 15
-                if (duration % 15 !== 0) {
-                  alert('Duration must be a multiple of 15 minutes (e.g., 15, 30, 45, 60)');
-                  setIsSubmitting(false);
-                  return;
-                }
-                
-                // Validate price
-                if (isNaN(price) || price < 0) {
-                  alert('Please enter a valid price');
-                  setIsSubmitting(false);
-                  return;
-                }
-                
-                const payload = {
-                  name: serviceForm.name,
-                  durationMinutes: duration,
-                  price: price,
-                  description: serviceForm.description,
-                  category: serviceForm.category,
-                  isActive: true
-                };
-                
-                console.log('Submitting service:', { 
-                  id: editingService?._id, 
-                  payload, 
-                  method: editingService ? 'PUT' : 'POST' 
-                });
-                
-                await mutateService(editingService?._id, payload, editingService ? 'PUT' : 'POST');
-                
-                setShowServiceForm(false);
-                setEditingService(null);
-                setServiceForm({ name: '', duration: '', price: '', description: '', category: '' });
-                sendNotification(`Service ${editingService ? 'updated' : 'created'} successfully`);
-              } catch (err) {
-                console.error('Service save error:', err);
-                alert('Failed to save service: ' + err.message);
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
-            className="form-grid"
-          >
-            <input
-              required
-              placeholder="Service name"
-              value={serviceForm.name}
-              onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })}
-              disabled={isSubmitting}
-            />
-            <input
-              placeholder="Category"
-              value={serviceForm.category || ''}
-              onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })}
-              disabled={isSubmitting}
-            />
-            <input
-              required
-              type="number"
-              min="15"
-              step="15"
-              placeholder="Duration (minutes - must be multiple of 15)"
-              value={serviceForm.duration}
-              onChange={e => setServiceForm({ ...serviceForm, duration: e.target.value })}
-              disabled={isSubmitting}
-            />
-            <input
-              required
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Price (R)"
-              value={serviceForm.price}
-              onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })}
-              disabled={isSubmitting}
-            />
-            <textarea
-              placeholder="Description"
-              value={serviceForm.description || ''}
-              onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })}
-              disabled={isSubmitting}
-            />
+          <form onSubmit={async e => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsSubmitting(true);
+            try {
+              const duration = Number(serviceForm.duration);
+              const price = Number(serviceForm.price);
+              if (duration % 15 !== 0) { alert('Duration must be a multiple of 15 minutes'); setIsSubmitting(false); return; }
+              if (isNaN(price) || price < 0) { alert('Please enter a valid price'); setIsSubmitting(false); return; }
+              const payload = { name: serviceForm.name, durationMinutes: duration, price, description: serviceForm.description, category: serviceForm.category, isActive: true };
+              await mutateService(editingService?._id, payload, editingService ? 'PUT' : 'POST');
+              setShowServiceForm(false);
+              setEditingService(null);
+              setServiceForm({ name: '', duration: '', price: '', description: '', category: '' });
+              sendNotification(`Service ${editingService ? 'updated' : 'created'} successfully`);
+            } catch (err) {
+              alert('Failed to save service: ' + err.message);
+            } finally { setIsSubmitting(false); }
+          }} className="form-grid">
+            <input required placeholder="Service name" value={serviceForm.name} onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })} disabled={isSubmitting} />
+            <input placeholder="Category" value={serviceForm.category || ''} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })} disabled={isSubmitting} />
+            <input required type="number" min="15" step="15" placeholder="Duration (minutes)" value={serviceForm.duration} onChange={e => setServiceForm({ ...serviceForm, duration: e.target.value })} disabled={isSubmitting} />
+            <input required type="number" min="0" step="0.01" placeholder="Price (R)" value={serviceForm.price} onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} disabled={isSubmitting} />
+            <textarea placeholder="Description" value={serviceForm.description || ''} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} disabled={isSubmitting} />
             <footer className="modal-actions">
-              <button type="button" onClick={() => {
-                setShowServiceForm(false);
-                setEditingService(null);
-              }} disabled={isSubmitting}>
-                Cancel
-              </button>
-              <button type="submit" className="btn primary" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Save'}
-              </button>
+              <button type="button" onClick={() => { setShowServiceForm(false); setEditingService(null); }} disabled={isSubmitting}>Cancel</button>
+              <button type="submit" className="btn primary" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save'}</button>
             </footer>
           </form>
         </Modal>
@@ -769,117 +566,73 @@ function AdminDashboard() {
   );
 
   const renderStaff = () => (
-  <section className="panel">
-    <header>
-      <h3>Staff Management</h3>
-      <button className="btn primary" onClick={() => {
-        setEditingStaff(null);
-        setShowStaffModal(true);
-      }}>
-        ➕ Add Technician
-      </button>
-    </header>
-    <div className="table-responsive">
-      <table>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Services</th>
-            <th>Working Hours</th>
-            <th>Active</th>
-            <th>Workload</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {staff.map(emp => {
-            const empServices = (emp.servicesOffered || [])
-              .map(id => services.find(s => String(s._id) === String(id))?.name)
-              .filter(Boolean)
-              .join(', ') || '—';
-
-            return (
-              <tr key={emp._id}>
-                <td>{emp.name}</td>
-                <td>{empServices}</td>
-                <td>{emp.workingHours ? 'Custom' : 'Default'}</td>
-                <td>{emp.isActive ? 'Yes' : 'No'}</td>
-                <td>{staffWorkload[emp._id] || 0} appts</td>
-                <td className="row-actions">
-                  <button onClick={() => {
-                    setEditingStaff(emp);
-                    setShowStaffModal(true);
-                  }}>
-                    Edit
-                  </button>
-                  <button onClick={async () => {
-                    const action = emp.isActive ? 'deactivate' : 'activate';
-                    if (!window.confirm(`Are you sure you want to ${action} ${emp.name}?`)) return;
-                    try {
-                      await mutateStaff(emp._id, { isActive: !emp.isActive }, 'PUT');
-                      sendNotification(`${emp.name} ${emp.isActive ? 'deactivated' : 'activated'} successfully`);
-                    } catch (err) {
-                      alert('Failed to update staff: ' + err.message);
-                    }
-                  }}>
-                    {emp.isActive ? 'Deactivate' : 'Activate'}
-                  </button>
-                  <button onClick={async () => {
-                    if (!window.confirm(
-                      `Are you sure you want to remove ${emp.name}?\n\nThis cannot be undone and may affect existing appointments.`
-                    )) return;
-                    try {
-                      await mutateStaff(emp._id, {}, 'DELETE');
-                      sendNotification(`${emp.name} removed successfully`);
-                    } catch (err) {
-                      alert('Failed to remove staff: ' + err.message);
-                    }
-                  }}>
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-          {!staff.length && (
-            <tr>
-              <td colSpan="6" className="empty-row">
-                No staff members yet.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  </section>
-);
-  const renderClients = () => (
     <section className="panel">
       <header>
-        <h3>Clients</h3>
-        <input
-          placeholder="Search clients"
-          value={filters.client}
-          onChange={e => setFilters({ ...filters, client: e.target.value })}
-        />
+        <h3>Staff Management</h3>
+        <button className="btn primary" onClick={() => { setEditingStaff(null); setShowStaffModal(true); }}>➕ Add Technician</button>
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Total Bookings</th>
-              <th>Last Booking</th>
-              <th>Status</th>
-              <th />
-            </tr>
+            <tr><th>Name</th><th>Services</th><th>Working Hours</th><th>Active</th><th>Workload</th><th /></tr>
+          </thead>
+          <tbody>
+            {staff.map(emp => {
+              const empServices = (emp.servicesOffered || [])
+                .map(id => services.find(s => String(s._id) === String(id))?.name)
+                .filter(Boolean).join(', ') || '—';
+              return (
+                <tr key={emp._id}>
+                  <td>{emp.name}</td>
+                  <td>{empServices}</td>
+                  <td>{emp.workingHours ? 'Custom' : 'Default'}</td>
+                  <td>{emp.isActive ? 'Yes' : 'No'}</td>
+                  {/* FIX #6: Use String key for workload lookup */}
+                  <td>{staffWorkload[String(emp._id)] || 0} appts</td>
+                  <td className="row-actions">
+                    <button onClick={() => { setEditingStaff(emp); setShowStaffModal(true); }}>Edit</button>
+                    <button onClick={async () => {
+                      const action = emp.isActive ? 'deactivate' : 'activate';
+                      if (!window.confirm(`Are you sure you want to ${action} ${emp.name}?`)) return;
+                      try {
+                        await mutateStaff(emp._id, { isActive: !emp.isActive }, 'PUT');
+                        sendNotification(`${emp.name} ${emp.isActive ? 'deactivated' : 'activated'} successfully`);
+                      } catch (err) { alert('Failed to update staff: ' + err.message); }
+                    }}>{emp.isActive ? 'Deactivate' : 'Activate'}</button>
+                    <button onClick={async () => {
+                      if (!window.confirm(`Are you sure you want to remove ${emp.name}?\n\nThis cannot be undone and may affect existing appointments.`)) return;
+                      try {
+                        await mutateStaff(emp._id, {}, 'DELETE');
+                        sendNotification(`${emp.name} removed successfully`);
+                      } catch (err) { alert('Failed to remove staff: ' + err.message); }
+                    }}>Remove</button>
+                  </td>
+                </tr>
+              );
+            })}
+            {!staff.length && <tr><td colSpan="6" className="empty-row">No staff members yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+
+  const renderClients = () => (
+    <section className="panel">
+      <header>
+        <h3>Clients</h3>
+        <input placeholder="Search clients" value={filters.client} onChange={e => setFilters({ ...filters, client: e.target.value })} />
+      </header>
+      <div className="table-responsive">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Total Bookings</th><th>Last Booking</th><th>Status</th><th /></tr>
           </thead>
           <tbody>
             {clients
               .filter(c => c.email?.toLowerCase().includes(filters.client.toLowerCase()))
               .map(client => {
-                const stats = clientStats[client._id] || { total: 0, last: null };
+                const stats = clientStats[String(client._id)] || { total: 0, last: null };
                 const isActive = client.isActive !== false;
                 return (
                   <tr key={client._id}>
@@ -890,20 +643,12 @@ function AdminDashboard() {
                     <td>{isActive ? 'Active' : 'Blocked'}</td>
                     <td className="row-actions">
                       <button onClick={() => sendNotification(`Reminder sent to ${client.email}`)}>Notify</button>
-                      <button onClick={() => blockClient(client._id, isActive)}>
-                        {isActive ? 'Block' : 'Unblock'}
-                      </button>
+                      <button onClick={() => blockClient(client._id, isActive)}>{isActive ? 'Block' : 'Unblock'}</button>
                     </td>
                   </tr>
                 );
               })}
-            {!clients.length && (
-              <tr>
-                <td colSpan="6" className="empty-row">
-                  No clients registered yet.
-                </td>
-              </tr>
-            )}
+            {!clients.length && <tr><td colSpan="6" className="empty-row">No clients registered yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -914,42 +659,26 @@ function AdminDashboard() {
     <section className="panel">
       <header>
         <h3>Availability & Scheduling</h3>
-        <div className="button-row">
-          <button className="btn primary" onClick={() => setShowAvailabilityModal(true)}>
-            ➕ Block Time
-          </button>
-        </div>
+        <button className="btn primary" onClick={() => setShowAvailabilityModal(true)}>➕ Block Time</button>
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr>
-              <th>Date</th>
-              <th>Time</th>
-              <th>Employee</th>
-              <th>Reason</th>
-              <th />
-            </tr>
+            <tr><th>Date</th><th>Time</th><th>Employee</th><th>Reason</th><th /></tr>
           </thead>
           <tbody>
             {availability.map(slot => (
               <tr key={slot._id}>
                 <td>{slot.date}</td>
                 <td>{slot.time}</td>
-                <td>{slot.employeeId === 'ALL' ? 'Salon-wide' : staff.find(s => s._id === slot.employeeId)?.name}</td>
+                <td>{slot.employeeId === 'ALL' ? 'Salon-wide' : staff.find(s => String(s._id) === String(slot.employeeId))?.name || '—'}</td>
                 <td>{slot.reason}</td>
                 <td className="row-actions">
                   <button onClick={() => mutateAvailability(slot._id, {}, 'DELETE')}>Remove</button>
                 </td>
               </tr>
             ))}
-            {!availability.length && (
-              <tr>
-                <td colSpan="5" className="empty-row">
-                  No blocked time slots.
-                </td>
-              </tr>
-            )}
+            {!availability.length && <tr><td colSpan="5" className="empty-row">No blocked time slots.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -961,26 +690,14 @@ function AdminDashboard() {
       <header>
         <h3>Payments & Reports</h3>
         <div className="button-row">
-          <button className="btn ghost" onClick={() => exportReport('csv')}>
-            📊 Export CSV
-          </button>
-          <button className="btn ghost" onClick={handleExportRevenuePDF}>
-            📄 Export PDF
-          </button>
+          <button className="btn ghost" onClick={() => exportReport('csv')}>📊 Export CSV</button>
+          <button className="btn ghost" onClick={handleExportRevenuePDF}>📄 Export PDF</button>
         </div>
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr>
-              <th>Date</th>
-              <th>Client</th>
-              <th>Amount</th>
-              <th>Type</th>
-              <th>Method</th>
-              <th>Status</th>
-              <th />
-            </tr>
+            <tr><th>Date</th><th>Client</th><th>Amount</th><th>Type</th><th>Method</th><th>Status</th><th /></tr>
           </thead>
           <tbody>
             {payments.map(pay => (
@@ -992,21 +709,14 @@ function AdminDashboard() {
                 <td>{pay.method}</td>
                 <td className={`status ${pay.status}`}>{pay.status}</td>
                 <td className="row-actions">
+                  {/* FIX #7: Use correct PUT endpoint for refund */}
                   {pay.status === 'paid' && (
-                    <button onClick={() => handleRefundPayment(pay._id)} title="Refund">
-                      ↩️
-                    </button>
+                    <button onClick={() => handleRefundPayment(pay._id)} title="Refund">↩️</button>
                   )}
                 </td>
               </tr>
             ))}
-            {!payments.length && (
-              <tr>
-                <td colSpan="7" className="empty-row">
-                  No payments recorded yet.
-                </td>
-              </tr>
-            )}
+            {!payments.length && <tr><td colSpan="7" className="empty-row">No payments recorded yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -1017,9 +727,7 @@ function AdminDashboard() {
     <section className="panel">
       <header>
         <h3>Notifications & Announcements</h3>
-        <button className="btn primary" onClick={() => sendNotification('Sample announcement')}>
-          + New Announcement
-        </button>
+        <button className="btn primary" onClick={() => sendNotification('Sample announcement')}>+ New Announcement</button>
       </header>
       <ul className="notification-feed">
         {notifications.map(note => (
@@ -1069,7 +777,6 @@ function AdminDashboard() {
           notes: formData.notes
         })
       });
-      
       const apptData = await apiRequest(API_ENDPOINTS.appointments);
       setAppointments(apptData.data || []);
       setShowAppointmentModal(false);
@@ -1077,24 +784,16 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Failed to create appointment:', err);
       alert('Failed to create appointment: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
+  // FIX #1: handleStaffSubmit is now properly wired to StaffModal below
   const handleStaffSubmit = async (formData) => {
     setIsSubmitting(true);
     try {
       const method = editingStaff ? 'PUT' : 'POST';
-      const endpoint = editingStaff 
-        ? `${API_ENDPOINTS.staff}/${editingStaff._id}` 
-        : API_ENDPOINTS.staff;
-      
-      await apiRequest(endpoint, {
-        method,
-        body: JSON.stringify(formData)
-      });
-      
+      const endpoint = editingStaff ? `${API_ENDPOINTS.staff}/${editingStaff._id}` : API_ENDPOINTS.staff;
+      await apiRequest(endpoint, { method, body: JSON.stringify(formData) });
       const staffData = await apiRequest(API_ENDPOINTS.staff);
       setStaff(staffData.data || []);
       setShowStaffModal(false);
@@ -1103,19 +802,14 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Failed to save staff:', err);
       alert('Failed to save staff: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
+  // FIX #1: handleBlockTime is now properly wired to AvailabilityModal below
   const handleBlockTime = async (formData) => {
     setIsSubmitting(true);
     try {
-      await apiRequest(API_ENDPOINTS.availability, {
-        method: 'POST',
-        body: JSON.stringify(formData)
-      });
-      
+      await apiRequest(API_ENDPOINTS.availability, { method: 'POST', body: JSON.stringify(formData) });
       const availData = await apiRequest(API_ENDPOINTS.availability);
       setAvailability(availData.data || []);
       setShowAvailabilityModal(false);
@@ -1123,9 +817,7 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Failed to block time:', err);
       alert('Failed to block time: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
   const handleUpdateAppointment = async (formData) => {
@@ -1142,7 +834,6 @@ function AdminDashboard() {
           status: formData.status
         })
       });
-      
       const apptData = await apiRequest(API_ENDPOINTS.appointments);
       setAppointments(apptData.data || []);
       setShowEditAppointmentModal(false);
@@ -1151,24 +842,17 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Failed to update appointment:', err);
       alert('Failed to update appointment: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
   const handleCreatePayment = async (formData) => {
     setIsSubmitting(true);
     try {
-      await apiRequest(API_ENDPOINTS.payments, {
-        method: 'POST',
-        body: JSON.stringify(formData)
-      });
-      
+      await apiRequest(API_ENDPOINTS.payments, { method: 'POST', body: JSON.stringify(formData) });
       const [apptData, paymentData] = await Promise.all([
         apiRequest(API_ENDPOINTS.appointments),
         apiRequest(API_ENDPOINTS.payments)
       ]);
-      
       setAppointments(apptData.data || []);
       setPayments(paymentData.data || []);
       setShowPaymentModal(false);
@@ -1177,24 +861,21 @@ function AdminDashboard() {
     } catch (err) {
       console.error('Failed to record payment:', err);
       alert('Failed to record payment: ' + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    } finally { setIsSubmitting(false); }
   };
 
+  // FIX #7: Use correct PUT /payments/:id endpoint instead of non-existent /refund
   const handleRefundPayment = async (paymentId) => {
-    if (!confirm('Are you sure you want to refund this payment?')) return;
-    
+    if (!window.confirm('Are you sure you want to refund this payment?')) return;
     try {
-      await apiRequest(`${API_ENDPOINTS.payments}/${paymentId}/refund`, {
-        method: 'POST'
+      await apiRequest(`${API_ENDPOINTS.payments}/${paymentId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'refunded' })
       });
-      
       const [apptData, paymentData] = await Promise.all([
         apiRequest(API_ENDPOINTS.appointments),
         apiRequest(API_ENDPOINTS.payments)
       ]);
-      
       setAppointments(apptData.data || []);
       setPayments(paymentData.data || []);
       sendNotification('Payment refunded successfully');
@@ -1218,31 +899,21 @@ function AdminDashboard() {
       <div className="admin-error">
         <h2>Admin Dashboard</h2>
         <p>{error}</p>
-        <button className="btn primary" onClick={() => window.location.reload()}>
-          Retry
-        </button>
+        <button className="btn primary" onClick={() => window.location.reload()}>Retry</button>
       </div>
     );
   }
 
   const sectionRenderer = () => {
     switch (activeSection) {
-      case 'appointments':
-        return renderAppointments();
-      case 'services':
-        return renderServices();
-      case 'staff':
-        return renderStaff();
-      case 'clients':
-        return renderClients();
-      case 'availability':
-        return renderAvailability();
-      case 'payments':
-        return renderPayments();
-      case 'notifications':
-        return renderNotifications();
-      default:
-        return renderOverview();
+      case 'appointments': return renderAppointments();
+      case 'services': return renderServices();
+      case 'staff': return renderStaff();
+      case 'clients': return renderClients();
+      case 'availability': return renderAvailability();
+      case 'payments': return renderPayments();
+      case 'notifications': return renderNotifications();
+      default: return renderOverview();
     }
   };
 
@@ -1250,9 +921,7 @@ function AdminDashboard() {
     <div className="admin-shell">
       <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand">
-          <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>
-            ☰
-          </button>
+          <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
           <div>
             <h2>NXL Beauty Bar</h2>
             <p>Admin Panel</p>
@@ -1269,16 +938,10 @@ function AdminDashboard() {
           <SidebarBtn icon="🔔" label="Notifications" active={activeSection === 'notifications'} onClick={() => setActiveSection('notifications')} />
         </nav>
         <footer>
-          <button className="btn ghost" onClick={() => {
-            // Clear the active section when navigating away
-            localStorage.removeItem('adminActiveSection');
-            navigate('/dashboard');
-          }}>
+          <button className="btn ghost" onClick={() => { localStorage.removeItem('adminActiveSection'); navigate('/dashboard'); }}>
             Return to User View
           </button>
-          <button className="btn danger" onClick={logout}>
-            Logout
-          </button>
+          <button className="btn danger" onClick={logout}>Logout</button>
         </footer>
       </aside>
 
@@ -1314,10 +977,7 @@ function AdminDashboard() {
           services={services}
           staff={staff}
           clients={clients}
-          onClose={() => {
-            setShowEditAppointmentModal(false);
-            setEditingAppointment(null);
-          }}
+          onClose={() => { setShowEditAppointmentModal(false); setEditingAppointment(null); }}
           onSubmit={handleUpdateAppointment}
           isSubmitting={isSubmitting}
         />
@@ -1326,16 +986,32 @@ function AdminDashboard() {
       {showPaymentModal && (
         <PaymentModal
           appointment={selectedAppointment}
-          onClose={() => {
-            setShowPaymentModal(false);
-            setSelectedAppointment(null);
-          }}
+          onClose={() => { setShowPaymentModal(false); setSelectedAppointment(null); }}
           onSubmit={handleCreatePayment}
           isSubmitting={isSubmitting}
         />
       )}
 
-      {/* ...existing other modals... */}
+      {/* FIX #1: StaffModal now properly wired */}
+      {showStaffModal && (
+        <StaffModal
+          staff={editingStaff}
+          services={services}
+          onClose={() => { setShowStaffModal(false); setEditingStaff(null); }}
+          onSubmit={handleStaffSubmit}
+          isSubmitting={isSubmitting}
+        />
+      )}
+
+      {/* FIX #1: AvailabilityModal now properly wired */}
+      {showAvailabilityModal && (
+        <AvailabilityModal
+          staff={staff}
+          onClose={() => setShowAvailabilityModal(false)}
+          onSubmit={handleBlockTime}
+          isSubmitting={isSubmitting}
+        />
+      )}
     </div>
   );
 }
@@ -1360,15 +1036,6 @@ function StatCard({ label, value, icon }) {
         <p>{label}</p>
         <h3>{value}</h3>
       </div>
-    </div>
-  );
-}
-
-function TrendChartCard({ title }) {
-  return (
-    <div className="trend-card">
-      <header>{title}</header>
-      <div className="chart-placeholder">[Chart Placeholder]</div>
     </div>
   );
 }
