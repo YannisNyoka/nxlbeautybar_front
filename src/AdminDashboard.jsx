@@ -386,6 +386,7 @@ function AdminDashboard() {
           </select>
           <select value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })}>
             <option value="all">All Statuses</option>
+            <option value="pending">Pending Payment</option>
             <option value="booked">Booked</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>

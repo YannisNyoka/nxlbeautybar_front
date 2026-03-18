@@ -220,7 +220,7 @@ function Dashboard() {
       if (result.success) {
         const formattedSlots = result.data
           .map(appointment => {
-            if (appointment.status === 'cancelled') return null;
+            if (appointment.status === 'cancelled' || appointment.status === 'pending') return null;
             const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/)
               ? appointment.date
               : new Date(appointment.date).toISOString().split('T')[0];
