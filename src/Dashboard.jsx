@@ -4,17 +4,13 @@ import BookingSummary from './BookingSummary';
 import { useAuth } from './AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 
-// Helper to safely convert Decimal128 or numeric values to float
 const decimalToFloat = (value) => {
   if (value == null) return 0;
-  if (typeof value === 'object' && '$numberDecimal' in value) {
-    return parseFloat(value.$numberDecimal);
-  }
+  if (typeof value === 'object' && '$numberDecimal' in value) return parseFloat(value.$numberDecimal);
   const num = Number(value);
   return isNaN(num) ? 0 : num;
 };
 
-// Helper to convert 24-hour time to 12-hour format with am/pm
 const convertTo12Hour = (time24) => {
   if (!time24) return '';
   const [hours, minutes] = time24.split(':').map(Number);
@@ -23,26 +19,18 @@ const convertTo12Hour = (time24) => {
   return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`;
 };
 
-// Helper to convert 12-hour time with am/pm to 24-hour format
 const convertTo24Hour = (time12) => {
   if (!time12) return '';
   const match = time12.match(/(\d+):(\d+)\s*(am|pm)/i);
   if (!match) return time12;
   let [, hours, minutes, period] = match;
-  hours = parseInt(hours, 10);
-  minutes = parseInt(minutes, 10);
+  hours = parseInt(hours, 10); minutes = parseInt(minutes, 10);
   if (period.toLowerCase() === 'pm' && hours !== 12) hours += 12;
   else if (period.toLowerCase() === 'am' && hours === 12) hours = 0;
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
 function Dashboard() {
-  const pedicureTypes = [
-    'Basic Pedicure','French Pedicure','Gel Pedicure','Spa Pedicure',
-    'Paraffin Pedicure','Hot Stone Pedicure','Fish Pedicure','Mini Pedicure',
-    'Athletic or Sports Pedicure','Luxury/Deluxe Pedicure'
-  ];
-
   const defaultServices = [
     { name: 'Manicure', duration: 45, price: 150 },
     { name: 'Pedicure', duration: 30, price: 100 },
@@ -50,18 +38,11 @@ function Dashboard() {
     { name: 'Tinting',  duration: 30, price: 80  }
   ];
 
-  const manicureTypes = [
-    'Basic manicure','Classic gel manicure','Hard gel manicure','Acrylic full set',
-    'Acrylic fill','Acrylic overlay','Full-coverage soft gel tips','Polygel manicure',
-    'Dip manicure','Press-on manicure','Shellac manicure','Vinylux manicure'
-  ];
-
   const [selectedPedicureType, setSelectedPedicureType] = useState('');
   const [selectedManicureType, setSelectedManicureType] = useState('');
   const { user, logout, appointmentRefreshTrigger } = useAuth();
   const navigate = useNavigate();
   const [selectedServices, setSelectedServices] = useState([]);
-
   const today = new Date();
   const [selectedDate, setSelectedDate] = useState(today.getDate());
   const [selectedTime, setSelectedTime] = useState('');
@@ -75,63 +56,36 @@ function Dashboard() {
   const [servicesError, setServicesError] = useState('');
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 
-  const [collapsedPanels, setCollapsedPanels] = useState({
-    services: false, date: false, time: false, employee: false
-  });
+  const [collapsedPanels, setCollapsedPanels] = useState({ services: false, date: false, time: false, employee: false });
 
   const [services, setServices] = useState(() => {
     try {
       const saved = localStorage.getItem('services');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed.map(s => ({ _id: s._id || s.id, name: s.name, duration: s.duration, price: s.price }));
-        }
-      }
+      if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) return parsed.map(s => ({ _id: s._id || s.id, name: s.name, duration: s.duration, price: s.price })); }
     } catch {}
     return defaultServices;
   });
 
   useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'services') {
-        try {
-          const parsed = JSON.parse(e.newValue || '[]');
-          if (Array.isArray(parsed)) {
-            setServices(parsed.map(s => ({ _id: s._id || s.id, name: s.name, duration: s.duration, price: s.price })));
-          }
-        } catch {}
-      }
-    };
+    const onStorage = (e) => { if (e.key === 'services') { try { const parsed = JSON.parse(e.newValue || '[]'); if (Array.isArray(parsed)) setServices(parsed.map(s => ({ _id: s._id || s.id, name: s.name, duration: s.duration, price: s.price }))); } catch {} } };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const generateTimeSlots = (start = '09:00', end = '17:00', interval = 15) => {
-    const slots = [];
-    let [h, m] = start.split(':').map(Number);
-    const [endH, endM] = end.split(':').map(Number);
+    const slots = []; let [h, m] = start.split(':').map(Number); const [endH, endM] = end.split(':').map(Number);
     while (h < endH || (h === endH && m <= endM)) {
-      const hour12 = h % 12 === 0 ? 12 : h % 12;
-      const ampm = h < 12 ? 'am' : 'pm';
+      const hour12 = h % 12 === 0 ? 12 : h % 12; const ampm = h < 12 ? 'am' : 'pm';
       slots.push(`${hour12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`);
-      m += interval;
-      if (m >= 60) { h += 1; m -= 60; }
+      m += interval; if (m >= 60) { h += 1; m -= 60; }
     }
     return slots;
   };
 
   const allTimeSlots = generateTimeSlots('09:00', '17:00', 15);
-
   const timeSlots = {
-    morning: allTimeSlots.filter(t => {
-      const h = parseInt(t.split(':')[0], 10);
-      return t.includes('am') && h < 12;
-    }),
-    afternoon: allTimeSlots.filter(t => {
-      const h = parseInt(t.split(':')[0], 10);
-      return t.includes('pm') && (h < 5 || h === 12);
-    }),
+    morning: allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('am') && h < 12; }),
+    afternoon: allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('pm') && (h < 5 || h === 12); }),
   };
 
   const [bookedSlots, setBookedSlots] = useState([]);
@@ -140,110 +94,68 @@ function Dashboard() {
 
   const parseSlotDateTime = (slot) => {
     try {
-      const dateStr = String(slot?.date || '').trim();
-      const parts = dateStr.split(' ');
+      const dateStr = String(slot?.date || '').trim(); const parts = dateStr.split(' ');
       if (parts.length < 3) return new Date(0);
-      const [month, year, day] = parts;
-      const base = new Date(`${month} ${day}, ${year}`);
+      const [month, year, day] = parts; const base = new Date(`${month} ${day}, ${year}`);
       if (isNaN(base.getTime())) return new Date(0);
-      base.setHours(23, 59, 59, 999);
-      return base;
+      base.setHours(23, 59, 59, 999); return base;
     } catch { return new Date(0); }
   };
 
-  const pruneExpiredUnavailableSlots = (slots) => {
-    const now = new Date();
-    return (Array.isArray(slots) ? slots : []).filter(s => parseSlotDateTime(s) >= now);
-  };
+  const pruneExpiredUnavailableSlots = (slots) => { const now = new Date(); return (Array.isArray(slots) ? slots : []).filter(s => parseSlotDateTime(s) >= now); };
+
+  useEffect(() => { let initial = []; try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; } setUnavailableSlots(pruneExpiredUnavailableSlots(initial)); }, []);
 
   useEffect(() => {
-    let initial = [];
-    try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; }
-    setUnavailableSlots(pruneExpiredUnavailableSlots(initial));
+    const onStorage = (e) => { if (e.key === 'unavailableSlots') { try { setUnavailableSlots(pruneExpiredUnavailableSlots(JSON.parse(e.newValue || '[]'))); } catch {} } };
+    window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'unavailableSlots') {
-        try { setUnavailableSlots(pruneExpiredUnavailableSlots(JSON.parse(e.newValue || '[]'))); } catch {}
-      }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  useEffect(() => {
-    if (appointmentRefreshTrigger > 0) fetchAppointments();
-  }, [appointmentRefreshTrigger]);
+  useEffect(() => { if (appointmentRefreshTrigger > 0) fetchAppointments(); }, [appointmentRefreshTrigger]);
 
   useEffect(() => {
     async function fetchServices() {
       try {
-        setServicesError('');
-        const token = localStorage.getItem('token');
+        setServicesError(''); const token = localStorage.getItem('token');
         const response = await fetch(`${apiBase}/services`, { headers: { Authorization: `Bearer ${token}` } });
         const result = await response.json();
         if (response.ok && result.success && Array.isArray(result.data)) {
-          const active = result.data
-            .filter(s => s.isActive !== false)
-            .map(s => ({ _id: s._id || s.id, name: s.name, duration: s.durationMinutes, price: decimalToFloat(s.price), category: s.category || '' }));
+          const active = result.data.filter(s => s.isActive !== false).map(s => ({ _id: s._id || s.id, name: s.name, duration: s.durationMinutes, price: decimalToFloat(s.price), category: s.category || '' }));
           if (active.length > 0) { setServices(active); return; }
         }
-        setServices(defaultServices);
-        setServicesError('Showing default services (could not load from server).');
-      } catch {
-        setServices(defaultServices);
-        setServicesError('Showing default services (could not load from server).');
-      }
+        setServices(defaultServices); setServicesError('Showing default services (could not load from server).');
+      } catch { setServices(defaultServices); setServicesError('Showing default services (could not load from server).'); }
     }
     fetchServices();
   }, [apiBase]);
 
-  useEffect(() => {
-    if (services.length > 0) fetchAppointments();
-  }, [services, apiBase]);
+  useEffect(() => { if (services.length > 0) fetchAppointments(); }, [services, apiBase]);
 
   const calculateRequiredSlots = (startTime, durationMinutes) => {
-    const startIndex = allTimeSlots.indexOf(startTime);
-    if (startIndex === -1) return [];
-    const slotsNeeded = Math.ceil(durationMinutes / 15);
-    if (startIndex + slotsNeeded > allTimeSlots.length) return [];
+    const startIndex = allTimeSlots.indexOf(startTime); if (startIndex === -1) return [];
+    const slotsNeeded = Math.ceil(durationMinutes / 15); if (startIndex + slotsNeeded > allTimeSlots.length) return [];
     return allTimeSlots.slice(startIndex, startIndex + slotsNeeded);
   };
 
   const fetchAppointments = async () => {
     try {
-      setLoadingAppointments(true);
-      const token = localStorage.getItem('token');
+      setLoadingAppointments(true); const token = localStorage.getItem('token');
       const response = await fetch(`${apiBase}/appointments`, { headers: { Authorization: `Bearer ${token}` } });
       const result = await response.json();
       if (result.success) {
-        const formattedSlots = result.data
-          .map(appointment => {
-            if (appointment.status === 'cancelled' || appointment.status === 'pending') return null;
-            const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/)
-              ? appointment.date
-              : new Date(appointment.date).toISOString().split('T')[0];
-            const time12Hour = convertTo12Hour(appointment.time);
-            let totalDuration = appointment.totalDuration || 60;
-            if (!appointment.totalDuration && appointment.serviceIds && Array.isArray(appointment.serviceIds)) {
-              totalDuration = appointment.serviceIds.reduce((sum, serviceId) => {
-                const service = services.find(s => s._id === serviceId);
-                return sum + (service ? service.duration : 0);
-              }, 0) || 60;
-            }
-            return { date: isoDate, time: time12Hour, userName: appointment.userName || 'Booked', serviceType: 'Service', appointmentId: appointment._id, duration: totalDuration };
-          })
-          .filter(slot => slot !== null && slot.time);
+        const formattedSlots = result.data.map(appointment => {
+          if (appointment.status === 'cancelled' || appointment.status === 'pending') return null;
+          const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/) ? appointment.date : new Date(appointment.date).toISOString().split('T')[0];
+          const time12Hour = convertTo12Hour(appointment.time);
+          let totalDuration = appointment.totalDuration || 60;
+          if (!appointment.totalDuration && appointment.serviceIds && Array.isArray(appointment.serviceIds)) {
+            totalDuration = appointment.serviceIds.reduce((sum, serviceId) => { const service = services.find(s => s._id === serviceId); return sum + (service ? service.duration : 0); }, 0) || 60;
+          }
+          return { date: isoDate, time: time12Hour, userName: appointment.userName || 'Booked', serviceType: 'Service', appointmentId: appointment._id, duration: totalDuration };
+        }).filter(slot => slot !== null && slot.time);
         setBookedSlots(formattedSlots);
-      } else {
-        setBookedSlots([]);
-      }
-    } catch {
-      setBookedSlots([]);
-    } finally {
-      setLoadingAppointments(false);
-    }
+      } else { setBookedSlots([]); }
+    } catch { setBookedSlots([]); } finally { setLoadingAppointments(false); }
   };
 
   useEffect(() => {
@@ -252,31 +164,20 @@ function Dashboard() {
         const token = localStorage.getItem('token');
         const response = await fetch(`${apiBase}/availability`, { headers: { Authorization: `Bearer ${token}` } });
         const result = await response.json();
-        if (result.success && Array.isArray(result.data)) {
-          setUnavailableSlots(result.data.map(slot => ({ ...slot, time: convertTo12Hour(slot.time) })));
-        }
+        if (result.success && Array.isArray(result.data)) setUnavailableSlots(result.data.map(slot => ({ ...slot, time: convertTo12Hour(slot.time) })));
       } catch {
-        let initial = [];
-        try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; }
+        let initial = []; try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; }
         setUnavailableSlots(pruneExpiredUnavailableSlots(initial));
       }
     }
     fetchUnavailableSlots();
   }, [apiBase]);
 
-  const handleLogout = () => {
-    try { localStorage.removeItem('token'); localStorage.removeItem('refreshToken'); } catch {}
-    logout();
-    navigate('/login');
-  };
-
-  const togglePanel = (panelName) => {
-    setCollapsedPanels(prev => ({ ...prev, [panelName]: !prev[panelName] }));
-  };
+  const handleLogout = () => { try { localStorage.removeItem('token'); localStorage.removeItem('refreshToken'); } catch {} logout(); navigate('/login'); };
+  const togglePanel = (panelName) => setCollapsedPanels(prev => ({ ...prev, [panelName]: !prev[panelName] }));
 
   const getDaysInMonth = (date) => {
-    const year = date.getFullYear();
-    const month = date.getMonth();
+    const year = date.getFullYear(); const month = date.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
     const startingDay = (new Date(year, month, 1).getDay() + 6) % 7;
     const days = [];
@@ -288,42 +189,29 @@ function Dashboard() {
   const getMonthName = (date) => date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   const dayToISO = (day) => {
-  const year = currentMonth.getFullYear();
-  const month = currentMonth.getMonth();
-  const mm = String(month + 1).padStart(2, '0');
-  const dd = String(day).padStart(2, '0');
-  return `${year}-${mm}-${dd}`;
-};
-
-  const getTodayISO = () => new Date().toISOString().split('T')[0];
-
-  const isDayInPast = (day) => {
-    if (!day) return false;
-    return dayToISO(day) < getTodayISO();
+    const year = currentMonth.getFullYear(); const month = currentMonth.getMonth();
+    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   };
 
+  const getTodayISO = () => new Date().toISOString().split('T')[0];
+  const isDayInPast = (day) => { if (!day) return false; return dayToISO(day) < getTodayISO(); };
+
   const isTimePast = (time) => {
-    const year = currentMonth.getFullYear();
-    const month = currentMonth.getMonth();
+    const year = currentMonth.getFullYear(); const month = currentMonth.getMonth();
     const selectedFullDate = new Date(year, month, selectedDate);
-    const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
-    selectedFullDate.setHours(0,0,0,0);
+    const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0); selectedFullDate.setHours(0,0,0,0);
     if (selectedFullDate.getTime() !== todayMidnight.getTime()) return false;
-    const time24 = convertTo24Hour(time);
-    const [h, m] = time24.split(':').map(Number);
-    const slotDate = new Date(); slotDate.setHours(h, m, 0, 0);
-    return slotDate < new Date();
+    const time24 = convertTo24Hour(time); const [h, m] = time24.split(':').map(Number);
+    const slotDate = new Date(); slotDate.setHours(h, m, 0, 0); return slotDate < new Date();
   };
 
   const handleMonthChange = (direction) => {
     const newMonth = new Date(currentMonth);
-    if (direction === 'next') {
-      newMonth.setMonth(newMonth.getMonth() + 1);
-    } else {
+    if (direction === 'next') { newMonth.setMonth(newMonth.getMonth() + 1); }
+    else {
       newMonth.setMonth(newMonth.getMonth() - 1);
       const now = new Date();
-      if (newMonth.getFullYear() < now.getFullYear() ||
-        (newMonth.getFullYear() === now.getFullYear() && newMonth.getMonth() < now.getMonth())) return;
+      if (newMonth.getFullYear() < now.getFullYear() || (newMonth.getFullYear() === now.getFullYear() && newMonth.getMonth() < now.getMonth())) return;
     }
     setCurrentMonth(newMonth);
   };
@@ -332,8 +220,7 @@ function Dashboard() {
     if (!day) return;
     if (isDayInPast(day)) { alert('You cannot book an appointment in the past.'); return; }
     if (isDateFullyBooked(day)) { alert('This date is fully booked. Please select another date.'); return; }
-    setSelectedDate(day);
-    setSelectedTime('');
+    setSelectedDate(day); setSelectedTime('');
   };
 
   const handleServiceSelect = (service) => {
@@ -341,58 +228,42 @@ function Dashboard() {
       if (prev.includes(service.name)) {
         if (service.name === 'Manicure') setSelectedManicureType('');
         if (service.name === 'Pedicure') setSelectedPedicureType('');
-        setSelectedTime('');
-        return prev.filter(s => s !== service.name);
-      } else {
-        setSelectedTime('');
-        return [...prev, service.name];
-      }
+        setSelectedTime(''); return prev.filter(s => s !== service.name);
+      } else { setSelectedTime(''); return [...prev, service.name]; }
     });
   };
 
   const handleBookAppointment = () => {
-    if (selectedServices.length && selectedDate && selectedTime) {
-      setShowSummary(true);
-    } else {
-      alert('Please select a service, date, and time');
-    }
+    if (selectedServices.length && selectedDate && selectedTime) setShowSummary(true);
+    else alert('Please select a service, date, and time');
   };
 
   const handleCloseSummary = () => setShowSummary(false);
   const handleEditDateTime = () => setShowSummary(false);
 
-  const handleBookingConfirmed = async (bookingInfo) => {
+  const handleBookingConfirmed = (bookingInfo) => {
     const totalDuration = getTotalServiceDuration();
     const requiredSlots = calculateRequiredSlots(selectedTime, totalDuration);
     const isoDate = dayToISO(selectedDate);
     const newBookings = requiredSlots.map(slot => ({
       date: isoDate, time: slot,
-      userName: bookingInfo.userName || user?.firstName + ' ' + user?.lastName,
+      userName: bookingInfo.userName || `${user?.firstName} ${user?.lastName}`,
       serviceType: bookingInfo.serviceType || 'Service',
-      duration: totalDuration,
-      isMainSlot: slot === selectedTime,
+      duration: totalDuration, isMainSlot: slot === selectedTime,
       appointmentId: bookingInfo.appointmentId || bookingInfo._id
     }));
     setBookedSlots(prev => [...prev, ...newBookings]);
-    setSelectedTime('');
-    setShowSummary(false);
+    setSelectedTime(''); setShowSummary(false);
     navigate('/payment', {
       state: {
         appointmentId: bookingInfo.appointmentId || bookingInfo._id,
-        name: user?.firstName + ' ' + user?.lastName,
+        name: `${user?.firstName} ${user?.lastName}`,
         dateTime: `${getMonthName(currentMonth)} ${selectedDate}, ${selectedTime}`,
-        appointmentDate: isoDate,
-        appointmentTime: selectedTime,
-        selectedServices,
-        selectedEmployee,
-        totalPrice: selectedServices.reduce((acc, s) => {
-          const svc = services.find(x => x.name === s);
-          return acc + (svc ? svc.price : 0);
-        }, 0),
-        totalDuration: getTotalServiceDuration(),
-        contactNumber: cellNumber,
-        selectedManicureType,
-        selectedPedicureType,
+        appointmentDate: isoDate, appointmentTime: selectedTime,
+        selectedServices, selectedEmployee,
+        totalPrice: selectedServices.reduce((acc, s) => { const svc = services.find(x => x.name === s); return acc + (svc ? svc.price : 0); }, 0),
+        totalDuration: getTotalServiceDuration(), contactNumber: cellNumber,
+        selectedManicureType, selectedPedicureType,
       }
     });
   };
@@ -407,46 +278,27 @@ function Dashboard() {
   }, [bookedSlots]);
 
   const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
-    const isoDate = dayToISO(day);
-    const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
-    return requiredSlots.some(slot =>
-      unavailableSlots.some(s => s.date === isoDate && s.time === slot && (s.stylist === 'All' || s.stylist === selectedEmployee))
-    );
+    const isoDate = dayToISO(day); const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
+    return requiredSlots.some(slot => unavailableSlots.some(s => s.date === isoDate && s.time === slot && (s.stylist === 'All' || s.stylist === selectedEmployee)));
   };
 
   const isDateFullyBooked = (day) => {
     const isoDate = dayToISO(day);
     return allTimeSlots.every(slot => {
       const isBlocked = unavailableSlots.some(s => s.date === isoDate && s.time === slot && (s.stylist === 'All' || s.stylist === selectedEmployee));
-      const isBooked = bookedSlots.some(booking => {
-        if (booking.date !== isoDate) return false;
-        return calculateRequiredSlots(booking.time, booking.duration || 15).includes(slot);
-      });
+      const isBooked = bookedSlots.some(booking => { if (booking.date !== isoDate) return false; return calculateRequiredSlots(booking.time, booking.duration || 15).includes(slot); });
       return isBooked || isBlocked;
     });
   };
 
-  const getTotalServiceDuration = () =>
-    selectedServices.reduce((total, serviceName) => {
-      const service = services.find(s => s.name === serviceName);
-      return total + (service ? service.duration : 0);
-    }, 0);
-
-  const isPartOfBookedRange = (date, time) => {
-    const isoDate = dayToISO(date);
-    return occupiedSlotsByDate[isoDate]?.has(time) || false;
-  };
-
-  const isInSelectedRange = (time) => {
-    if (!selectedTime) return false;
-    return calculateRequiredSlots(selectedTime, getTotalServiceDuration()).includes(time);
-  };
+  const getTotalServiceDuration = () => selectedServices.reduce((total, serviceName) => { const service = services.find(s => s.name === serviceName); return total + (service ? service.duration : 0); }, 0);
+  const isPartOfBookedRange = (date, time) => { const isoDate = dayToISO(date); return occupiedSlotsByDate[isoDate]?.has(time) || false; };
+  const isInSelectedRange = (time) => { if (!selectedTime) return false; return calculateRequiredSlots(selectedTime, getTotalServiceDuration()).includes(time); };
 
   const getSlotPositionInRange = (time) => {
     if (!selectedTime) return null;
     const requiredSlots = calculateRequiredSlots(selectedTime, getTotalServiceDuration());
-    const index = requiredSlots.indexOf(time);
-    if (index === -1) return null;
+    const index = requiredSlots.indexOf(time); if (index === -1) return null;
     return { isFirst: index === 0, isLast: index === requiredSlots.length - 1, position: index + 1, total: requiredSlots.length };
   };
 
@@ -456,26 +308,19 @@ function Dashboard() {
       setLoadingEmployees(true); setEmployeeError('');
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch(`${apiBase}/employees`, {
-          headers: { Authorization: token ? `Bearer ${token}` : '' },
-          signal: controller.signal,
-        });
+        const res = await fetch(`${apiBase}/employees`, { headers: { Authorization: token ? `Bearer ${token}` : '' }, signal: controller.signal });
         const result = await res.json();
         if (!res.ok || !result.success) throw new Error(result.error || 'Failed to fetch employees');
         const list = Array.isArray(result.data) ? result.data : [];
         setEmployees(list);
         if (!selectedEmployee && list.length > 0) setSelectedEmployee(list[0].name);
-      } catch (err) {
-        if (err.name !== 'AbortError') setEmployeeError(err.message || 'Failed to fetch employees');
-      } finally { setLoadingEmployees(false); }
+      } catch (err) { if (err.name !== 'AbortError') setEmployeeError(err.message || 'Failed to fetch employees'); }
+      finally { setLoadingEmployees(false); }
     }
-    fetchEmployees();
-    return () => controller.abort();
+    fetchEmployees(); return () => controller.abort();
   }, [apiBase]);
 
-  const selectedServiceIds = selectedServices
-    .map(name => services.find(s => s.name === name)?._id)
-    .filter(Boolean);
+  const selectedServiceIds = selectedServices.map(name => services.find(s => s.name === name)?._id).filter(Boolean);
 
   const renderTimeSlot = (time, index) => {
     const totalDuration = selectedServices.length > 0 ? getTotalServiceDuration() : 15;
@@ -488,37 +333,18 @@ function Dashboard() {
     const isClickable = selectedServices.length > 0 && !isUnavailableBooked;
 
     const getStatusLabel = () => {
-      if (isPastSlot) return 'Passed';
-      if (isUnavailableBooked) return 'Booked';
+      if (isPastSlot) return 'Passed'; if (isUnavailableBooked) return 'Booked';
       if (inSelectedRange && slotPosition) {
-        if (slotPosition.isFirst) return '▼ START';
-        if (slotPosition.isLast && slotPosition.total > 1) return '▲ END';
+        if (slotPosition.isFirst) return '▼ START'; if (slotPosition.isLast && slotPosition.total > 1) return '▲ END';
         return `${slotPosition.position}/${slotPosition.total}`;
       }
       return null;
     };
 
-    // Slot style — override only what the CSS can't do (dynamic states)
     const slotStyle = isUnavailableBooked
-      ? {
-          background: isPastSlot ? '#f5ece8' : '#ffe5e5',
-          borderLeft: isPastSlot ? '3px solid #e0ccc4' : '3px solid #e05252',
-          color: isPastSlot ? '#c4a898' : '#c0392b',
-          opacity: 0.75,
-          pointerEvents: 'none',
-          cursor: 'not-allowed',
-        }
-      : inSelectedRange
-      ? {
-          background: 'linear-gradient(135deg, #fce8db 0%, #f9c8a8 100%)',
-          borderLeft: '3px solid #a0502e',
-          color: '#3d1f15',
-          fontWeight: 700,
-          boxShadow: '0 2px 10px rgba(160, 80, 46, 0.25)',
-        }
-      : selectedServices.length === 0
-      ? { opacity: 0.5, cursor: 'default' }
-      : {};
+      ? { background: isPastSlot ? '#f5ece8' : '#ffe5e5', borderLeft: isPastSlot ? '3px solid #e0ccc4' : '3px solid #e05252', color: isPastSlot ? '#c4a898' : '#c0392b', opacity: 0.75, pointerEvents: 'none', cursor: 'not-allowed' }
+      : inSelectedRange ? { background: 'linear-gradient(135deg, #fce8db 0%, #f9c8a8 100%)', borderLeft: '3px solid #a0502e', color: '#3d1f15', fontWeight: 700, boxShadow: '0 2px 10px rgba(160, 80, 46, 0.25)' }
+      : selectedServices.length === 0 ? { opacity: 0.5, cursor: 'default' } : {};
 
     return (
       <div key={index} className="time-slot-stack">
@@ -529,14 +355,8 @@ function Dashboard() {
           onMouseEnter={(e) => { if (isClickable && !inSelectedRange) e.currentTarget.style.background = 'linear-gradient(135deg, #fdf6f0 0%, #fce8db 100%)'; }}
           onMouseLeave={(e) => { if (isClickable && !inSelectedRange) e.currentTarget.style.background = ''; }}
         >
-          <span style={{ fontSize: '0.78rem', textDecoration: isUnavailableBooked ? 'line-through' : 'none' }}>
-            {time}
-          </span>
-          {getStatusLabel() && (
-            <div style={{ fontSize: '0.6rem', marginTop: '2px', fontWeight: 700, color: 'inherit', opacity: 0.85 }}>
-              {getStatusLabel()}
-            </div>
-          )}
+          <span style={{ fontSize: '0.78rem', textDecoration: isUnavailableBooked ? 'line-through' : 'none' }}>{time}</span>
+          {getStatusLabel() && <div style={{ fontSize: '0.6rem', marginTop: '2px', fontWeight: 700, color: 'inherit', opacity: 0.85 }}>{getStatusLabel()}</div>}
         </div>
       </div>
     );
@@ -547,16 +367,13 @@ function Dashboard() {
       <BookingSummary
         open={showSummary}
         onClose={handleCloseSummary}
-        service={selectedServices.map(s => {
-          const svc = services.find(x => x.name === s);
-          return svc ? `${svc.name} (${svc.duration} min, R${svc.price})` : s;
-        }).join(', ')}
+        service={selectedServices.map(s => { const svc = services.find(x => x.name === s); return svc ? `${svc.name} (${svc.duration} min, R${svc.price})` : s; }).join(', ')}
         totalDuration={selectedServices.reduce((acc, s) => { const svc = services.find(x => x.name === s); return acc + (svc ? svc.duration : 0); }, 0)}
         totalPrice={selectedServices.reduce((acc, s) => { const svc = services.find(x => x.name === s); return acc + (svc ? svc.price : 0); }, 0)}
         dateTime={selectedDate && selectedTime ? `${getMonthName(currentMonth)} ${selectedDate}, ${selectedTime}` : ''}
         appointmentDate={selectedDate ? dayToISO(selectedDate) : ''}
         appointmentTime={selectedTime}
-        name={user?.firstName + ' ' + user?.lastName}
+        name={`${user?.firstName} ${user?.lastName}`}
         email={user?.email}
         contactNumber={cellNumber}
         onEdit={handleEditDateTime}
@@ -571,40 +388,24 @@ function Dashboard() {
         onBookingConfirmed={handleBookingConfirmed}
       />
 
-      {/* ---- Header ---- */}
       <div className="dashboard-header">
-        <div className="header-left">
-          <h1>NXL Beauty Bar</h1>
-        </div>
+        <div className="header-left"><h1>NXL Beauty Bar</h1></div>
         <div className="header-right">
-          <Link
-            to="/profile"
-            className="user-info"
-            onMouseEnter={(e) => {}}
-            onMouseLeave={(e) => {}}
-          >
+          <Link to="/profile" className="user-info">
             <span className="user-icon">👤</span>
             <span className="user-name">{user?.firstName}</span>
           </Link>
         </div>
       </div>
 
-      {/* ---- Welcome ---- */}
       <div className="welcome-section">
         <h2>Welcome back!</h2>
         <p>Book your appointment in a few simple steps — choose a service, pick your date and time. See you soon!</p>
       </div>
 
-      {/* ---- Slots label ---- */}
-      <div className="db-slots-label">
-        Time slots for:
-        <span>{getMonthName(currentMonth)} {selectedDate}</span>
-      </div>
+      <div className="db-slots-label">Time slots for: <span>{getMonthName(currentMonth)} {selectedDate}</span></div>
 
-      {/* ---- Booking Grid ---- */}
       <div className="booking-interface">
-
-        {/* Services Panel */}
         <div className="booking-panel">
           <div className="panel-header" onClick={() => togglePanel('services')}>
             <h3>Services</h3>
@@ -614,38 +415,21 @@ function Dashboard() {
             <div className="panel-content">
               {servicesError && <div style={{ color: '#c07a5a', marginBottom: '0.5rem', fontSize: '0.78rem' }}>{servicesError}</div>}
               {(() => {
-  // Group services by category
-  const categoryOrder = ['Manicure', 'Pedicure', 'Eyelashes', 'Extras'];
-  const grouped = {};
-
-  services.forEach(service => {
-  const rawCat = (service.category || '').trim().toLowerCase();
-  const cat = rawCat ? rawCat.charAt(0).toUpperCase() + rawCat.slice(1) : 'Extras';
-  if (!grouped[cat]) grouped[cat] = [];
-  grouped[cat].push(service);
-});
-
-  // Include any categories not in our order list
-  const allCats = [
-    ...categoryOrder.filter(c => grouped[c]),
-    ...Object.keys(grouped).filter(c => !categoryOrder.includes(c))
-  ];
-
-  return allCats.map(category => (
-    <ServiceCategory
-      key={category}
-      category={category}
-      services={grouped[category] || []}
-      selectedServices={selectedServices}
-      onSelect={handleServiceSelect}
-    />
-  ));
-})()}
+                const categoryOrder = ['Manicure', 'Pedicure', 'Eyelashes', 'Extras'];
+                const grouped = {};
+                services.forEach(service => {
+                  const rawCat = (service.category || '').trim().toLowerCase();
+                  const cat = rawCat ? rawCat.charAt(0).toUpperCase() + rawCat.slice(1) : 'Extras';
+                  if (!grouped[cat]) grouped[cat] = [];
+                  grouped[cat].push(service);
+                });
+                const allCats = [...categoryOrder.filter(c => grouped[c]), ...Object.keys(grouped).filter(c => !categoryOrder.includes(c))];
+                return allCats.map(category => <ServiceCategory key={category} category={category} services={grouped[category] || []} selectedServices={selectedServices} onSelect={handleServiceSelect} />);
+              })()}
             </div>
           )}
         </div>
 
-        {/* Date Panel */}
         <div className="booking-panel">
           <div className="panel-header" onClick={() => togglePanel('date')}>
             <h3>Select Date</h3>
@@ -659,27 +443,16 @@ function Dashboard() {
           {!collapsedPanels.date && (
             <div className="panel-content">
               <div className="calendar">
-                <div className="calendar-header">
-                  {['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => <span key={d}>{d}</span>)}
-                </div>
+                <div className="calendar-header">{['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => <span key={d}>{d}</span>)}</div>
                 <div className="calendar-grid" style={{ position: 'relative' }}>
-                  {loadingAppointments && (
-                    <div style={{ position:'absolute', inset:0, background:'rgba(253,248,245,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10, borderRadius:8 }}>
-                      <span style={{ fontSize:'0.8rem', color:'#9e7060' }}>Loading...</span>
-                    </div>
-                  )}
+                  {loadingAppointments && <div style={{ position:'absolute', inset:0, background:'rgba(253,248,245,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10, borderRadius:8 }}><span style={{ fontSize:'0.8rem', color:'#9e7060' }}>Loading...</span></div>}
                   {getDaysInMonth(currentMonth).map((day, index) => {
-                    const fullyBooked = day && isDateFullyBooked(day);
-                    const isPast = day && isDayInPast(day);
+                    const fullyBooked = day && isDateFullyBooked(day); const isPast = day && isDayInPast(day);
                     return (
-                      <div
-                        key={index}
+                      <div key={index}
                         className={`calendar-day ${day ? 'available' : 'empty'} ${selectedDate === day && !isPast ? 'selected' : ''} ${fullyBooked && !isPast ? 'fully-booked' : ''}`}
                         onClick={() => day && handleDateSelect(day)}
-                        style={{
-                          ...(isPast ? { opacity: 0.3, cursor: 'not-allowed', textDecoration: 'line-through', color: '#b08070' } :
-                             fullyBooked ? { background: '#ffe5e5', cursor: 'not-allowed', color: '#c07a5a', fontSize: '0.7rem' } : {})
-                        }}
+                        style={{ ...(isPast ? { opacity: 0.3, cursor: 'not-allowed', textDecoration: 'line-through', color: '#b08070' } : fullyBooked ? { background: '#ffe5e5', cursor: 'not-allowed', color: '#c07a5a', fontSize: '0.7rem' } : {}) }}
                         title={isPast ? 'Past date' : fullyBooked ? 'Fully Booked' : day ? 'Select date' : ''}
                       >
                         {day}
@@ -693,7 +466,6 @@ function Dashboard() {
           )}
         </div>
 
-        {/* Time Panel */}
         <div className="booking-panel">
           <div className="panel-header" onClick={() => togglePanel('time')}>
             <h3>Time Slots</h3>
@@ -707,23 +479,12 @@ function Dashboard() {
                   <span style={{ color:'#9e7060' }}> · {Math.ceil(getTotalServiceDuration() / 15)} slots</span>
                 </div>
               )}
-              <div className="time-section">
-                <h4>Morning</h4>
-                <div className="time-slots">
-                  {timeSlots.morning.map((time, index) => renderTimeSlot(time, index))}
-                </div>
-              </div>
-              <div className="time-section">
-                <h4>Afternoon</h4>
-                <div className="time-slots">
-                  {timeSlots.afternoon.map((time, index) => renderTimeSlot(time, index))}
-                </div>
-              </div>
+              <div className="time-section"><h4>Morning</h4><div className="time-slots">{timeSlots.morning.map((time, index) => renderTimeSlot(time, index))}</div></div>
+              <div className="time-section"><h4>Afternoon</h4><div className="time-slots">{timeSlots.afternoon.map((time, index) => renderTimeSlot(time, index))}</div></div>
             </div>
           )}
         </div>
 
-        {/* Stylist Panel */}
         <div className="booking-panel">
           <div className="panel-header" onClick={() => togglePanel('employee')}>
             <h3>Select Stylist</h3>
@@ -734,40 +495,26 @@ function Dashboard() {
               {loadingEmployees && <div style={{ color:'#9e7060', fontSize:'0.82rem' }}>Loading stylists...</div>}
               {employeeError && <div style={{ color:'#c0392b', fontSize:'0.82rem' }}>{employeeError}</div>}
               {!loadingEmployees && !employeeError && employees.map((emp, idx) => (
-                <div
-                  key={idx}
-                  className={`employee-item ${selectedEmployee === emp.name ? 'selected' : ''}`}
-                  onClick={() => setSelectedEmployee(emp.name)}
-                >
+                <div key={idx} className={`employee-item ${selectedEmployee === emp.name ? 'selected' : ''}`} onClick={() => setSelectedEmployee(emp.name)}>
                   <span style={{ fontSize:'1.1rem' }}>👩‍💼</span>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{emp.name}</div>
-                    {emp.position && <div style={{ fontSize: '0.75rem', opacity: 0.75 }}>{emp.position}</div>}
-                  </div>
+                  <div><div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{emp.name}</div>{emp.position && <div style={{ fontSize: '0.75rem', opacity: 0.75 }}>{emp.position}</div>}</div>
                 </div>
               ))}
-              {!loadingEmployees && !employeeError && employees.length === 0 && (
-                <div style={{ color:'#9e7060', fontSize:'0.82rem' }}>No stylists available</div>
-              )}
+              {!loadingEmployees && !employeeError && employees.length === 0 && <div style={{ color:'#9e7060', fontSize:'0.82rem' }}>No stylists available</div>}
             </div>
           )}
         </div>
       </div>
 
-      {/* ---- Book Button ---- */}
       <div className="booking-actions" style={{ position: 'relative', zIndex: 10 }}>
-        <button
-          className="book-appointment-btn"
-          onClick={handleBookAppointment}
-          style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', cursor: 'pointer' }}
-        >
-          Book Appointment
-        </button>
+        <button className="book-appointment-btn" onClick={handleBookAppointment} style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', cursor: 'pointer' }}>Book Appointment</button>
       </div>
 
-      {/* ---- Navigation ---- */}
       <div className="dashboard-navigation">
         <button onClick={handleLogout} className="logout-button">Sign Out</button>
+        {user?.role === 'admin' && (
+          <button onClick={() => navigate('/admin')} style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.55rem 1.1rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 2px 8px rgba(79,70,229,0.35)' }}>🛠 Admin Panel</button>
+        )}
         <Link to="/" className="back-home-link">← Back to Home</Link>
       </div>
     </div>
@@ -777,81 +524,22 @@ function Dashboard() {
 function ServiceCategory({ category, services, selectedServices, onSelect }) {
   const [open, setOpen] = useState(true);
   const hasSelected = services.some(s => selectedServices.includes(s.name));
-
-  const categoryIcons = {
-    Manicure: '💅',
-    Pedicure: '🦶',
-    Eyelashes: '👁️',
-    Extras: '✨',
-  };
+  const categoryIcons = { Manicure: '💅', Pedicure: '🦶', Eyelashes: '👁️', Extras: '✨' };
 
   return (
     <div style={{ marginBottom: '0.5rem' }}>
-      {/* Category Header */}
-      <div
-        onClick={() => setOpen(prev => !prev)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0.5rem 0.7rem',
-          background: hasSelected
-            ? 'linear-gradient(135deg, #3d1f15, #6b3528)'
-            : 'linear-gradient(135deg, #fdf6f0, #fce8db)',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          border: '1px solid #e0ccc4',
-          marginBottom: open ? '0.4rem' : 0,
-          transition: 'all 0.2s ease',
-        }}
-      >
+      <div onClick={() => setOpen(prev => !prev)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.7rem', background: hasSelected ? 'linear-gradient(135deg, #3d1f15, #6b3528)' : 'linear-gradient(135deg, #fdf6f0, #fce8db)', borderRadius: '8px', cursor: 'pointer', border: '1px solid #e0ccc4', marginBottom: open ? '0.4rem' : 0, transition: 'all 0.2s ease' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '1rem' }}>
-            {categoryIcons[category] || '💄'}
-          </span>
-          <span style={{
-            fontSize: '0.82rem',
-            fontWeight: 700,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
-            color: hasSelected ? '#ffe8d6' : '#3d1f15',
-          }}>
-            {category}
-          </span>
-          {hasSelected && (
-            <span style={{
-              fontSize: '0.65rem',
-              background: 'rgba(255,179,128,0.3)',
-              color: '#ffb380',
-              padding: '0.1rem 0.5rem',
-              borderRadius: '20px',
-              fontWeight: 600,
-            }}>
-              {services.filter(s => selectedServices.includes(s.name)).length} selected
-            </span>
-          )}
+          <span style={{ fontSize: '1rem' }}>{categoryIcons[category] || '💄'}</span>
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: hasSelected ? '#ffe8d6' : '#3d1f15' }}>{category}</span>
+          {hasSelected && <span style={{ fontSize: '0.65rem', background: 'rgba(255,179,128,0.3)', color: '#ffb380', padding: '0.1rem 0.5rem', borderRadius: '20px', fontWeight: 600 }}>{services.filter(s => selectedServices.includes(s.name)).length} selected</span>}
         </div>
-        <span style={{
-          fontSize: '0.7rem',
-          color: hasSelected ? 'rgba(255,232,214,0.7)' : '#9e7060',
-          transition: 'transform 0.2s',
-          transform: open ? 'rotate(0deg)' : 'rotate(-90deg)',
-          display: 'inline-block',
-        }}>
-          ▼
-        </span>
+        <span style={{ fontSize: '0.7rem', color: hasSelected ? 'rgba(255,232,214,0.7)' : '#9e7060', transition: 'transform 0.2s', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', display: 'inline-block' }}>▼</span>
       </div>
-
-      {/* Services List */}
       {open && (
         <div style={{ paddingLeft: '0.3rem' }}>
           {services.map((service, index) => (
-            <div
-              key={index}
-              className={`service-item ${selectedServices.includes(service.name) ? 'selected' : ''}`}
-              onClick={() => onSelect(service)}
-              style={{ marginBottom: '0.25rem' }}
-            >
+            <div key={index} className={`service-item ${selectedServices.includes(service.name) ? 'selected' : ''}`} onClick={() => onSelect(service)} style={{ marginBottom: '0.25rem' }}>
               <span className="service-name">{service.name}</span>
               <span className="service-duration">{service.duration} min</span>
               <span className="service-price">R{(Number(service.price) || 0).toFixed(0)}</span>
