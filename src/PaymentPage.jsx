@@ -11,33 +11,36 @@ const PaymentPage = () => {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
 
-  // --- Guard: redirect if no booking state ---
+  // Guard: need employeeId + serviceIds to proceed
   useEffect(() => {
-    if (!location.state?.appointmentId) {
-      navigate('/dashboard', { replace: true });
+    const s = location.state;
+    if (!s?.employeeId || !s?.serviceIds?.length) {
+      const raw = localStorage.getItem('pendingBooking');
+      if (!raw) navigate('/dashboard', { replace: true });
     }
   }, [location.state, navigate]);
 
-  // Booking info from navigation state
-  const name             = location.state?.name || (user ? `${user.firstName} ${user.lastName}` : '');
-  const dateTime         = location.state?.dateTime || '';
-  const appointmentId    = location.state?.appointmentId;
-  const totalPrice       = location.state?.totalPrice ?? 0;
-  const totalDuration    = location.state?.totalDuration ?? 0;
-  const selectedServices = location.state?.selectedServices ?? [];
-  const selectedEmployee = location.state?.selectedEmployee ?? '';
-  const appointmentDate  = location.state?.appointmentDate ?? '';
-  const appointmentTime  = location.state?.appointmentTime ?? '';
-  const contactNumber    = location.state?.contactNumber ?? '';
+  const state            = location.state || {};
+  const name             = state.name             || (user ? `${user.firstName} ${user.lastName}` : '');
+  const email            = state.email            || user?.email || '';
+  const dateTime         = state.dateTime         || '';
+  const appointmentDate  = state.appointmentDate  || '';
+  const appointmentTime  = state.appointmentTime  || '';
+  const selectedServices = state.selectedServices || [];
+  const selectedEmployee = state.selectedEmployee || '';
+  const totalPrice       = state.totalPrice       ?? 0;
+  const totalDuration    = state.totalDuration    ?? 0;
+  const contactNumber    = state.contactNumber    || '';
+  const employeeId       = state.employeeId       || '';
+  const serviceIds       = state.serviceIds       || [];
+  const userName         = state.userName         || name;
   const BOOKING_FEE      = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
-  const email            = user?.email ?? '';
 
   const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   const API_ROOT = RAW_API_BASE
     ? `${RAW_API_BASE.replace(/\/api$/, '')}/api`
     : '/api';
 
-  // --- Token refresh ---
   const refreshAccessToken = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) return null;
@@ -74,50 +77,55 @@ const PaymentPage = () => {
     return res;
   };
 
-  // --- Submit: create Yoco checkout session and redirect ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setApiError('');
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      if (!localStorage.getItem('token')) {
         setApiError('You must be logged in to make a payment.');
         setLoading(false);
         return;
       }
-      if (!appointmentId) {
-        setApiError('Missing appointment ID. Please go back and book again.');
+      if (!employeeId || !serviceIds.length) {
+        setApiError('Missing booking details. Please go back and book again.');
         setLoading(false);
         return;
       }
 
-      // Save booking details BEFORE redirecting so PaymentSuccess can
-      // send the confirmation email when the user returns
+      // Persist booking details before leaving the page
       localStorage.setItem('pendingBooking', JSON.stringify({
-        name,
-        appointmentDate,
-        appointmentTime,
-        selectedServices,
-        selectedEmployee,
-        totalPrice,
-        totalDuration,
-        contactNumber,
-        email,
+        name, email, dateTime,
+        appointmentDate, appointmentTime,
+        selectedServices, selectedEmployee,
+        totalPrice, totalDuration,
+        contactNumber, employeeId, serviceIds, userName,
       }));
 
-      // Create Yoco checkout session — server returns a checkoutUrl
+      // POST /payments — validates slot + creates Yoco checkout session
+      // Booking details go into Yoco metadata so the webhook/PaymentSuccess
+      // can create the appointment after payment
       const res = await fetchWithAuth(`${API_ROOT}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId }),
+        body: JSON.stringify({
+          date:          appointmentDate,
+          time:          appointmentTime,
+          employeeId,
+          serviceIds,
+          contactNumber,
+          userName,
+        }),
       });
 
       const result = await res.json();
 
       if (result.success && result.checkoutUrl) {
-        // Redirect user directly to Yoco's hosted payment page
+        // Save checkoutId for PaymentSuccess to use in confirm-payment call
+        localStorage.setItem('yocoCheckoutId', result.checkoutId);
+        // Redirect — intentionally don't setLoading(false) so button stays
+        // in "Redirecting..." state while the browser navigates
         window.location.href = result.checkoutUrl;
       } else {
         setApiError(result.error || 'Could not initiate payment. Please try again.');
@@ -128,23 +136,19 @@ const PaymentPage = () => {
       setApiError('Payment failed. Please try again.');
       setLoading(false);
     }
-    // Note: setLoading(false) is intentionally NOT called on success
-    // because window.location.href causes a page navigation — we want
-    // the button to stay in "Redirecting..." state until Yoco loads
   };
 
   return (
     <div className="pp-bg">
       <div className="pp-wrapper">
 
-        {/* Back button */}
         <button className="pp-back-btn" onClick={() => navigate('/dashboard')}>
           ← Back to Booking
         </button>
 
         <div className="pp-layout">
 
-          {/* LEFT: Booking Summary Panel */}
+          {/* LEFT: Summary */}
           <div className="pp-summary">
             <div className="pp-summary-header">
               <span className="pp-logo-dot" />
@@ -204,15 +208,15 @@ const PaymentPage = () => {
             </div>
             <div className="pp-divider" />
             <div className="pp-summary-note">
-              The R{BOOKING_FEE} booking fee secures your appointment. The remaining balance is payable at the salon.
+              The R{BOOKING_FEE} booking fee secures your appointment.
+              The remaining balance is payable at the salon.
             </div>
           </div>
 
-          {/* RIGHT: Payment Form */}
+          {/* RIGHT: Form */}
           <div className="pp-form-card">
             <h3 className="pp-form-title">Payment Details</h3>
 
-            {/* Yoco branding */}
             <div className="pp-methods">
               <div
                 className="pp-method-btn pp-method-active"
@@ -223,12 +227,8 @@ const PaymentPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="pp-form">
-
               <div className="pp-paypal-notice">
-                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>
-                  {/* Yoco logo placeholder — replace with an <img> if you have the asset */}
-                  🇿🇦
-                </div>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🇿🇦</div>
                 <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>
                   Secure Payment via Yoco
                 </p>
@@ -239,30 +239,19 @@ const PaymentPage = () => {
                 </p>
               </div>
 
-              {/* Accepted payment methods */}
               <div style={{
-                display: 'flex',
-                gap: '0.5rem',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0.6rem',
-                background: '#f8fafc',
-                borderRadius: '8px',
-                border: '1px solid #e2e8f0',
-                fontSize: '0.78rem',
-                color: '#64748b',
-                flexWrap: 'wrap',
+                display: 'flex', gap: '0.5rem', alignItems: 'center',
+                justifyContent: 'center', padding: '0.6rem',
+                background: '#f8fafc', borderRadius: '8px',
+                border: '1px solid #e2e8f0', fontSize: '0.78rem',
+                color: '#64748b', flexWrap: 'wrap',
               }}>
-                <span>💳 Visa</span>
-                <span>·</span>
-                <span>💳 Mastercard</span>
-                <span>·</span>
-                <span>🏦 Instant EFT</span>
-                <span>·</span>
+                <span>💳 Visa</span><span>·</span>
+                <span>💳 Mastercard</span><span>·</span>
+                <span>🏦 Instant EFT</span><span>·</span>
                 <span>📱 Scan to Pay</span>
               </div>
 
-              {/* Secure badge */}
               <div className="pp-secure-badge">
                 🔒 Secured by Yoco — South Africa's trusted payment provider
               </div>
