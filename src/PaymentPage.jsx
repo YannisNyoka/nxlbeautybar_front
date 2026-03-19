@@ -1,55 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import './PaymentPage.css';
-import ConfirmationPopup from './ConfirmationPopup';
 import { useAuth } from './AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
-import emailjs from '@emailjs/browser';
 
-const PaymentPage = ({ onSave }) => {
+const PaymentPage = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [method, setMethod] = useState('card');
-  const [country, setCountry] = useState('South Africa');
-  const [showConfirmation, setShowConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
-  const [apiSuccess, setApiSuccess] = useState('');
 
-  // Initialize EmailJS
+  // Guard: need employeeId + serviceIds to proceed (set by BookingSummary)
   useEffect(() => {
-    const key = import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'l7AiKNhYSfG_q4eot';
-    emailjs.init(key);
-  }, []);
-
-  // --- Guard: redirect if no booking state ---
-  useEffect(() => {
-    if (!location.state?.appointmentId) {
-      navigate('/dashboard', { replace: true });
+    const s = location.state;
+    if (!s?.employeeId || !s?.serviceIds?.length) {
+      // Try to fall back to localStorage
+      const raw = localStorage.getItem('pendingBooking');
+      if (!raw) {
+        navigate('/dashboard', { replace: true });
+      }
     }
   }, [location.state, navigate]);
 
-  // Booking info from navigation state
-  const name = location.state?.name || (user ? `${user.firstName} ${user.lastName}` : '');
-  const dateTime = location.state?.dateTime || '';
-  const appointmentId = location.state?.appointmentId;
-  const totalPrice = location.state?.totalPrice ?? 0;
-  const totalDuration = location.state?.totalDuration ?? 0;
-  const selectedServices = location.state?.selectedServices ?? [];
-  const selectedEmployee = location.state?.selectedEmployee ?? '';
-  const appointmentDate = location.state?.appointmentDate ?? '';
-  const appointmentTime = location.state?.appointmentTime ?? '';
-  const contactNumber = location.state?.contactNumber ?? '';
-  const BOOKING_FEE = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
-  const email = user?.email ?? '';
+  // All booking info comes from navigation state (set by BookingSummary.jsx)
+  const state            = location.state || {};
+  const name             = state.name             || (user ? `${user.firstName} ${user.lastName}` : '');
+  const email            = state.email            || user?.email || '';
+  const dateTime         = state.dateTime         || '';
+  const appointmentDate  = state.appointmentDate  || '';
+  const appointmentTime  = state.appointmentTime  || '';
+  const selectedServices = state.selectedServices || [];
+  const selectedEmployee = state.selectedEmployee || '';
+  const totalPrice       = state.totalPrice       ?? 0;
+  const totalDuration    = state.totalDuration    ?? 0;
+  const contactNumber    = state.contactNumber    || '';
+  const employeeId       = state.employeeId       || '';
+  const serviceIds       = state.serviceIds       || [];
+  const userName         = state.userName         || name;
+  const BOOKING_FEE      = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
 
   const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   const API_ROOT = RAW_API_BASE
     ? `${RAW_API_BASE.replace(/\/api$/, '')}/api`
     : '/api';
 
-  // --- Token refresh ---
+  // Token refresh helper
   const refreshAccessToken = async () => {
     const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) return null;
@@ -86,104 +82,79 @@ const PaymentPage = ({ onSave }) => {
     return res;
   };
 
-  // --- Submit: initiate PayFast payment ---
+  // Submit: POST /payments → server validates slot + creates Yoco checkout
+  // On success → redirect to Yoco hosted payment page
+  // Appointment is created ONLY after payment succeeds (in PaymentSuccess.jsx)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setApiError('');
-    setApiSuccess('');
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      if (!localStorage.getItem('token')) {
         setApiError('You must be logged in to make a payment.');
         setLoading(false);
         return;
       }
-      if (!appointmentId) {
-        setApiError('Missing appointment ID. Please go back and book again.');
+
+      if (!employeeId || !serviceIds.length) {
+        setApiError('Missing booking details. Please go back and book again.');
         setLoading(false);
         return;
       }
 
-      const normalizedDeposit = Number.isFinite(BOOKING_FEE) && BOOKING_FEE > 0 ? BOOKING_FEE : 100;
-      const total = Number(totalPrice ?? normalizedDeposit);
-      const paymentAmount = total >= normalizedDeposit ? normalizedDeposit : total;
-      const paymentType = total > normalizedDeposit ? 'deposit' : 'full';
+      // Save booking details to localStorage BEFORE redirecting to Yoco.
+      // PaymentSuccess.jsx reads this to create the appointment after payment.
+      localStorage.setItem('pendingBooking', JSON.stringify({
+        name,
+        email,
+        dateTime,
+        appointmentDate,
+        appointmentTime,
+        selectedServices,
+        selectedEmployee,
+        totalPrice,
+        totalDuration,
+        contactNumber,
+        employeeId,
+        serviceIds,
+        userName,
+      }));
 
-      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-        setApiError('Invalid payment amount. Please refresh and try again.');
-        setLoading(false);
-        return;
-      }
-
+      // POST /payments — server checks slot availability then creates Yoco checkout.
+      // No appointment is created in the database yet.
       const res = await fetchWithAuth(`${API_ROOT}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          appointmentId,
-          amount: paymentAmount.toFixed(2),
-          type: paymentType,
+          date:          appointmentDate,
+          time:          appointmentTime,
+          employeeId,
+          serviceIds,
+          contactNumber,
+          userName,
         }),
       });
 
       const result = await res.json();
 
-      if (result.success) {
-        // Build a hidden form and redirect user to PayFast's hosted payment page
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = result.pfUrl;
-
-        Object.entries(result.pfData).forEach(([key, value]) => {
-          const input = document.createElement('input');
-          input.type = 'hidden';
-          input.name = key;
-          input.value = value;
-          form.appendChild(input);
-        });
-
-        // Save booking details so PaymentSuccess.jsx can send the confirmation email
-        localStorage.setItem('pendingBooking', JSON.stringify({
-          name,
-          appointmentDate,
-          appointmentTime,
-          selectedServices,
-          selectedEmployee,
-          totalPrice,
-          totalDuration,
-          contactNumber,
-          email,
-        }));
-
-        document.body.appendChild(form);
-        form.submit();
+      if (result.success && result.checkoutUrl) {
+        // Save checkoutId so PaymentSuccess can use it in the confirm-payment call
+        localStorage.setItem('yocoCheckoutId', result.checkoutId);
+        // Redirect to Yoco's hosted payment page.
+        // Intentionally NOT calling setLoading(false) — button stays in
+        // "Redirecting..." state while the browser navigates away.
+        window.location.href = result.checkoutUrl;
       } else {
         setApiError(result.error || 'Could not initiate payment. Please try again.');
+        setLoading(false);
       }
     } catch (err) {
       console.error('Payment error:', err);
       setApiError('Payment failed. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
-
-  if (showConfirmation) {
-    return (
-      <ConfirmationPopup
-        name={name}
-        dateTime={dateTime}
-        selectedServices={selectedServices}
-        selectedEmployee={selectedEmployee}
-        totalPrice={totalPrice}
-        totalDuration={totalDuration}
-        contactNumber={contactNumber}
-        selectedManicureType={location.state?.selectedManicureType || ''}
-        selectedPedicureType={location.state?.selectedPedicureType || ''}
-      />
-    );
-  }
 
   return (
     <div className="pp-bg">
@@ -256,7 +227,8 @@ const PaymentPage = ({ onSave }) => {
             </div>
             <div className="pp-divider" />
             <div className="pp-summary-note">
-              The R{BOOKING_FEE} booking fee secures your appointment. The remaining balance is payable at the salon.
+              The R{BOOKING_FEE} booking fee secures your appointment.
+              The remaining balance is payable at the salon.
             </div>
           </div>
 
@@ -264,66 +236,65 @@ const PaymentPage = ({ onSave }) => {
           <div className="pp-form-card">
             <h3 className="pp-form-title">Payment Details</h3>
 
-            {/* Method Tabs */}
+            {/* Yoco tab — single option, no PayFast tabs */}
             <div className="pp-methods">
-              <button
-                type="button"
-                className={`pp-method-btn ${method === 'card' ? 'pp-method-active' : ''}`}
-                onClick={() => setMethod('card')}
+              <div
+                className="pp-method-btn pp-method-active"
+                style={{ cursor: 'default', flex: 1, justifyContent: 'center' }}
               >
-                <span>💳</span> Card
-              </button>
-              <button
-                type="button"
-                className={`pp-method-btn ${method === 'eft' ? 'pp-method-active' : ''}`}
-                onClick={() => setMethod('eft')}
-              >
-                <span>🏦</span> EFT
-              </button>
+                <span>💳</span> Pay with Yoco
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="pp-form">
 
-              {/* Card via PayFast */}
-              {method === 'card' && (
-                <div className="pp-paypal-notice">
-                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>💳</div>
-                  <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>
-                    Secure Card Payment via PayFast
-                  </p>
-                  <p style={{ fontSize: '0.85rem', opacity: 0.75 }}>
-                    Clicking Pay below will redirect you to PayFast's secure hosted
-                    payment page where you can safely enter your card details.
-                  </p>
-                </div>
-              )}
+              {/* Yoco info box */}
+              <div className="pp-paypal-notice">
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🇿🇦</div>
+                <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>
+                  Secure Payment via Yoco
+                </p>
+                <p style={{ fontSize: '0.85rem', opacity: 0.75 }}>
+                  Clicking Pay below will redirect you to Yoco's secure hosted
+                  payment page. Your card details are entered directly on Yoco —
+                  we never see or store them.
+                </p>
+              </div>
 
-              {/* EFT via PayFast */}
-              {method === 'eft' && (
-                <div className="pp-paypal-notice">
-                  <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏦</div>
-                  <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>
-                    EFT Payment via PayFast
-                  </p>
-                  <p style={{ fontSize: '0.85rem', opacity: 0.75 }}>
-                    Clicking Pay below will redirect you to PayFast where you can
-                    complete your payment via Instant EFT.
-                  </p>
-                </div>
-              )}
+              {/* Accepted payment methods */}
+              <div style={{
+                display: 'flex',
+                gap: '0.5rem',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '0.6rem',
+                background: '#f8fafc',
+                borderRadius: '8px',
+                border: '1px solid #e2e8f0',
+                fontSize: '0.78rem',
+                color: '#64748b',
+                flexWrap: 'wrap',
+              }}>
+                <span>💳 Visa</span>
+                <span>·</span>
+                <span>💳 Mastercard</span>
+                <span>·</span>
+                <span>🏦 Instant EFT</span>
+                <span>·</span>
+                <span>📱 Scan to Pay</span>
+              </div>
 
               {/* Secure badge */}
               <div className="pp-secure-badge">
-                🔒 Secured with 256-bit SSL encryption via PayFast
+                🔒 Secured by Yoco — South Africa's trusted payment provider
               </div>
 
               {apiError && <div className="pp-api-error">{apiError}</div>}
-              {apiSuccess && <div className="pp-api-success">{apiSuccess}</div>}
 
               <button type="submit" className="pp-submit-btn" disabled={loading}>
                 {loading ? (
                   <span className="pp-spinner-wrap">
-                    <span className="pp-spinner" /> Redirecting to PayFast...
+                    <span className="pp-spinner" /> Redirecting to Yoco...
                   </span>
                 ) : (
                   `Pay R${BOOKING_FEE.toFixed(2)} to Secure Booking`
@@ -331,7 +302,8 @@ const PaymentPage = ({ onSave }) => {
               </button>
 
               <p className="pp-terms">
-                By completing this payment you agree to our <a href="#">Terms & Conditions</a>.
+                By completing this payment you agree to our{' '}
+                <a href="#">Terms & Conditions</a>.
                 This booking fee is non-refundable.
               </p>
             </form>
