@@ -1,16 +1,85 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import emailjs from '@emailjs/browser';
 import './ConfirmationPopup.css';
 
 const PaymentSuccess = () => {
-  const navigate = useNavigate();
+  const navigate  = useNavigate();
+  const location  = useLocation();
   const { logout } = useAuth();
   const [bookingDetails, setBookingDetails] = useState(null);
   const [emailStatus, setEmailStatus] = useState('');
+  const hasRun = useRef(false); // prevent double-run in React StrictMode
+
+  const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+  const API_ROOT = RAW_API_BASE
+    ? `${RAW_API_BASE.replace(/\/api$/, '')}/api`
+    : '/api';
+
+  // Refresh token then update appointment to booked + deposit_paid
+  const updateAppointmentStatus = async (appointmentId) => {
+    try {
+      let token = localStorage.getItem('token');
+      if (!token) {
+        console.warn('No auth token — webhook will handle the update.');
+        return;
+      }
+
+      // Try to refresh the token first in case it expired during Yoco redirect
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        try {
+          const refreshRes = await fetch(`${API_ROOT}/auth/refresh-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken }),
+          });
+          const refreshData = await refreshRes.json();
+          if (refreshData.success && refreshData.token) {
+            token = refreshData.token;
+            localStorage.setItem('token', token);
+            console.log('Token refreshed successfully');
+          }
+        } catch (e) {
+          console.warn('Token refresh failed, using existing token:', e);
+        }
+      }
+
+      const res = await fetch(`${API_ROOT}/appointments/${appointmentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status:        'booked',
+          paymentStatus: 'deposit_paid',
+        }),
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        console.log('Appointment updated to booked + deposit_paid', { appointmentId });
+      } else if (
+        result.error?.includes('Invalid status transition') ||
+        result.error?.includes('already booked')
+      ) {
+        // Webhook already set it to booked — idempotent success
+        console.log('Appointment already booked by webhook — no action needed', { appointmentId });
+      } else {
+        console.warn('Appointment update non-success:', result.error);
+      }
+    } catch (err) {
+      console.error('Appointment update error:', err);
+    }
+  };
 
   useEffect(() => {
+    if (hasRun.current) return;
+    hasRun.current = true;
+
     emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'l7AiKNhYSfG_q4eot');
 
     // Try localStorage first, then sessionStorage as fallback
@@ -26,6 +95,23 @@ const PaymentSuccess = () => {
 
     console.log('Booking details loaded:', details);
     setBookingDetails(details);
+
+    // ---------------------------------------------------------------
+    // UPDATE APPOINTMENT STATUS IN DATABASE
+    // Yoco redirects to /payment-success?appointmentId=xxx
+    // Use the existing PUT /appointments/:id endpoint to mark it as
+    // booked + deposit_paid. No new route needed — uses existing CRUD.
+    // Idempotent — safe if webhook already did it.
+    // ---------------------------------------------------------------
+    const params        = new URLSearchParams(location.search);
+    const appointmentId = params.get('appointmentId');
+
+    if (appointmentId) {
+      updateAppointmentStatus(appointmentId);
+    } else {
+      console.warn('No appointmentId in URL — skipping update.');
+    }
+    // ---------------------------------------------------------------
 
     const sendConfirmationEmail = async () => {
       try {
@@ -55,17 +141,17 @@ const PaymentSuccess = () => {
           : `${mins}min`;
 
         const emailParams = {
-          customer_name: name || '',
-          appointment_date: appointmentDate || '',
-          appointment_time: appointmentTime || '',
-          services: Array.isArray(selectedServices) ? selectedServices.join(', ') : '',
-          employee: selectedEmployee || '',
-          total_price: `R${totalPrice || 0}`,
-          total_duration: durationStr,
-          contact_number: String(contactNumber || '').replace(/\D/g, ''),
-          salon_email: 'nxlbeautybar@gmail.com',
-          salon_phone: '0685113394',
-          email: email,
+          customer_name:    name             || '',
+          appointment_date: appointmentDate  || '',
+          appointment_time: appointmentTime  || '',
+          services:         Array.isArray(selectedServices) ? selectedServices.join(', ') : '',
+          employee:         selectedEmployee || '',
+          total_price:      `R${totalPrice  || 0}`,
+          total_duration:   durationStr,
+          contact_number:   String(contactNumber || '').replace(/\D/g, ''),
+          salon_email:      'nxlbeautybar@gmail.com',
+          salon_phone:      '0685113394',
+          email:            email,
         };
 
         console.log('Sending email with params:', emailParams);
@@ -73,7 +159,7 @@ const PaymentSuccess = () => {
         // Mark as sent before sending to prevent duplicates on fast refresh
         localStorage.setItem('emailSent', details.email);
 
-        const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_f0lbtzg';
+        const serviceId  = import.meta.env.VITE_EMAILJS_SERVICE_ID  || 'service_f0lbtzg';
         const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_sbxxbii';
 
         await emailjs.send(serviceId, templateId, emailParams);
@@ -81,7 +167,6 @@ const PaymentSuccess = () => {
         setEmailStatus('sent');
       } catch (err) {
         console.error('EmailJS error:', err);
-        // Remove the sent flag if email actually failed so it can retry
         localStorage.removeItem('emailSent');
         setEmailStatus('error');
       }
@@ -102,7 +187,6 @@ const PaymentSuccess = () => {
     try {
       const { appointmentDate, appointmentTime, selectedServices, selectedEmployee, totalPrice, totalDuration } = bookingDetails;
 
-      // Convert "09:30 am" / "01:30 pm" to 24-hour "09:30" / "13:30"
       const convertTo24Hour = (timeStr) => {
         const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
         if (!m) return timeStr;
@@ -114,29 +198,29 @@ const PaymentSuccess = () => {
         return `${String(hh).padStart(2, '0')}:${mm}`;
       };
 
-      const time24 = convertTo24Hour(appointmentTime);
+      const time24    = convertTo24Hour(appointmentTime);
       const startDate = new Date(`${appointmentDate}T${time24}`);
       if (isNaN(startDate.getTime())) return '#';
 
       const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
-      const endDate = new Date(startDate.getTime() + durationMs);
+      const endDate    = new Date(startDate.getTime() + durationMs);
 
-      const pad = (n) => String(n).padStart(2, '0');
+      const pad         = (n) => String(n).padStart(2, '0');
       const toGoogleDate = (d) =>
         `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
         `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
 
-      const dates = `${toGoogleDate(startDate)}/${toGoogleDate(endDate)}`;
-      const text = encodeURIComponent('NXL Beauty Bar Appointment');
+      const dates      = `${toGoogleDate(startDate)}/${toGoogleDate(endDate)}`;
+      const text       = encodeURIComponent('NXL Beauty Bar Appointment');
       const detailLines = [
         `Services: ${(selectedServices || []).join(', ')}`,
         selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
         `Total: R${totalPrice}`,
       ].filter(Boolean);
       const calDetails = encodeURIComponent(detailLines.join('\n'));
-      const location = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
+      const calLocation = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
 
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${location}&ctz=Africa/Johannesburg`;
+      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${calLocation}&ctz=Africa/Johannesburg`;
     } catch {
       return '#';
     }
@@ -163,13 +247,7 @@ const PaymentSuccess = () => {
         <div className="cp-success-ring">
           <div className="cp-success-icon">
             <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
-              <polyline
-                points="8,20 16,28 30,12"
-                stroke="#fff"
-                strokeWidth="3.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
+              <polyline points="8,20 16,28 30,12" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
         </div>
@@ -178,8 +256,8 @@ const PaymentSuccess = () => {
         <h1 className="cp-heading">Payment Successful!</h1>
         <p className="cp-subheading">
           Your appointment is secured.{' '}
-          {emailStatus === 'sent' && 'A confirmation email has been sent to you.'}
-          {emailStatus === 'error' && 'Email could not be sent, but your booking is confirmed.'}
+          {emailStatus === 'sent'     && 'A confirmation email has been sent to you.'}
+          {emailStatus === 'error'    && 'Email could not be sent, but your booking is confirmed.'}
           {emailStatus === 'no-email' && 'Your booking is confirmed.'}
         </p>
 
@@ -260,30 +338,20 @@ const PaymentSuccess = () => {
             {d.totalPrice > 0 && (
               <div className="cp-pricing-row">
                 <span className="cp-pricing-label">Balance Due at Salon</span>
-                <span className="cp-pricing-balance">
-                  R{Math.max(0, Number(d.totalPrice) - 100).toFixed(2)}
-                </span>
+                <span className="cp-pricing-balance">R{Math.max(0, Number(d.totalPrice) - 100).toFixed(2)}</span>
               </div>
             )}
           </div>
         </div>
 
         {/* Calendar Link */}
-        <a
-          href={buildCalendarLink()}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="cp-calendar-btn"
-        >
+        <a href={buildCalendarLink()} target="_blank" rel="noopener noreferrer" className="cp-calendar-btn">
           <span>📆</span> Add to Google Calendar
         </a>
 
         {/* Actions */}
         <div className="cp-actions">
-          <button className="cp-book-btn" onClick={() => {
-            clearBookingData();
-            navigate('/dashboard', { replace: true });
-          }}>
+          <button className="cp-book-btn" onClick={() => { clearBookingData(); navigate('/dashboard', { replace: true }); }}>
             Book Another Appointment
           </button>
           <button className="cp-print-btn" onClick={() => window.print()}>
