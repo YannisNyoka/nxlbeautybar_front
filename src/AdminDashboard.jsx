@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import AppointmentModal from './components/AppointmentModal';
@@ -12,310 +12,377 @@ import './AdminDashboard.css';
 import EditAppointmentModal from './components/EditAppointmentModal';
 import PaymentModal from './components/PaymentModal';
 
-// --- API helpers ------------------------------------------------------------
+// ─── API helpers ────────────────────────────────────────────────────────────
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const API_ENDPOINTS = {
   appointments: `${API_BASE_URL}/appointments`,
-  services: `${API_BASE_URL}/services`,
-  staff: `${API_BASE_URL}/employees`,
+  services:     `${API_BASE_URL}/services`,
+  staff:        `${API_BASE_URL}/employees`,
   availability: `${API_BASE_URL}/availability`,
-  clients: `${API_BASE_URL}/users?limit=500`,
-  payments: `${API_BASE_URL}/payments`
+  clients:      `${API_BASE_URL}/users?limit=500`,
+  payments:     `${API_BASE_URL}/payments`,
 };
 
 const decimalToFloat = value => {
   if (value == null) return 0;
   if (typeof value === 'object' && '$numberDecimal' in value) return parseFloat(value.$numberDecimal);
-  return Number(value);
+  const n = Number(value);
+  return isNaN(n) ? 0 : n;
 };
 
 const authHeaders = () => {
   const token = localStorage.getItem('token');
   return token
-    ? {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json'
-      }
+    ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' }
     : {};
 };
 
 async function apiRequest(endpoint, options = {}) {
-  const res = await fetch(endpoint, { headers: { ...authHeaders(), ...(options.headers || {}) }, ...options });
-  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Request failed');
+  const res = await fetch(endpoint, {
+    headers: { ...authHeaders(), ...(options.headers || {}) },
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Request failed (${res.status})`);
+  }
   return res.json();
 }
 
-// --- Dashboard component ----------------------------------------------------
+// ─── Payment status badge ────────────────────────────────────────────────────
+function PaymentBadge({ status }) {
+  const cfg = {
+    unpaid:       { bg: '#fff0f0', color: '#c53030', border: '#fed7d7', label: '⚠️ Unpaid',       fw: 700 },
+    deposit_paid: { bg: '#f0fff4', color: '#276749', border: '#c6f6d5', label: '✅ Deposit Paid', fw: 600 },
+    paid:         { bg: '#ebf8ff', color: '#2c5282', border: '#bee3f8', label: '✅ Paid',          fw: 600 },
+    refunded:     { bg: '#fffaf0', color: '#c05621', border: '#feebc8', label: '↩️ Refunded',      fw: 600 },
+  };
+  const c = cfg[status] || cfg.unpaid;
+  return (
+    <span style={{
+      background: c.bg, color: c.color,
+      border: `1px solid ${c.border}`,
+      fontWeight: c.fw,
+      padding: '0.25rem 0.65rem',
+      borderRadius: '20px',
+      fontSize: '0.72rem',
+      display: 'inline-block',
+      whiteSpace: 'nowrap',
+    }}>
+      {c.label}
+    </span>
+  );
+}
+
+// ─── How long ago an appointment was created ─────────────────────────────────
+function appointmentAge(createdAt) {
+  if (!createdAt) return '';
+  const mins = Math.floor((Date.now() - new Date(createdAt)) / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// ─── Confirm dialog helper ───────────────────────────────────────────────────
+function confirmHardDelete(appt) {
+  const name = appt.userName || appt.clientName || 'Unknown client';
+  return window.confirm(
+    `⚠️  PERMANENTLY DELETE APPOINTMENT\n\n` +
+    `Client : ${name}\n` +
+    `Date   : ${appt.date}  ${appt.time}\n` +
+    `Status : ${appt.paymentStatus || 'unpaid'}\n\n` +
+    `This removes the appointment AND any associated payment records from the database.\n` +
+    `This action CANNOT be undone.\n\n` +
+    `Are you absolutely sure?`
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// AdminDashboard
+// ════════════════════════════════════════════════════════════════════════════
 function AdminDashboard() {
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
 
-  // --- UI state ------------------------------------------------------------
-  const [activeSection, setActiveSection] = useState(() => {
-    return localStorage.getItem('adminActiveSection') || 'overview';
-  });
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [activeSection, setActiveSection] = useState(
+    () => localStorage.getItem('adminActiveSection') || 'overview'
+  );
+  const [sidebarOpen, setSidebarOpen]   = useState(false);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState('');
+  const [deletingId, setDeletingId]     = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [chartRange, setChartRange]     = useState('week');
+  const [toast, setToast]               = useState(null);
+
+  // ── filter state ──────────────────────────────────────────────────────────
   const [filters, setFilters] = useState({
     dateRange: { start: null, end: null },
-    staff: 'all',
-    service: 'all',
-    status: 'all',
-    client: ''
+    staff: 'all', service: 'all', status: 'all', client: '',
   });
 
-  // --- Data stores ---------------------------------------------------------
+  // ── data ──────────────────────────────────────────────────────────────────
   const [appointments, setAppointments] = useState([]);
-  const [services, setServices] = useState([]);
-  const [staff, setStaff] = useState([]);
-  const [clients, setClients] = useState([]);
+  const [services,     setServices]     = useState([]);
+  const [staff,        setStaff]        = useState([]);
+  const [clients,      setClients]      = useState([]);
   const [availability, setAvailability] = useState([]);
-  const [payments, setPayments] = useState([]);
+  const [payments,     setPayments]     = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [reportMeta, setReportMeta] = useState({
-    totalRevenueToday: 0,
-    totalRevenueWeek: 0,
-    totalRevenueMonth: 0,
-    bookingsToday: 0,
-    upcomingBookings: 0,
-    cancellations: 0,
-    noShows: 0,
-    unpaidCount: 0
-  });
-  const [showServiceForm, setShowServiceForm] = useState(false);
-  const [editingService, setEditingService] = useState(null);
-  const [serviceForm, setServiceForm] = useState({
-    name: '',
-    duration: '',
-    price: '',
-    description: '',
-    category: ''
-  });
-  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
-  const [showStaffModal, setShowStaffModal] = useState(false);
-  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
-  const [editingStaff, setEditingStaff] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [chartRange, setChartRange] = useState('week');
-  const [editingAppointment, setEditingAppointment] = useState(null);
-  const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [selectedAppointment, setSelectedAppointment] = useState(null);
 
-  // --- Initial load --------------------------------------------------------
+  const [reportMeta, setReportMeta] = useState({
+    totalRevenueToday: 0, totalRevenueWeek: 0, totalRevenueMonth: 0,
+    bookingsToday: 0, upcomingBookings: 0, cancellations: 0,
+    noShows: 0, unpaidCount: 0,
+  });
+
+  // ── modal state ───────────────────────────────────────────────────────────
+  const [showServiceForm,         setShowServiceForm]         = useState(false);
+  const [editingService,          setEditingService]          = useState(null);
+  const [serviceForm,             setServiceForm]             = useState({ name:'', duration:'', price:'', description:'', category:'' });
+  const [showAppointmentModal,    setShowAppointmentModal]    = useState(false);
+  const [showStaffModal,          setShowStaffModal]          = useState(false);
+  const [showAvailabilityModal,   setShowAvailabilityModal]   = useState(false);
+  const [editingStaff,            setEditingStaff]            = useState(null);
+  const [editingAppointment,      setEditingAppointment]      = useState(null);
+  const [showEditAppointmentModal,setShowEditAppointmentModal]= useState(false);
+  const [showPaymentModal,        setShowPaymentModal]        = useState(false);
+  const [selectedAppointment,     setSelectedAppointment]     = useState(null);
+
+  // ── toast helper ──────────────────────────────────────────────────────────
+  const showToast = useCallback((msg, type = 'success') => {
+    setToast({ msg, type, id: Date.now() });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+
+  // ── persist active section ────────────────────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem('adminActiveSection', activeSection);
+  }, [activeSection]);
+
+  // ── initial load ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated || authLoading) return;
-    const loadAll = async () => {
-      try {
-        setLoading(true);
-        const [apptData, serviceData, staffData, availabilityData, clientData, paymentData] = await Promise.all([
+    loadAll();
+  }, [isAuthenticated, authLoading, user]);
+
+  const loadAll = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const [apptData, svcData, staffData, availData, clientData, payData] =
+        await Promise.all([
           apiRequest(API_ENDPOINTS.appointments),
           apiRequest(API_ENDPOINTS.services),
           apiRequest(API_ENDPOINTS.staff),
           apiRequest(API_ENDPOINTS.availability),
           apiRequest(API_ENDPOINTS.clients),
-          apiRequest(API_ENDPOINTS.payments)
+          apiRequest(API_ENDPOINTS.payments),
         ]);
-        setAppointments(apptData.data || []);
-        setServices(
-          (serviceData.data || []).map(service => ({
-            ...service,
-            price: decimalToFloat(service.price),
-            durationMinutes: service.durationMinutes || service.duration
-          }))
-        );
-        setStaff(staffData.data || []);
-        setAvailability(availabilityData.data || []);
-        setClients((clientData.data || []).filter(c => c.role !== 'admin'));
-        setPayments((paymentData.data || []).map(pay => ({
-          ...pay,
-          amount: decimalToFloat(pay.amount)
-        })));
-        computeReportMeta(apptData.data || [], paymentData.data || []);
-      } catch (err) {
-        console.error('AdminDashboard - Data load error:', err);
-        setError(err.message || 'Failed to load admin data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadAll();
-  }, [isAuthenticated, authLoading, user]);
 
-  useEffect(() => {
-    localStorage.setItem('adminActiveSection', activeSection);
-  }, [activeSection]);
+      const appts = apptData.data || [];
+      const pays  = (payData.data || []).map(p => ({ ...p, amount: decimalToFloat(p.amount) }));
 
-  // --- Derived stats -------------------------------------------------------
-  // FIX #5: Use String comparison for ObjectId matching
+      setAppointments(appts);
+      setServices((svcData.data || []).map(s => ({
+        ...s,
+        price: decimalToFloat(s.price),
+        durationMinutes: s.durationMinutes || s.duration,
+      })));
+      setStaff(staffData.data || []);
+      setAvailability(availData.data || []);
+      setClients((clientData.data || []).filter(c => c.role !== 'admin'));
+      setPayments(pays);
+      computeReportMeta(appts, pays);
+    } catch (err) {
+      console.error('AdminDashboard load error:', err);
+      setError(err.message || 'Failed to load admin data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── derived ───────────────────────────────────────────────────────────────
+  const unpaidAppointments = useMemo(
+    () => appointments.filter(a => a.paymentStatus === 'unpaid'),
+    [appointments]
+  );
+
   const filteredAppointments = useMemo(() => {
     return appointments.filter(appt => {
-      const matchesStaff = filters.staff === 'all' || String(appt.employeeId) === String(filters.staff);
-      const matchesService = filters.service === 'all' || (appt.serviceIds || []).some(id => String(id) === String(filters.service));
-      const matchesStatus = filters.status === 'all' || appt.status === filters.status;
-      const matchesClient =
-        !filters.client ||
+      const matchStaff   = filters.staff   === 'all' || String(appt.employeeId) === String(filters.staff);
+      const matchService = filters.service === 'all' || (appt.serviceIds || []).some(id => String(id) === String(filters.service));
+      const matchStatus  = filters.status  === 'all' || appt.status === filters.status;
+      const matchClient  = !filters.client ||
         appt.userName?.toLowerCase().includes(filters.client.toLowerCase()) ||
         appt.clientName?.toLowerCase().includes(filters.client.toLowerCase()) ||
-        appt.clientEmail?.toLowerCase().includes(filters.client.toLowerCase()) ||
         appt.user?.email?.toLowerCase().includes(filters.client.toLowerCase());
-      let matchesDate = true;
+      let matchDate = true;
       if (filters.dateRange.start && filters.dateRange.end) {
-        const apptDate = new Date(appt.date);
-        matchesDate =
-          apptDate >= new Date(filters.dateRange.start) &&
-          apptDate <= new Date(filters.dateRange.end);
+        const d = new Date(appt.date);
+        matchDate = d >= new Date(filters.dateRange.start) && d <= new Date(filters.dateRange.end);
       }
-      return matchesStaff && matchesService && matchesStatus && matchesClient && matchesDate;
+      return matchStaff && matchService && matchStatus && matchClient && matchDate;
     });
   }, [appointments, filters]);
 
-  // FIX #6: Use String comparison for workload counting
   const staffWorkload = useMemo(() => {
-    const workload = {};
-    staff.forEach(s => (workload[String(s._id)] = 0));
-    filteredAppointments.forEach(appt => {
-      const key = String(appt.employeeId);
-      if (workload[key] !== undefined) workload[key] += 1;
+    const w = {};
+    staff.forEach(s => (w[String(s._id)] = 0));
+    filteredAppointments.forEach(a => {
+      const k = String(a.employeeId);
+      if (k in w) w[k]++;
     });
-    return workload;
+    return w;
   }, [filteredAppointments, staff]);
 
   const clientStats = useMemo(() => {
     const stats = {};
-    appointments.forEach(appt => {
-      const key = String(appt.userId || '');
-      if (!stats[key]) stats[key] = { total: 0, last: null };
-      stats[key].total += 1;
-      const apptDate = new Date(appt.date);
-      if (!stats[key].last || apptDate > stats[key].last) stats[key].last = apptDate;
+    appointments.forEach(a => {
+      const k = String(a.userId || '');
+      if (!stats[k]) stats[k] = { total: 0, last: null };
+      stats[k].total++;
+      const d = new Date(a.date);
+      if (!stats[k].last || d > stats[k].last) stats[k].last = d;
     });
     return stats;
   }, [appointments]);
 
-  // --- Helpers -------------------------------------------------------------
-  function computeReportMeta(apptList, paymentList) {
+  // ── report meta ───────────────────────────────────────────────────────────
+  function computeReportMeta(apptList, payList) {
     const today = new Date();
     const sameDay = (d1, d2) =>
       d1.getFullYear() === d2.getFullYear() &&
-      d1.getMonth() === d2.getMonth() &&
-      d1.getDate() === d2.getDate();
-
-    // FIX #9: Correct direction — days SINCE the date, not until
-    const withinDays = (date, days) => (today - new Date(date)) / (1000 * 60 * 60 * 24) < days;
-
-    const bookingsToday = apptList.filter(appt => sameDay(new Date(appt.date), today)).length;
-    const upcomingBookings = apptList.filter(appt => new Date(appt.date) >= today).length;
-    const cancellations = apptList.filter(appt => appt.status === 'cancelled').length;
-    const noShows = apptList.filter(appt => appt.status === 'no-show').length;
-
-    const revenueToday = paymentList
-      .filter(pay => sameDay(new Date(pay.createdAt), today) && pay.status === 'paid')
-      .reduce((sum, pay) => sum + decimalToFloat(pay.amount), 0);
-    const revenueWeek = paymentList
-      .filter(pay => withinDays(pay.createdAt, 7) && pay.status === 'paid')
-      .reduce((sum, pay) => sum + decimalToFloat(pay.amount), 0);
-    const revenueMonth = paymentList
-      .filter(pay => withinDays(pay.createdAt, 30) && pay.status === 'paid')
-      .reduce((sum, pay) => sum + decimalToFloat(pay.amount), 0);
-    const unpaidCount = apptList.filter(appt => appt.paymentStatus !== 'paid').length;
+      d1.getMonth()    === d2.getMonth()    &&
+      d1.getDate()     === d2.getDate();
+    const withinDays = (date, n) =>
+      (today - new Date(date)) / (1000 * 60 * 60 * 24) < n;
 
     setReportMeta({
-      bookingsToday,
-      upcomingBookings,
-      cancellations,
-      noShows,
-      totalRevenueToday: revenueToday,
-      totalRevenueWeek: revenueWeek,
-      totalRevenueMonth: revenueMonth,
-      unpaidCount
+      bookingsToday:      apptList.filter(a => sameDay(new Date(a.date), today)).length,
+      upcomingBookings:   apptList.filter(a => new Date(a.date) >= today).length,
+      cancellations:      apptList.filter(a => a.status === 'cancelled').length,
+      noShows:            apptList.filter(a => a.status === 'no-show').length,
+      unpaidCount:        apptList.filter(a => a.paymentStatus === 'unpaid').length,
+      totalRevenueToday:  payList.filter(p => sameDay(new Date(p.createdAt), today) && p.status === 'paid').reduce((s, p) => s + decimalToFloat(p.amount), 0),
+      totalRevenueWeek:   payList.filter(p => withinDays(p.createdAt, 7)  && p.status === 'paid').reduce((s, p) => s + decimalToFloat(p.amount), 0),
+      totalRevenueMonth:  payList.filter(p => withinDays(p.createdAt, 30) && p.status === 'paid').reduce((s, p) => s + decimalToFloat(p.amount), 0),
     });
   }
 
+  // ─── HARD DELETE ──────────────────────────────────────────────────────────
+  // Only allowed for appointments where paymentStatus === 'unpaid'
+  async function hardDeleteAppointment(appt) {
+    if (appt.paymentStatus !== 'unpaid') {
+      alert('Only unpaid appointments can be permanently deleted.');
+      return;
+    }
+    if (!confirmHardDelete(appt)) return;
+
+    setDeletingId(appt._id);
+    try {
+      // 1. Delete the appointment
+      await apiRequest(`${API_ENDPOINTS.appointments}/${appt._id}`, { method: 'DELETE' });
+
+      // 2. Delete any orphaned pending payment records for this appointment
+      const linked = payments.filter(p => String(p.appointmentId) === String(appt._id) && p.status === 'pending');
+      await Promise.allSettled(
+        linked.map(p => apiRequest(`${API_ENDPOINTS.payments}/${p._id}`, { method: 'DELETE' }))
+      );
+
+      // 3. Refresh
+      const [apptData, payData] = await Promise.all([
+        apiRequest(API_ENDPOINTS.appointments),
+        apiRequest(API_ENDPOINTS.payments),
+      ]);
+      const appts = apptData.data || [];
+      const pays  = (payData.data || []).map(p => ({ ...p, amount: decimalToFloat(p.amount) }));
+      setAppointments(appts);
+      setPayments(pays);
+      computeReportMeta(appts, pays);
+
+      showToast(`Appointment for ${appt.userName || 'client'} permanently deleted.`);
+      addNotification(`Deleted unpaid appointment for ${appt.userName || 'client'} on ${appt.date}`);
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  // ─── Mutations ────────────────────────────────────────────────────────────
   async function mutateAppointment(id, payload) {
     await apiRequest(`${API_ENDPOINTS.appointments}/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(payload)
+      method: 'PUT', body: JSON.stringify(payload),
     });
     const apptData = await apiRequest(API_ENDPOINTS.appointments);
-    setAppointments(apptData.data || []);
+    const appts = apptData.data || [];
+    setAppointments(appts);
+    computeReportMeta(appts, payments);
   }
 
   async function mutateService(id, payload, method) {
-    try {
-      const options = { method };
-      if (method !== 'DELETE') {
-        if (payload.price !== undefined) payload.price = Number(payload.price);
-        if (payload.durationMinutes !== undefined) payload.durationMinutes = Number(payload.durationMinutes);
-        options.body = JSON.stringify(payload);
-      }
-      const endpoint = (id && method !== 'POST') ? `${API_ENDPOINTS.services}/${id}` : API_ENDPOINTS.services;
-      const result = await apiRequest(endpoint, options);
-      const serviceData = await apiRequest(API_ENDPOINTS.services);
-      setServices((serviceData.data || []).map(service => ({
-        ...service,
-        price: decimalToFloat(service.price),
-        durationMinutes: service.durationMinutes || service.duration
-      })));
-      return result;
-    } catch (err) {
-      console.error('Service mutation failed:', err);
-      throw err;
+    const opts = { method };
+    if (method !== 'DELETE') {
+      if (payload.price !== undefined)         payload.price = Number(payload.price);
+      if (payload.durationMinutes !== undefined) payload.durationMinutes = Number(payload.durationMinutes);
+      opts.body = JSON.stringify(payload);
     }
+    const endpoint = id && method !== 'POST'
+      ? `${API_ENDPOINTS.services}/${id}`
+      : API_ENDPOINTS.services;
+    const result = await apiRequest(endpoint, opts);
+    const svcData = await apiRequest(API_ENDPOINTS.services);
+    setServices((svcData.data || []).map(s => ({
+      ...s, price: decimalToFloat(s.price), durationMinutes: s.durationMinutes || s.duration,
+    })));
+    return result;
   }
 
   async function mutateStaff(id, payload, method = 'PUT') {
-    try {
-      const options = { method };
-      if (method !== 'DELETE') options.body = JSON.stringify(payload);
-      await apiRequest(id ? `${API_ENDPOINTS.staff}/${id}` : API_ENDPOINTS.staff, options);
-      const staffData = await apiRequest(API_ENDPOINTS.staff);
-      setStaff(staffData.data || []);
-    } catch (err) {
-      console.error('Staff mutation failed:', err);
-      throw err;
-    }
+    const opts = { method };
+    if (method !== 'DELETE') opts.body = JSON.stringify(payload);
+    await apiRequest(id ? `${API_ENDPOINTS.staff}/${id}` : API_ENDPOINTS.staff, opts);
+    const staffData = await apiRequest(API_ENDPOINTS.staff);
+    setStaff(staffData.data || []);
   }
 
   async function mutateAvailability(id, payload, method = 'PUT') {
-    try {
-      const options = { method };
-      if (method !== 'DELETE') options.body = JSON.stringify(payload);
-      await apiRequest(id ? `${API_ENDPOINTS.availability}/${id}` : API_ENDPOINTS.availability, options);
-      const availData = await apiRequest(API_ENDPOINTS.availability);
-      setAvailability(availData.data || []);
-    } catch (err) {
-      console.error('Availability mutation failed:', err);
-      throw err;
-    }
+    const opts = { method };
+    if (method !== 'DELETE') opts.body = JSON.stringify(payload);
+    await apiRequest(id ? `${API_ENDPOINTS.availability}/${id}` : API_ENDPOINTS.availability, opts);
+    const availData = await apiRequest(API_ENDPOINTS.availability);
+    setAvailability(availData.data || []);
   }
 
   async function blockClient(clientId, block) {
-    await apiRequest(`${API_ENDPOINTS.clients}/${clientId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ isActive: !block })
+    await apiRequest(`${API_BASE_URL}/users/${clientId}`, {
+      method: 'PUT', body: JSON.stringify({ isActive: !block }),
     });
     const clientData = await apiRequest(API_ENDPOINTS.clients);
     setClients((clientData.data || []).filter(c => c.role !== 'admin'));
   }
 
-  const exportReport = (format = 'csv') => {
+  function addNotification(msg) {
+    setNotifications(prev => [{ id: Date.now(), message: msg, createdAt: new Date() }, ...prev]);
+  }
+
+  const exportCSV = () => {
     const rows = [
-      ['Date', 'Client', 'Staff', 'Services', 'Status', 'Payment', 'Amount'],
+      ['Date','Client','Staff','Services','Status','Payment','Amount (R)'],
       ...appointments.map(appt => [
         appt.date,
-        appt.userName || appt.clientName || appt.clientEmail || 'Unknown',
-        // FIX #4: String comparison in export too
-        staff.find(s => String(s._id) === String(appt.employeeId))?.name || appt.employee?.name || '—',
+        appt.userName || appt.clientName || 'Unknown',
+        staff.find(s => String(s._id) === String(appt.employeeId))?.name || '—',
         (appt.serviceIds || []).map(id => services.find(s => String(s._id) === String(id))?.name).filter(Boolean).join('; '),
         appt.status,
         appt.paymentStatus || 'unpaid',
-        (payments.find(p => String(p.appointmentId) === String(appt._id))?.amount ?? 0).toFixed(2)
-      ])
+        (payments.find(p => String(p.appointmentId) === String(appt._id))?.amount ?? 0).toFixed(2),
+      ]),
     ];
-    const csv = rows.map(r => r.map(field => `"${String(field ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const csv  = rows.map(r => r.map(f => `"${String(f ?? '').replace(/"/g,'""')}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -324,48 +391,149 @@ function AdminDashboard() {
     URL.revokeObjectURL(link.href);
   };
 
-  const sendNotification = async message => {
-    setNotifications(prev => [...prev, { id: Date.now(), message, createdAt: new Date() }]);
+  // ─── Unpaid Review Panel ──────────────────────────────────────────────────
+  const renderUnpaidPanel = () => {
+    if (!unpaidAppointments.length) return null;
+    return (
+      <section className="panel unpaid-panel">
+        <header>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+            <span className="unpaid-badge-icon">⚠️</span>
+            <div>
+              <h3 style={{ color:'#c53030', marginBottom:'0.15rem' }}>
+                Unpaid Appointments — Admin Review Required
+              </h3>
+              <p style={{ color:'#718096', fontSize:'0.78rem', fontWeight:400 }}>
+                These bookings were started but payment was never completed. Review and permanently delete to free the time slot.
+              </p>
+            </div>
+          </div>
+          <span className="unpaid-count-badge">{unpaidAppointments.length}</span>
+        </header>
+        <div className="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Date & Time</th>
+                <th>Services</th>
+                <th>Stylist</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unpaidAppointments.map(appt => (
+                <tr key={appt._id} className="unpaid-row">
+                  <td>
+                    <div style={{ fontWeight:600 }}>{appt.userName || appt.clientName || '—'}</div>
+                    {appt.user?.email && <div className="sub-text">{appt.user.email}</div>}
+                  </td>
+                  <td>
+                    <div style={{ fontWeight:600 }}>{appt.date}</div>
+                    <div className="sub-text">{appt.time}</div>
+                  </td>
+                  <td>
+                    {(appt.serviceIds || [])
+                      .map(id => services.find(s => String(s._id) === String(id))?.name)
+                      .filter(Boolean).join(', ') || '—'}
+                  </td>
+                  <td>
+                    {staff.find(s => String(s._id) === String(appt.employeeId))?.name
+                      || appt.employee?.name || '—'}
+                  </td>
+                  <td>
+                    <span className="age-label">{appointmentAge(appt.createdAt)}</span>
+                  </td>
+                  <td className="row-actions">
+                    {/* Cancel — keeps record, frees slot */}
+                    <button
+                      className="action-btn cancel-btn"
+                      title="Cancel appointment (keeps record)"
+                      onClick={async () => {
+                        await mutateAppointment(appt._id, { status: 'cancelled' });
+                        showToast('Appointment cancelled.');
+                        addNotification(`Cancelled unpaid appointment for ${appt.userName || 'client'}`);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    {/* Hard delete — permanently removes from DB */}
+                    <button
+                      className="action-btn delete-btn"
+                      title="Permanently delete from database"
+                      disabled={deletingId === appt._id}
+                      onClick={() => hardDeleteAppointment(appt)}
+                    >
+                      {deletingId === appt._id ? 'Deleting…' : '🗑 Delete'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    );
   };
 
-  // --- Render fragments ----------------------------------------------------
-  const renderStatCards = () => (
-    <div className="grid grid-responsive">
-      <StatCard label="Bookings Today" value={reportMeta.bookingsToday} icon="📅" />
-      <StatCard label="Upcoming Bookings" value={reportMeta.upcomingBookings} icon="⏰" />
-      <StatCard label="Revenue Today" value={`R${reportMeta.totalRevenueToday.toFixed(2)}`} icon="💰" />
-      <StatCard label="Revenue (Week)" value={`R${reportMeta.totalRevenueWeek.toFixed(2)}`} icon="📈" />
-      <StatCard label="Revenue (Month)" value={`R${reportMeta.totalRevenueMonth.toFixed(2)}`} icon="📊" />
-      <StatCard label="Cancellations" value={reportMeta.cancellations} icon="⚠️" />
-      <StatCard label="No Shows" value={reportMeta.noShows} icon="🚫" />
-      <StatCard label="Unpaid Bookings" value={reportMeta.unpaidCount} icon="💳" />
-    </div>
-  );
-
+  // ─── Section renderers ────────────────────────────────────────────────────
   const renderOverview = () => (
     <>
-      {renderStatCards()}
+      <div className="grid grid-responsive">
+        <StatCard label="Bookings Today"    value={reportMeta.bookingsToday}                          icon="📅" color="rose" />
+        <StatCard label="Upcoming"          value={reportMeta.upcomingBookings}                       icon="⏰" color="sky" />
+        <StatCard label="Revenue Today"     value={`R${reportMeta.totalRevenueToday.toFixed(2)}`}    icon="💰" color="emerald" />
+        <StatCard label="Revenue (Week)"    value={`R${reportMeta.totalRevenueWeek.toFixed(2)}`}     icon="📈" color="violet" />
+        <StatCard label="Revenue (Month)"   value={`R${reportMeta.totalRevenueMonth.toFixed(2)}`}    icon="📊" color="amber" />
+        <StatCard label="Cancellations"     value={reportMeta.cancellations}                          icon="✕"  color="slate" />
+        <StatCard label="No-Shows"          value={reportMeta.noShows}                                icon="🚫" color="slate" />
+        <StatCard
+          label="Unpaid Bookings"
+          value={reportMeta.unpaidCount}
+          icon="💳"
+          color={reportMeta.unpaidCount > 0 ? 'danger' : 'slate'}
+          onClick={reportMeta.unpaidCount > 0 ? () => setActiveSection('appointments') : undefined}
+          clickable={reportMeta.unpaidCount > 0}
+        />
+      </div>
+
+      {renderUnpaidPanel()}
+
       <section className="panel">
         <header>
           <h3>Revenue Trend</h3>
           <div className="button-row">
-            <button className={`btn ${chartRange === 'week' ? 'primary' : 'ghost'}`} onClick={() => setChartRange('week')}>Week</button>
-            <button className={`btn ${chartRange === 'month' ? 'primary' : 'ghost'}`} onClick={() => setChartRange('month')}>Month</button>
-            <button className={`btn ${chartRange === 'year' ? 'primary' : 'ghost'}`} onClick={() => setChartRange('year')}>Year</button>
+            {['week','month','year'].map(r => (
+              <button key={r} className={`btn ${chartRange === r ? 'primary' : 'ghost'}`} onClick={() => setChartRange(r)}>
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </button>
+            ))}
           </div>
         </header>
         <RevenueChart payments={payments} range={chartRange} />
       </section>
+
       <section className="panel">
         <header><h3>Bookings Trend</h3></header>
         <BookingsChart appointments={appointments} range={chartRange} />
       </section>
+
       <section className="panel quick-actions">
         <h3>Quick Actions</h3>
         <div className="action-buttons">
           <button className="btn primary" onClick={() => setShowAppointmentModal(true)}>➕ Add Booking</button>
           <button className="btn primary" onClick={() => setActiveSection('services')}>💅 Add Service</button>
           <button className="btn primary" onClick={() => setShowAvailabilityModal(true)}>🚫 Block Time</button>
+          {reportMeta.unpaidCount > 0 && (
+            <button
+              className="btn"
+              style={{ background:'#c53030', color:'white' }}
+              onClick={() => { setFilters(f => ({ ...f, status:'pending' })); setActiveSection('appointments'); }}
+            >
+              ⚠️ Review {reportMeta.unpaidCount} Unpaid
+            </button>
+          )}
         </div>
       </section>
     </>
@@ -373,8 +541,10 @@ function AdminDashboard() {
 
   const renderAppointments = () => (
     <>
+      {renderUnpaidPanel()}
+
       <section className="panel filters">
-        <h3>Appointment Filters</h3>
+        <h3>Filters</h3>
         <div className="filter-grid">
           <select value={filters.staff} onChange={e => setFilters({ ...filters, staff: e.target.value })}>
             <option value="all">All Staff</option>
@@ -386,14 +556,14 @@ function AdminDashboard() {
           </select>
           <select value={filters.status} onChange={e => setFilters({ ...filters, status: e.target.value })}>
             <option value="all">All Statuses</option>
-            <option value="pending">Pending Payment</option>
+            <option value="pending">⚠️ Pending Payment</option>
             <option value="booked">Booked</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
             <option value="no-show">No Show</option>
           </select>
           <input
-            placeholder="Filter by client"
+            placeholder="Search client…"
             value={filters.client}
             onChange={e => setFilters({ ...filters, client: e.target.value })}
           />
@@ -402,11 +572,14 @@ function AdminDashboard() {
 
       <section className="panel">
         <header>
-          <h3>Appointments List</h3>
+          <h3>Appointments <span className="count-chip">{filteredAppointments.length}</span></h3>
           <div className="button-row">
-            <button className="btn ghost" onClick={handleExportAppointmentsPDF}>📄 Export PDF</button>
-            <button className="btn ghost" onClick={() => sendNotification('Manual reminder sent')}>Notify</button>
-            <button className="btn primary" onClick={() => setShowAppointmentModal(true)}>➕ Create Appointment</button>
+            <button className="btn ghost" onClick={() => {
+              try { generateAppointmentsPDF(filteredAppointments, staff, services, payments); }
+              catch (e) { alert('PDF export failed: ' + e.message); }
+            }}>📄 PDF</button>
+            <button className="btn ghost" onClick={exportCSV}>📊 CSV</button>
+            <button className="btn primary" onClick={() => setShowAppointmentModal(true)}>➕ New</button>
           </div>
         </header>
         <div className="table-responsive">
@@ -414,34 +587,74 @@ function AdminDashboard() {
             <thead>
               <tr>
                 <th>Date</th><th>Time</th><th>Client</th><th>Services</th>
-                <th>Staff</th><th>Status</th><th>Payment</th><th />
+                <th>Staff</th><th>Status</th><th>Payment</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredAppointments.map(appt => (
-                <tr key={appt._id}>
+                <tr
+                  key={appt._id}
+                  className={appt.paymentStatus === 'unpaid' ? 'unpaid-row' : ''}
+                >
                   <td>{appt.date}</td>
                   <td>{appt.time}</td>
-                  {/* FIX #2: Use userName from backend */}
-                  <td>{appt.userName || appt.clientName || '—'}</td>
-                  {/* FIX #3: String comparison for service names */}
-                  <td>{(appt.serviceIds || []).map(id => services.find(s => String(s._id) === String(id))?.name).filter(Boolean).join(', ') || '—'}</td>
-                  {/* FIX #4: String comparison for staff name */}
-                  <td>{staff.find(s => String(s._id) === String(appt.employeeId))?.name || appt.employee?.name || '—'}</td>
-                  <td className={`status ${appt.status}`}>{appt.status}</td>
-                  <td>{appt.paymentStatus || 'unpaid'}</td>
+                  <td>
+                    <div style={{ fontWeight:600 }}>{appt.userName || appt.clientName || '—'}</div>
+                    {appt.user?.email && <div className="sub-text">{appt.user.email}</div>}
+                  </td>
+                  <td>
+                    {(appt.serviceIds || [])
+                      .map(id => services.find(s => String(s._id) === String(id))?.name)
+                      .filter(Boolean).join(', ') || '—'}
+                  </td>
+                  <td>
+                    {staff.find(s => String(s._id) === String(appt.employeeId))?.name
+                      || appt.employee?.name || '—'}
+                  </td>
+                  <td><span className={`status ${appt.status}`}>{appt.status}</span></td>
+                  <td><PaymentBadge status={appt.paymentStatus || 'unpaid'} /></td>
                   <td className="row-actions">
-                    <button onClick={() => { setEditingAppointment(appt); setShowEditAppointmentModal(true); }} title="Edit">✏️</button>
-                    <button onClick={() => mutateAppointment(appt._id, { status: 'completed' })} title="Mark Complete">✓</button>
-                    <button onClick={() => mutateAppointment(appt._id, { status: 'cancelled' })} title="Cancel">✕</button>
-                    {appt.paymentStatus !== 'paid' && (
-                      <button onClick={() => { setSelectedAppointment(appt); setShowPaymentModal(true); }} title="Record Payment">💳</button>
+                    <button
+                      className="action-btn"
+                      title="Edit"
+                      onClick={() => { setEditingAppointment(appt); setShowEditAppointmentModal(true); }}
+                    >✏️</button>
+                    <button
+                      className="action-btn"
+                      title="Mark Complete"
+                      onClick={() => mutateAppointment(appt._id, { status:'completed' }).then(() => showToast('Marked complete.'))}
+                    >✓</button>
+                    <button
+                      className="action-btn"
+                      title="Cancel"
+                      onClick={() => mutateAppointment(appt._id, { status:'cancelled' }).then(() => showToast('Appointment cancelled.'))}
+                    >✕</button>
+
+                    {/* Record payment — show for unpaid and deposit_paid */}
+                    {(appt.paymentStatus === 'unpaid' || appt.paymentStatus === 'deposit_paid') && (
+                      <button
+                        className="action-btn"
+                        title="Record Payment"
+                        onClick={() => { setSelectedAppointment(appt); setShowPaymentModal(true); }}
+                      >💳</button>
+                    )}
+
+                    {/* Hard delete — ONLY for unpaid appointments */}
+                    {appt.paymentStatus === 'unpaid' && (
+                      <button
+                        className="action-btn delete-btn"
+                        title="Permanently delete (unpaid only)"
+                        disabled={deletingId === appt._id}
+                        onClick={() => hardDeleteAppointment(appt)}
+                      >
+                        {deletingId === appt._id ? '…' : '🗑'}
+                      </button>
                     )}
                   </td>
                 </tr>
               ))}
               {!filteredAppointments.length && (
-                <tr><td colSpan="8" className="empty-row">No appointments match the filters.</td></tr>
+                <tr><td colSpan="8" className="empty-row">No appointments match the current filters.</td></tr>
               )}
             </tbody>
           </table>
@@ -450,18 +663,16 @@ function AdminDashboard() {
 
       <section className="panel calendar-panel">
         <header><h3>Calendar View</h3></header>
-        {filteredAppointments.length > 0 && (
-          <AppointmentCalendar
-            appointments={filteredAppointments}
-            staff={staff}
-            services={services}
-            onSelectSlot={() => setShowAppointmentModal(true)}
-            onSelectEvent={(event) => console.log('Selected appointment:', event.resource)}
-          />
-        )}
-        {filteredAppointments.length === 0 && (
-          <div className="calendar-placeholder">No appointments to display. Create your first appointment to see it on the calendar.</div>
-        )}
+        {filteredAppointments.length > 0
+          ? <AppointmentCalendar
+              appointments={filteredAppointments}
+              staff={staff}
+              services={services}
+              onSelectSlot={() => setShowAppointmentModal(true)}
+              onSelectEvent={ev => console.log('Selected:', ev.resource)}
+            />
+          : <div className="calendar-placeholder">No appointments to display.</div>
+        }
       </section>
     </>
   );
@@ -472,93 +683,88 @@ function AdminDashboard() {
         <h3>Services</h3>
         <button className="btn primary" onClick={() => {
           setEditingService(null);
-          setServiceForm({ name: '', duration: '', price: '', description: '', category: '' });
+          setServiceForm({ name:'', duration:'', price:'', description:'', category:'' });
           setShowServiceForm(true);
         }}>+ Add Service</button>
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr><th>Name</th><th>Category</th><th>Duration</th><th>Price</th><th>Status</th><th /></tr>
+            <tr><th>Name</th><th>Category</th><th>Duration</th><th>Price</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
-            {services.map(service => (
-              <tr key={service._id}>
-                <td>{service.name}</td>
-                <td>{service.category || 'Uncategorized'}</td>
-                <td>{service.durationMinutes} min</td>
-                <td>R{(decimalToFloat(service.price) || 0).toFixed(2)}</td>
-                <td>{service.isActive ? 'Enabled' : 'Disabled'}</td>
+            {services.map(svc => (
+              <tr key={svc._id}>
+                <td style={{ fontWeight:600 }}>{svc.name}</td>
+                <td>{svc.category || 'Uncategorized'}</td>
+                <td>{svc.durationMinutes} min</td>
+                <td>R{(decimalToFloat(svc.price)).toFixed(2)}</td>
+                <td>
+                  <span className={`status ${svc.isActive ? 'booked' : 'cancelled'}`}>
+                    {svc.isActive ? 'Active' : 'Disabled'}
+                  </span>
+                </td>
                 <td className="row-actions">
-                  <button onClick={(e) => {
-                    e.preventDefault();
-                    setEditingService(service);
-                    setServiceForm({
-                      name: service.name,
-                      duration: service.durationMinutes,
-                      price: decimalToFloat(service.price) || 0,
-                      category: service.category || '',
-                      description: service.description || ''
-                    });
+                  <button className="action-btn" onClick={() => {
+                    setEditingService(svc);
+                    setServiceForm({ name:svc.name, duration:svc.durationMinutes, price:decimalToFloat(svc.price), category:svc.category||'', description:svc.description||'' });
                     setShowServiceForm(true);
                   }}>Edit</button>
-                  <button onClick={async (e) => {
-                    e.preventDefault();
+                  <button className="action-btn" onClick={async () => {
                     try {
-                      await mutateService(service._id, { isActive: !service.isActive }, 'PUT');
-                      sendNotification(`Service ${service.isActive ? 'disabled' : 'enabled'} successfully`);
-                    } catch (err) { alert('Failed to update service: ' + err.message); }
-                  }}>{service.isActive ? 'Disable' : 'Enable'}</button>
-                  <button onClick={async (e) => {
-                    e.preventDefault();
-                    if (!window.confirm(`Are you sure you want to delete "${service.name}"?\n\nIf it has future bookings it will be disabled instead.`)) return;
-                    try {
-                      await mutateService(service._id, {}, 'DELETE');
-                      sendNotification(`Service "${service.name}" deleted successfully`);
-                    } catch (err) { alert('Failed to delete service: ' + err.message); }
+                      await mutateService(svc._id, { isActive: !svc.isActive }, 'PUT');
+                      showToast(`Service ${svc.isActive ? 'disabled' : 'enabled'}.`);
+                    } catch (e) { alert(e.message); }
+                  }}>{svc.isActive ? 'Disable' : 'Enable'}</button>
+                  <button className="action-btn delete-btn" onClick={async () => {
+                    if (!window.confirm(`Delete "${svc.name}"? If it has future bookings it will be disabled instead.`)) return;
+                    try { await mutateService(svc._id, {}, 'DELETE'); showToast(`"${svc.name}" deleted.`); }
+                    catch (e) { alert(e.message); }
                   }}>Delete</button>
                 </td>
               </tr>
             ))}
-            {!services.length && (
-              <tr><td colSpan="6" className="empty-row">No services defined yet.</td></tr>
-            )}
+            {!services.length && <tr><td colSpan="6" className="empty-row">No services defined yet.</td></tr>}
           </tbody>
         </table>
       </div>
+
       {showServiceForm && (
-        <Modal title={editingService ? 'Edit Service' : 'Add Service'} onClose={() => {
-          setShowServiceForm(false);
-          setEditingService(null);
-          setServiceForm({ name: '', duration: '', price: '', description: '', category: '' });
-        }}>
-          <form onSubmit={async e => {
-            e.preventDefault();
-            e.stopPropagation();
-            setIsSubmitting(true);
-            try {
-              const duration = Number(serviceForm.duration);
-              const price = Number(serviceForm.price);
-              if (duration % 15 !== 0) { alert('Duration must be a multiple of 15 minutes'); setIsSubmitting(false); return; }
-              if (isNaN(price) || price < 0) { alert('Please enter a valid price'); setIsSubmitting(false); return; }
-              const payload = { name: serviceForm.name, durationMinutes: duration, price, description: serviceForm.description, category: serviceForm.category, isActive: true };
-              await mutateService(editingService?._id, payload, editingService ? 'PUT' : 'POST');
-              setShowServiceForm(false);
-              setEditingService(null);
-              setServiceForm({ name: '', duration: '', price: '', description: '', category: '' });
-              sendNotification(`Service ${editingService ? 'updated' : 'created'} successfully`);
-            } catch (err) {
-              alert('Failed to save service: ' + err.message);
-            } finally { setIsSubmitting(false); }
-          }} className="form-grid">
-            <input required placeholder="Service name" value={serviceForm.name} onChange={e => setServiceForm({ ...serviceForm, name: e.target.value })} disabled={isSubmitting} />
-            <input placeholder="Category" value={serviceForm.category || ''} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })} disabled={isSubmitting} />
-            <input required type="number" min="15" step="15" placeholder="Duration (minutes)" value={serviceForm.duration} onChange={e => setServiceForm({ ...serviceForm, duration: e.target.value })} disabled={isSubmitting} />
-            <input required type="number" min="0" step="0.01" placeholder="Price (R)" value={serviceForm.price} onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} disabled={isSubmitting} />
-            <textarea placeholder="Description" value={serviceForm.description || ''} onChange={e => setServiceForm({ ...serviceForm, description: e.target.value })} disabled={isSubmitting} />
+        <Modal
+          title={editingService ? 'Edit Service' : 'Add Service'}
+          onClose={() => { setShowServiceForm(false); setEditingService(null); }}
+        >
+          <form
+            onSubmit={async e => {
+              e.preventDefault();
+              e.stopPropagation();
+              setIsSubmitting(true);
+              try {
+                const dur   = Number(serviceForm.duration);
+                const price = Number(serviceForm.price);
+                if (dur % 15 !== 0) { alert('Duration must be a multiple of 15 minutes.'); return; }
+                if (isNaN(price) || price < 0) { alert('Enter a valid price.'); return; }
+                await mutateService(
+                  editingService?._id,
+                  { name:serviceForm.name, durationMinutes:dur, price, description:serviceForm.description, category:serviceForm.category, isActive:true },
+                  editingService ? 'PUT' : 'POST'
+                );
+                setShowServiceForm(false);
+                setEditingService(null);
+                showToast(`Service ${editingService ? 'updated' : 'created'}.`);
+              } catch (e) { alert(e.message); }
+              finally { setIsSubmitting(false); }
+            }}
+            className="form-grid"
+          >
+            <input required placeholder="Service name" value={serviceForm.name} onChange={e => setServiceForm({...serviceForm, name:e.target.value})} />
+            <input placeholder="Category (e.g. Manicure)" value={serviceForm.category} onChange={e => setServiceForm({...serviceForm, category:e.target.value})} />
+            <input required type="number" min="15" step="15" placeholder="Duration (min)" value={serviceForm.duration} onChange={e => setServiceForm({...serviceForm, duration:e.target.value})} />
+            <input required type="number" min="0" step="0.01" placeholder="Price (R)" value={serviceForm.price} onChange={e => setServiceForm({...serviceForm, price:e.target.value})} />
+            <textarea placeholder="Description (optional)" value={serviceForm.description} onChange={e => setServiceForm({...serviceForm, description:e.target.value})} />
             <footer className="modal-actions">
-              <button type="button" onClick={() => { setShowServiceForm(false); setEditingService(null); }} disabled={isSubmitting}>Cancel</button>
-              <button type="submit" className="btn primary" disabled={isSubmitting}>{isSubmitting ? 'Saving...' : 'Save'}</button>
+              <button type="button" onClick={() => { setShowServiceForm(false); setEditingService(null); }}>Cancel</button>
+              <button type="submit" className="btn primary" disabled={isSubmitting}>{isSubmitting ? 'Saving…' : 'Save Service'}</button>
             </footer>
           </form>
         </Modal>
@@ -575,43 +781,39 @@ function AdminDashboard() {
       <div className="table-responsive">
         <table>
           <thead>
-            <tr><th>Name</th><th>Services</th><th>Working Hours</th><th>Active</th><th>Workload</th><th /></tr>
+            <tr><th>Name</th><th>Services</th><th>Active</th><th>Workload</th><th>Actions</th></tr>
           </thead>
           <tbody>
-            {staff.map(emp => {
-              const empServices = (emp.servicesOffered || [])
-                .map(id => services.find(s => String(s._id) === String(id))?.name)
-                .filter(Boolean).join(', ') || '—';
-              return (
-                <tr key={emp._id}>
-                  <td>{emp.name}</td>
-                  <td>{empServices}</td>
-                  <td>{emp.workingHours ? 'Custom' : 'Default'}</td>
-                  <td>{emp.isActive ? 'Yes' : 'No'}</td>
-                  {/* FIX #6: Use String key for workload lookup */}
-                  <td>{staffWorkload[String(emp._id)] || 0} appts</td>
-                  <td className="row-actions">
-                    <button onClick={() => { setEditingStaff(emp); setShowStaffModal(true); }}>Edit</button>
-                    <button onClick={async () => {
-                      const action = emp.isActive ? 'deactivate' : 'activate';
-                      if (!window.confirm(`Are you sure you want to ${action} ${emp.name}?`)) return;
-                      try {
-                        await mutateStaff(emp._id, { isActive: !emp.isActive }, 'PUT');
-                        sendNotification(`${emp.name} ${emp.isActive ? 'deactivated' : 'activated'} successfully`);
-                      } catch (err) { alert('Failed to update staff: ' + err.message); }
-                    }}>{emp.isActive ? 'Deactivate' : 'Activate'}</button>
-                    <button onClick={async () => {
-                      if (!window.confirm(`Are you sure you want to remove ${emp.name}?\n\nThis cannot be undone and may affect existing appointments.`)) return;
-                      try {
-                        await mutateStaff(emp._id, {}, 'DELETE');
-                        sendNotification(`${emp.name} removed successfully`);
-                      } catch (err) { alert('Failed to remove staff: ' + err.message); }
-                    }}>Remove</button>
-                  </td>
-                </tr>
-              );
-            })}
-            {!staff.length && <tr><td colSpan="6" className="empty-row">No staff members yet.</td></tr>}
+            {staff.map(emp => (
+              <tr key={emp._id}>
+                <td style={{ fontWeight:600 }}>{emp.name}</td>
+                <td>
+                  {(emp.servicesOffered || [])
+                    .map(id => services.find(s => String(s._id) === String(id))?.name)
+                    .filter(Boolean).join(', ') || '—'}
+                </td>
+                <td>
+                  <span className={`status ${emp.isActive ? 'booked' : 'cancelled'}`}>
+                    {emp.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </td>
+                <td>{staffWorkload[String(emp._id)] || 0} appts</td>
+                <td className="row-actions">
+                  <button className="action-btn" onClick={() => { setEditingStaff(emp); setShowStaffModal(true); }}>Edit</button>
+                  <button className="action-btn" onClick={async () => {
+                    if (!window.confirm(`${emp.isActive ? 'Deactivate' : 'Activate'} ${emp.name}?`)) return;
+                    try { await mutateStaff(emp._id, { isActive: !emp.isActive }, 'PUT'); showToast(`${emp.name} ${emp.isActive ? 'deactivated' : 'activated'}.`); }
+                    catch (e) { alert(e.message); }
+                  }}>{emp.isActive ? 'Deactivate' : 'Activate'}</button>
+                  <button className="action-btn delete-btn" onClick={async () => {
+                    if (!window.confirm(`Remove ${emp.name}? This cannot be undone.`)) return;
+                    try { await mutateStaff(emp._id, {}, 'DELETE'); showToast(`${emp.name} removed.`); }
+                    catch (e) { alert(e.message); }
+                  }}>Remove</button>
+                </td>
+              </tr>
+            ))}
+            {!staff.length && <tr><td colSpan="5" className="empty-row">No staff members yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -621,30 +823,32 @@ function AdminDashboard() {
   const renderClients = () => (
     <section className="panel">
       <header>
-        <h3>Clients</h3>
-        <input placeholder="Search clients" value={filters.client} onChange={e => setFilters({ ...filters, client: e.target.value })} />
+        <h3>Clients <span className="count-chip">{clients.length}</span></h3>
+        <input placeholder="Search clients…" value={filters.client} onChange={e => setFilters({...filters, client:e.target.value})} style={{ padding:'0.5rem 0.75rem', border:'1px solid #e2e8f0', borderRadius:'8px', fontSize:'0.875rem' }} />
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Total Bookings</th><th>Last Booking</th><th>Status</th><th /></tr>
+            <tr><th>Name</th><th>Email</th><th>Bookings</th><th>Last Booking</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {clients
-              .filter(c => c.email?.toLowerCase().includes(filters.client.toLowerCase()))
+              .filter(c => c.email?.toLowerCase().includes(filters.client.toLowerCase()) || `${c.firstName} ${c.lastName}`.toLowerCase().includes(filters.client.toLowerCase()))
               .map(client => {
-                const stats = clientStats[String(client._id)] || { total: 0, last: null };
-                const isActive = client.isActive !== false;
+                const stats = clientStats[String(client._id)] || { total:0, last:null };
+                const active = client.isActive !== false;
                 return (
                   <tr key={client._id}>
-                    <td>{client.firstName} {client.lastName}</td>
+                    <td style={{ fontWeight:600 }}>{client.firstName} {client.lastName}</td>
                     <td>{client.email}</td>
                     <td>{stats.total}</td>
                     <td>{stats.last ? stats.last.toISOString().split('T')[0] : '—'}</td>
-                    <td>{isActive ? 'Active' : 'Blocked'}</td>
+                    <td><span className={`status ${active ? 'booked' : 'cancelled'}`}>{active ? 'Active' : 'Blocked'}</span></td>
                     <td className="row-actions">
-                      <button onClick={() => sendNotification(`Reminder sent to ${client.email}`)}>Notify</button>
-                      <button onClick={() => blockClient(client._id, isActive)}>{isActive ? 'Block' : 'Unblock'}</button>
+                      <button className="action-btn" onClick={() => { addNotification(`Reminder sent to ${client.email}`); showToast('Reminder sent.'); }}>Notify</button>
+                      <button className={`action-btn ${active ? 'delete-btn' : ''}`} onClick={() => blockClient(client._id, active).then(() => showToast(`Client ${active ? 'blocked' : 'unblocked'}.`))}>
+                        {active ? 'Block' : 'Unblock'}
+                      </button>
                     </td>
                   </tr>
                 );
@@ -659,13 +863,13 @@ function AdminDashboard() {
   const renderAvailability = () => (
     <section className="panel">
       <header>
-        <h3>Availability & Scheduling</h3>
+        <h3>Availability & Blocked Slots</h3>
         <button className="btn primary" onClick={() => setShowAvailabilityModal(true)}>➕ Block Time</button>
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr><th>Date</th><th>Time</th><th>Employee</th><th>Reason</th><th /></tr>
+            <tr><th>Date</th><th>Time</th><th>Employee</th><th>Reason</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {availability.map(slot => (
@@ -675,7 +879,7 @@ function AdminDashboard() {
                 <td>{slot.employeeId === 'ALL' ? 'Salon-wide' : staff.find(s => String(s._id) === String(slot.employeeId))?.name || '—'}</td>
                 <td>{slot.reason}</td>
                 <td className="row-actions">
-                  <button onClick={() => mutateAvailability(slot._id, {}, 'DELETE')}>Remove</button>
+                  <button className="action-btn delete-btn" onClick={() => mutateAvailability(slot._id, {}, 'DELETE').then(() => showToast('Slot unblocked.'))}>Remove</button>
                 </td>
               </tr>
             ))}
@@ -689,35 +893,43 @@ function AdminDashboard() {
   const renderPayments = () => (
     <section className="panel">
       <header>
-        <h3>Payments & Reports</h3>
+        <h3>Payments</h3>
         <div className="button-row">
-          <button className="btn ghost" onClick={() => exportReport('csv')}>📊 Export CSV</button>
-          <button className="btn ghost" onClick={handleExportRevenuePDF}>📄 Export PDF</button>
+          <button className="btn ghost" onClick={exportCSV}>📊 CSV</button>
+          <button className="btn ghost" onClick={() => {
+            try { generateRevenueReportPDF(payments, `Last ${chartRange}`); }
+            catch (e) { alert(e.message); }
+          }}>📄 PDF</button>
         </div>
       </header>
       <div className="table-responsive">
         <table>
           <thead>
-            <tr><th>Date</th><th>Client</th><th>Amount</th><th>Type</th><th>Method</th><th>Status</th><th /></tr>
+            <tr><th>Date</th><th>Amount</th><th>Type</th><th>Method</th><th>Status</th><th>Actions</th></tr>
           </thead>
           <tbody>
             {payments.map(pay => (
               <tr key={pay._id}>
                 <td>{new Date(pay.createdAt).toLocaleString()}</td>
-                <td>{pay.clientEmail || pay.clientName || 'Unknown'}</td>
-                <td>R{decimalToFloat(pay.amount).toFixed(2)}</td>
+                <td style={{ fontWeight:600 }}>R{decimalToFloat(pay.amount).toFixed(2)}</td>
                 <td>{pay.type || 'full'}</td>
                 <td>{pay.method}</td>
-                <td className={`status ${pay.status}`}>{pay.status}</td>
+                <td><span className={`status ${pay.status === 'paid' ? 'booked' : pay.status === 'refunded' ? 'no-show' : 'cancelled'}`}>{pay.status}</span></td>
                 <td className="row-actions">
-                  {/* FIX #7: Use correct PUT endpoint for refund */}
                   {pay.status === 'paid' && (
-                    <button onClick={() => handleRefundPayment(pay._id)} title="Refund">↩️</button>
+                    <button className="action-btn" title="Issue Refund" onClick={async () => {
+                      if (!window.confirm('Refund this payment?')) return;
+                      try {
+                        await apiRequest(`${API_ENDPOINTS.payments}/${pay._id}`, { method:'PUT', body: JSON.stringify({ status:'refunded' }) });
+                        await loadAll();
+                        showToast('Payment refunded.');
+                      } catch (e) { alert(e.message); }
+                    }}>↩️ Refund</button>
                   )}
                 </td>
               </tr>
             ))}
-            {!payments.length && <tr><td colSpan="7" className="empty-row">No payments recorded yet.</td></tr>}
+            {!payments.length && <tr><td colSpan="6" className="empty-row">No payments recorded yet.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -727,199 +939,65 @@ function AdminDashboard() {
   const renderNotifications = () => (
     <section className="panel">
       <header>
-        <h3>Notifications & Announcements</h3>
-        <button className="btn primary" onClick={() => sendNotification('Sample announcement')}>+ New Announcement</button>
+        <h3>Activity Log</h3>
+        <button className="btn ghost" onClick={() => setNotifications([])}>Clear All</button>
       </header>
       <ul className="notification-feed">
-        {notifications.map(note => (
-          <li key={note.id}>
-            <span>{note.message}</span>
-            <small>{new Date(note.createdAt).toLocaleString()}</small>
+        {notifications.map(n => (
+          <li key={n.id}>
+            <span>{n.message}</span>
+            <small>{new Date(n.createdAt).toLocaleString()}</small>
           </li>
         ))}
-        {!notifications.length && <li className="empty-row">No notifications sent yet.</li>}
+        {!notifications.length && <li className="empty-row">No activity yet.</li>}
       </ul>
     </section>
   );
 
-  // --- PDF export handlers -------------------------------------------------
-  const handleExportAppointmentsPDF = () => {
-    try {
-      generateAppointmentsPDF(filteredAppointments, staff, services, payments);
-      sendNotification('Appointments report exported to PDF');
-    } catch (err) {
-      console.error('PDF export failed:', err);
-      alert('Failed to export PDF: ' + err.message);
-    }
-  };
-
-  const handleExportRevenuePDF = () => {
-    try {
-      generateRevenueReportPDF(payments, `Last ${chartRange}`);
-      sendNotification('Revenue report exported to PDF');
-    } catch (err) {
-      console.error('PDF export failed:', err);
-      alert('Failed to export PDF: ' + err.message);
-    }
-  };
-
-  // --- Modal handlers ------------------------------------------------------
-  const handleCreateAppointment = async (formData) => {
-    setIsSubmitting(true);
-    try {
-      await apiRequest(API_ENDPOINTS.appointments, {
-        method: 'POST',
-        body: JSON.stringify({
-          userId: formData.clientId,
-          employeeId: formData.employeeId,
-          serviceIds: formData.serviceIds,
-          date: formData.date,
-          time: formData.time,
-          notes: formData.notes
-        })
-      });
-      const apptData = await apiRequest(API_ENDPOINTS.appointments);
-      setAppointments(apptData.data || []);
-      setShowAppointmentModal(false);
-      sendNotification('New appointment created successfully');
-    } catch (err) {
-      console.error('Failed to create appointment:', err);
-      alert('Failed to create appointment: ' + err.message);
-    } finally { setIsSubmitting(false); }
-  };
-
-  // FIX #1: handleStaffSubmit is now properly wired to StaffModal below
-  const handleStaffSubmit = async (formData) => {
-    setIsSubmitting(true);
-    try {
-      const method = editingStaff ? 'PUT' : 'POST';
-      const endpoint = editingStaff ? `${API_ENDPOINTS.staff}/${editingStaff._id}` : API_ENDPOINTS.staff;
-      await apiRequest(endpoint, { method, body: JSON.stringify(formData) });
-      const staffData = await apiRequest(API_ENDPOINTS.staff);
-      setStaff(staffData.data || []);
-      setShowStaffModal(false);
-      setEditingStaff(null);
-      sendNotification(`Staff member ${editingStaff ? 'updated' : 'added'} successfully`);
-    } catch (err) {
-      console.error('Failed to save staff:', err);
-      alert('Failed to save staff: ' + err.message);
-    } finally { setIsSubmitting(false); }
-  };
-
-  // FIX #1: handleBlockTime is now properly wired to AvailabilityModal below
-  const handleBlockTime = async (formData) => {
-    setIsSubmitting(true);
-    try {
-      await apiRequest(API_ENDPOINTS.availability, { method: 'POST', body: JSON.stringify(formData) });
-      const availData = await apiRequest(API_ENDPOINTS.availability);
-      setAvailability(availData.data || []);
-      setShowAvailabilityModal(false);
-      sendNotification('Time slot blocked successfully');
-    } catch (err) {
-      console.error('Failed to block time:', err);
-      alert('Failed to block time: ' + err.message);
-    } finally { setIsSubmitting(false); }
-  };
-
-  const handleUpdateAppointment = async (formData) => {
-    setIsSubmitting(true);
-    try {
-      await apiRequest(`${API_ENDPOINTS.appointments}/${editingAppointment._id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          employeeId: formData.employeeId,
-          serviceIds: formData.serviceIds,
-          date: formData.date,
-          time: formData.time,
-          notes: formData.notes,
-          status: formData.status
-        })
-      });
-      const apptData = await apiRequest(API_ENDPOINTS.appointments);
-      setAppointments(apptData.data || []);
-      setShowEditAppointmentModal(false);
-      setEditingAppointment(null);
-      sendNotification('Appointment updated successfully');
-    } catch (err) {
-      console.error('Failed to update appointment:', err);
-      alert('Failed to update appointment: ' + err.message);
-    } finally { setIsSubmitting(false); }
-  };
-
-  const handleCreatePayment = async (formData) => {
-    setIsSubmitting(true);
-    try {
-      await apiRequest(API_ENDPOINTS.payments, { method: 'POST', body: JSON.stringify(formData) });
-      const [apptData, paymentData] = await Promise.all([
-        apiRequest(API_ENDPOINTS.appointments),
-        apiRequest(API_ENDPOINTS.payments)
-      ]);
-      setAppointments(apptData.data || []);
-      setPayments(paymentData.data || []);
-      setShowPaymentModal(false);
-      setSelectedAppointment(null);
-      sendNotification('Payment recorded successfully');
-    } catch (err) {
-      console.error('Failed to record payment:', err);
-      alert('Failed to record payment: ' + err.message);
-    } finally { setIsSubmitting(false); }
-  };
-
-  // FIX #7: Use correct PUT /payments/:id endpoint instead of non-existent /refund
-  const handleRefundPayment = async (paymentId) => {
-    if (!window.confirm('Are you sure you want to refund this payment?')) return;
-    try {
-      await apiRequest(`${API_ENDPOINTS.payments}/${paymentId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: 'refunded' })
-      });
-      const [apptData, paymentData] = await Promise.all([
-        apiRequest(API_ENDPOINTS.appointments),
-        apiRequest(API_ENDPOINTS.payments)
-      ]);
-      setAppointments(apptData.data || []);
-      setPayments(paymentData.data || []);
-      sendNotification('Payment refunded successfully');
-    } catch (err) {
-      alert('Failed to refund payment: ' + err.message);
-    }
-  };
-
-  // --- Main render ---------------------------------------------------------
+  // ─── Loading / error ──────────────────────────────────────────────────────
   if (authLoading || loading) {
     return (
       <div className="admin-loading">
         <div className="spinner" />
-        <span>Loading admin dashboard...</span>
+        <span>Loading admin dashboard…</span>
       </div>
     );
   }
-
   if (error) {
     return (
       <div className="admin-error">
         <h2>Admin Dashboard</h2>
         <p>{error}</p>
-        <button className="btn primary" onClick={() => window.location.reload()}>Retry</button>
+        <button className="btn primary" onClick={loadAll}>Retry</button>
       </div>
     );
   }
 
   const sectionRenderer = () => {
     switch (activeSection) {
-      case 'appointments': return renderAppointments();
-      case 'services': return renderServices();
-      case 'staff': return renderStaff();
-      case 'clients': return renderClients();
-      case 'availability': return renderAvailability();
-      case 'payments': return renderPayments();
+      case 'appointments':  return renderAppointments();
+      case 'services':      return renderServices();
+      case 'staff':         return renderStaff();
+      case 'clients':       return renderClients();
+      case 'availability':  return renderAvailability();
+      case 'payments':      return renderPayments();
       case 'notifications': return renderNotifications();
-      default: return renderOverview();
+      default:              return renderOverview();
     }
   };
 
+  // ─── Main shell ───────────────────────────────────────────────────────────
   return (
     <div className="admin-shell">
+
+      {/* Toast */}
+      {toast && (
+        <div className={`toast toast-${toast.type}`} key={toast.id}>
+          {toast.type === 'success' ? '✓' : '✕'} {toast.msg}
+        </div>
+      )}
+
+      {/* Sidebar */}
       <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand">
           <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
@@ -929,32 +1007,43 @@ function AdminDashboard() {
           </div>
         </div>
         <nav>
-          <SidebarBtn icon="🏠" label="Overview" active={activeSection === 'overview'} onClick={() => setActiveSection('overview')} />
-          <SidebarBtn icon="📅" label="Appointments" active={activeSection === 'appointments'} onClick={() => setActiveSection('appointments')} />
-          <SidebarBtn icon="💅" label="Services" active={activeSection === 'services'} onClick={() => setActiveSection('services')} />
-          <SidebarBtn icon="👩‍💼" label="Staff" active={activeSection === 'staff'} onClick={() => setActiveSection('staff')} />
-          <SidebarBtn icon="🧑‍🤝‍🧑" label="Clients" active={activeSection === 'clients'} onClick={() => setActiveSection('clients')} />
-          <SidebarBtn icon="🗓️" label="Availability" active={activeSection === 'availability'} onClick={() => setActiveSection('availability')} />
-          <SidebarBtn icon="💸" label="Payments" active={activeSection === 'payments'} onClick={() => setActiveSection('payments')} />
-          <SidebarBtn icon="🔔" label="Notifications" active={activeSection === 'notifications'} onClick={() => setActiveSection('notifications')} />
+          <SidebarBtn icon="🏠" label="Overview"      section="overview"      active={activeSection} onClick={setActiveSection} />
+          <SidebarBtn icon="📅" label="Appointments"  section="appointments"  active={activeSection} onClick={setActiveSection} badge={unpaidAppointments.length || null} />
+          <SidebarBtn icon="💅" label="Services"      section="services"      active={activeSection} onClick={setActiveSection} />
+          <SidebarBtn icon="👩‍💼" label="Staff"         section="staff"         active={activeSection} onClick={setActiveSection} />
+          <SidebarBtn icon="🧑‍🤝‍🧑" label="Clients"      section="clients"       active={activeSection} onClick={setActiveSection} />
+          <SidebarBtn icon="🗓️" label="Availability"  section="availability"  active={activeSection} onClick={setActiveSection} />
+          <SidebarBtn icon="💸" label="Payments"      section="payments"      active={activeSection} onClick={setActiveSection} />
+          <SidebarBtn icon="🔔" label="Activity Log"  section="notifications" active={activeSection} onClick={setActiveSection} badge={notifications.length || null} />
         </nav>
         <footer>
           <button className="btn ghost" onClick={() => { localStorage.removeItem('adminActiveSection'); navigate('/dashboard'); }}>
-            Return to User View
+            ← User View
           </button>
           <button className="btn danger" onClick={logout}>Logout</button>
         </footer>
       </aside>
 
+      {/* Main */}
       <main className="admin-main">
         <header className="admin-header">
           <div>
-            <h1>{sectionTitleMap[activeSection]}</h1>
-            <p>Manage salon operations and monitor performance.</p>
+            <h1>{SECTION_TITLES[activeSection]}</h1>
+            <p>NXL Beauty Bar · Admin Panel</p>
           </div>
-          <div className="admin-user">
-            <span>{user?.firstName} {user?.lastName}</span>
-            <small>{user?.email}</small>
+          <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
+            {unpaidAppointments.length > 0 && (
+              <button
+                className="unpaid-alert-btn"
+                onClick={() => { setFilters(f => ({...f, status:'pending'})); setActiveSection('appointments'); }}
+              >
+                ⚠️ {unpaidAppointments.length} Unpaid
+              </button>
+            )}
+            <div className="admin-user">
+              <span>{user?.firstName} {user?.lastName}</span>
+              <small>{user?.email}</small>
+            </div>
           </div>
         </header>
         <div className="admin-content">{sectionRenderer()}</div>
@@ -963,53 +1052,93 @@ function AdminDashboard() {
       {/* Modals */}
       {showAppointmentModal && (
         <AppointmentModal
-          services={services}
-          staff={staff}
-          clients={clients}
+          services={services} staff={staff} clients={clients}
           onClose={() => setShowAppointmentModal(false)}
-          onSubmit={handleCreateAppointment}
+          onSubmit={async fd => {
+            setIsSubmitting(true);
+            try {
+              await apiRequest(API_ENDPOINTS.appointments, { method:'POST', body: JSON.stringify({ userId:fd.clientId, employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes }) });
+              await loadAll();
+              setShowAppointmentModal(false);
+              showToast('Appointment created.');
+            } catch (e) { alert(e.message); }
+            finally { setIsSubmitting(false); }
+          }}
           isSubmitting={isSubmitting}
         />
       )}
-
       {showEditAppointmentModal && (
         <EditAppointmentModal
-          appointment={editingAppointment}
-          services={services}
-          staff={staff}
-          clients={clients}
+          appointment={editingAppointment} services={services} staff={staff} clients={clients}
           onClose={() => { setShowEditAppointmentModal(false); setEditingAppointment(null); }}
-          onSubmit={handleUpdateAppointment}
+          onSubmit={async fd => {
+            setIsSubmitting(true);
+            try {
+              await apiRequest(`${API_ENDPOINTS.appointments}/${editingAppointment._id}`, { method:'PUT', body: JSON.stringify({ employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes, status:fd.status }) });
+              await loadAll();
+              setShowEditAppointmentModal(false);
+              setEditingAppointment(null);
+              showToast('Appointment updated.');
+            } catch (e) { alert(e.message); }
+            finally { setIsSubmitting(false); }
+          }}
           isSubmitting={isSubmitting}
         />
       )}
-
       {showPaymentModal && (
         <PaymentModal
           appointment={selectedAppointment}
           onClose={() => { setShowPaymentModal(false); setSelectedAppointment(null); }}
-          onSubmit={handleCreatePayment}
+          onSubmit={async fd => {
+            setIsSubmitting(true);
+            try {
+              await apiRequest(API_ENDPOINTS.payments, { method:'POST', body: JSON.stringify(fd) });
+              await loadAll();
+              setShowPaymentModal(false);
+              setSelectedAppointment(null);
+              showToast('Payment recorded.');
+            } catch (e) { alert(e.message); }
+            finally { setIsSubmitting(false); }
+          }}
           isSubmitting={isSubmitting}
         />
       )}
-
-      {/* FIX #1: StaffModal now properly wired */}
       {showStaffModal && (
         <StaffModal
-          staff={editingStaff}
-          services={services}
+          staff={editingStaff} services={services}
           onClose={() => { setShowStaffModal(false); setEditingStaff(null); }}
-          onSubmit={handleStaffSubmit}
+          onSubmit={async fd => {
+            setIsSubmitting(true);
+            try {
+              const method   = editingStaff ? 'PUT' : 'POST';
+              const endpoint = editingStaff ? `${API_ENDPOINTS.staff}/${editingStaff._id}` : API_ENDPOINTS.staff;
+              await apiRequest(endpoint, { method, body: JSON.stringify(fd) });
+              const staffData = await apiRequest(API_ENDPOINTS.staff);
+              setStaff(staffData.data || []);
+              setShowStaffModal(false);
+              setEditingStaff(null);
+              showToast(`Staff member ${editingStaff ? 'updated' : 'added'}.`);
+            } catch (e) { alert(e.message); }
+            finally { setIsSubmitting(false); }
+          }}
           isSubmitting={isSubmitting}
         />
       )}
-
-      {/* FIX #1: AvailabilityModal now properly wired */}
       {showAvailabilityModal && (
         <AvailabilityModal
           staff={staff}
           onClose={() => setShowAvailabilityModal(false)}
-          onSubmit={handleBlockTime}
+          onSubmit={async fd => {
+            setIsSubmitting(true);
+            try {
+              await apiRequest(API_ENDPOINTS.availability, { method:'POST', body: JSON.stringify(fd) });
+              const availData = await apiRequest(API_ENDPOINTS.availability);
+              setAvailability(availData.data || []);
+              setShowAvailabilityModal(false);
+              showToast('Time slot blocked.');
+            } catch (e) { alert(e.message); }
+            finally { setIsSubmitting(false); }
+          }}
           isSubmitting={isSubmitting}
         />
       )}
@@ -1017,21 +1146,35 @@ function AdminDashboard() {
   );
 }
 
-// --- Supporting UI components -----------------------------------------------
-const sectionTitleMap = {
-  overview: 'Dashboard Overview',
-  appointments: 'Appointments Management',
-  services: 'Services Management',
-  staff: 'Staff Management',
-  clients: 'Clients Management',
-  availability: 'Availability & Scheduling',
-  payments: 'Payments & Reports',
-  notifications: 'Notifications & Announcements'
+// ─── Supporting components ───────────────────────────────────────────────────
+const SECTION_TITLES = {
+  overview:      'Dashboard Overview',
+  appointments:  'Appointments',
+  services:      'Services',
+  staff:         'Staff Management',
+  clients:       'Clients',
+  availability:  'Availability',
+  payments:      'Payments & Reports',
+  notifications: 'Activity Log',
 };
 
-function StatCard({ label, value, icon }) {
+const COLOR_MAP = {
+  rose:    'linear-gradient(135deg,#f87171,#ef4444)',
+  sky:     'linear-gradient(135deg,#38bdf8,#0ea5e9)',
+  emerald: 'linear-gradient(135deg,#34d399,#10b981)',
+  violet:  'linear-gradient(135deg,#a78bfa,#7c3aed)',
+  amber:   'linear-gradient(135deg,#fbbf24,#d97706)',
+  slate:   'linear-gradient(135deg,#94a3b8,#64748b)',
+  danger:  'linear-gradient(135deg,#f87171,#dc2626)',
+};
+
+function StatCard({ label, value, icon, color = 'slate', onClick, clickable }) {
   return (
-    <div className="stat-card">
+    <div
+      className={`stat-card${clickable ? ' stat-card-clickable' : ''}`}
+      style={{ background: COLOR_MAP[color] || COLOR_MAP.slate, cursor: clickable ? 'pointer' : 'default' }}
+      onClick={onClick}
+    >
       <div className="icon">{icon}</div>
       <div>
         <p>{label}</p>
@@ -1041,18 +1184,22 @@ function StatCard({ label, value, icon }) {
   );
 }
 
-function SidebarBtn({ icon, label, active, onClick }) {
+function SidebarBtn({ icon, label, section, active, onClick, badge }) {
   return (
-    <button className={`sidebar-btn ${active ? 'active' : ''}`} onClick={onClick}>
-      <span>{icon}</span>
-      {label}
+    <button
+      className={`sidebar-btn ${active === section ? 'active' : ''}`}
+      onClick={() => onClick(section)}
+    >
+      <span className="sb-icon">{icon}</span>
+      <span className="sb-label">{label}</span>
+      {badge ? <span className="sb-badge">{badge}</span> : null}
     </button>
   );
 }
 
 function Modal({ title, onClose, children }) {
   return (
-    <div className="modal-backdrop">
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <header>
           <h3>{title}</h3>
