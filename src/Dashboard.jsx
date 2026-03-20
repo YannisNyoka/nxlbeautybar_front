@@ -82,10 +82,10 @@ function Dashboard() {
     return slots;
   };
 
-  const allTimeSlots = generateTimeSlots('09:00', '17:00', 15);
+  const allTimeSlots = generateTimeSlots('07:00', '19:00', 15);
   const timeSlots = {
-    morning: allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('am') && h < 12; }),
-    afternoon: allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('pm') && (h < 5 || h === 12); }),
+    morning:   allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('am') && h < 12; }),
+    afternoon: allTimeSlots.filter(t => t.includes('pm')),
   };
 
   const [bookedSlots, setBookedSlots] = useState([]);
