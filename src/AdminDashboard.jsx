@@ -586,8 +586,8 @@ function AdminDashboard() {
           <table>
             <thead>
               <tr>
-                <th>Date</th><th>Time</th><th>Client</th><th>Services</th>
-                <th>Staff</th><th>Status</th><th>Payment</th><th>Actions</th>
+                <th>Date</th><th>Time</th><th>Client</th><th className="hide-mobile">Services</th>
+                <th className="hide-mobile">Staff</th><th>Status</th><th>Payment</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -602,12 +602,12 @@ function AdminDashboard() {
                     <div style={{ fontWeight:600 }}>{appt.userName || appt.clientName || '—'}</div>
                     {appt.user?.email && <div className="sub-text">{appt.user.email}</div>}
                   </td>
-                  <td>
+                  <td className="hide-mobile">
                     {(appt.serviceIds || [])
                       .map(id => services.find(s => String(s._id) === String(id))?.name)
                       .filter(Boolean).join(', ') || '—'}
                   </td>
-                  <td>
+                  <td className="hide-mobile">
                     {staff.find(s => String(s._id) === String(appt.employeeId))?.name
                       || appt.employee?.name || '—'}
                   </td>
@@ -997,24 +997,29 @@ function AdminDashboard() {
         </div>
       )}
 
+      {/* Mobile overlay — tap to close sidebar */}
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Sidebar */}
       <aside className={`admin-sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="brand">
-          <button className="hamburger" onClick={() => setSidebarOpen(!sidebarOpen)}>☰</button>
           <div>
             <h2>NXL Beauty Bar</h2>
             <p>Admin Panel</p>
           </div>
         </div>
         <nav>
-          <SidebarBtn icon="🏠" label="Overview"      section="overview"      active={activeSection} onClick={setActiveSection} />
-          <SidebarBtn icon="📅" label="Appointments"  section="appointments"  active={activeSection} onClick={setActiveSection} badge={unpaidAppointments.length || null} />
-          <SidebarBtn icon="💅" label="Services"      section="services"      active={activeSection} onClick={setActiveSection} />
-          <SidebarBtn icon="👩‍💼" label="Staff"         section="staff"         active={activeSection} onClick={setActiveSection} />
-          <SidebarBtn icon="🧑‍🤝‍🧑" label="Clients"      section="clients"       active={activeSection} onClick={setActiveSection} />
-          <SidebarBtn icon="🗓️" label="Availability"  section="availability"  active={activeSection} onClick={setActiveSection} />
-          <SidebarBtn icon="💸" label="Payments"      section="payments"      active={activeSection} onClick={setActiveSection} />
-          <SidebarBtn icon="🔔" label="Activity Log"  section="notifications" active={activeSection} onClick={setActiveSection} badge={notifications.length || null} />
+          <SidebarBtn icon="🏠" label="Overview"      section="overview"      active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
+          <SidebarBtn icon="📅" label="Appointments"  section="appointments"  active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} badge={unpaidAppointments.length || null} />
+          <SidebarBtn icon="💅" label="Services"      section="services"      active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
+          <SidebarBtn icon="👩‍💼" label="Staff"         section="staff"         active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
+          <SidebarBtn icon="🧑‍🤝‍🧑" label="Clients"      section="clients"       active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
+          <SidebarBtn icon="🗓️" label="Availability"  section="availability"  active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
+          <SidebarBtn icon="💸" label="Payments"      section="payments"      active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
+          <SidebarBtn icon="🔔" label="Activity Log"  section="notifications" active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} badge={notifications.length || null} />
         </nav>
         <footer>
           <button className="btn ghost" onClick={() => { localStorage.removeItem('adminActiveSection'); navigate('/dashboard'); }}>
@@ -1027,11 +1032,21 @@ function AdminDashboard() {
       {/* Main */}
       <main className="admin-main">
         <header className="admin-header">
-          <div>
-            <h1>{SECTION_TITLES[activeSection]}</h1>
-            <p>NXL Beauty Bar · Admin Panel</p>
+          <div className="admin-header-left">
+            {/* Hamburger — only visible on mobile via CSS */}
+            <button
+              className="admin-header-hamburger"
+              onClick={() => setSidebarOpen(s => !s)}
+              aria-label="Open menu"
+            >
+              ☰
+            </button>
+            <div>
+              <h1>{SECTION_TITLES[activeSection]}</h1>
+              <p>NXL Beauty Bar · Admin Panel</p>
+            </div>
           </div>
-          <div style={{ display:'flex', alignItems:'center', gap:'1rem' }}>
+          <div className="admin-header-right">
             {unpaidAppointments.length > 0 && (
               <button
                 className="unpaid-alert-btn"
@@ -1184,11 +1199,11 @@ function StatCard({ label, value, icon, color = 'slate', onClick, clickable }) {
   );
 }
 
-function SidebarBtn({ icon, label, section, active, onClick, badge }) {
+function SidebarBtn({ icon, label, section, active, onClick, badge, onNavigate }) {
   return (
     <button
       className={`sidebar-btn ${active === section ? 'active' : ''}`}
-      onClick={() => onClick(section)}
+      onClick={() => { onClick(section); if (onNavigate) onNavigate(); }}
     >
       <span className="sb-icon">{icon}</span>
       <span className="sb-label">{label}</span>
