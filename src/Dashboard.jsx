@@ -168,7 +168,7 @@ function Dashboard() {
         const token = localStorage.getItem('token');
         const response = await fetch(`${apiBase}/availability`, { headers: { Authorization: `Bearer ${token}` } });
         const result = await response.json();
-        if (result.success && Array.isArray(result.data)) setUnavailableSlots(result.data.map(slot => ({ ...slot, time: convertTo12Hour(slot.time) })));
+       if (result.success && Array.isArray(result.data)) setUnavailableSlots(result.data);
       } catch {
         let initial = []; try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; }
         setUnavailableSlots(pruneExpiredUnavailableSlots(initial));
@@ -281,19 +281,40 @@ function Dashboard() {
     return map;
   }, [bookedSlots]);
 
-  const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
-    const isoDate = dayToISO(day); const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
-    return requiredSlots.some(slot => unavailableSlots.some(s => s.date === isoDate && s.time === slot && (s.stylist === 'All' || s.stylist === selectedEmployee)));
-  };
+ 
+const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
+  const isoDate = dayToISO(day);
+  const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
+  const selectedEmp = employees.find(e => e.name === selectedEmployee);
+  return requiredSlots.some(slot => {
+    const slot24 = convertTo24Hour(slot);
+    return unavailableSlots.some(s => {
+      const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
+      const matchesDate = s.date === isoDate;
+      const matchesTime = sTime === slot24;
+      const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
+      return matchesDate && matchesTime && matchesEmployee;
+    });
+  });
+};
 
   const isDateFullyBooked = (day) => {
-    const isoDate = dayToISO(day);
-    return allTimeSlots.every(slot => {
-      const isBlocked = unavailableSlots.some(s => s.date === isoDate && s.time === slot && (s.stylist === 'All' || s.stylist === selectedEmployee));
-      const isBooked = bookedSlots.some(booking => { if (booking.date !== isoDate) return false; return calculateRequiredSlots(booking.time, booking.duration || 15).includes(slot); });
-      return isBooked || isBlocked;
+  const isoDate = dayToISO(day);
+  const selectedEmp = employees.find(e => e.name === selectedEmployee);
+  return allTimeSlots.every(slot => {
+    const slot24 = convertTo24Hour(slot);
+    const isBlocked = unavailableSlots.some(s => {
+      const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
+      const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
+      return s.date === isoDate && sTime === slot24 && matchesEmployee;
     });
-  };
+    const isBooked = bookedSlots.some(booking => {
+      if (booking.date !== isoDate) return false;
+      return calculateRequiredSlots(booking.time, booking.duration || 15).includes(slot);
+    });
+    return isBooked || isBlocked;
+  });
+};
 
   const getTotalServiceDuration = () => selectedServices.reduce((total, serviceName) => { const service = services.find(s => s.name === serviceName); return total + (service ? service.duration : 0); }, 0);
   const isPartOfBookedRange = (date, time) => { const isoDate = dayToISO(date); return occupiedSlotsByDate[isoDate]?.has(time) || false; };
