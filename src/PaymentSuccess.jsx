@@ -10,23 +10,66 @@ const PaymentSuccess = () => {
   const { logout } = useAuth();
   const [bookingDetails, setBookingDetails] = useState(null);
   const [emailStatus, setEmailStatus] = useState('');
-  const hasRun = useRef(false); // prevent double-run in React StrictMode
+  const hasRun = useRef(false);
 
   const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   const API_ROOT = RAW_API_BASE
     ? `${RAW_API_BASE.replace(/\/api$/, '')}/api`
     : '/api';
 
-  // Refresh token then update appointment to booked + deposit_paid
-  const updateAppointmentStatus = async (appointmentId) => {
+  const updateAppointmentStatus = async (appointmentId, token) => {
     try {
-      let token = localStorage.getItem('token');
-      if (!token) {
-        console.warn('No auth token — webhook will handle the update.');
-        return;
+      const res = await fetch(`${API_ROOT}/appointments/${appointmentId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status:        'booked',
+          paymentStatus: 'deposit_paid',
+        }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        console.log('Appointment updated to booked + deposit_paid', { appointmentId });
+      } else if (
+        result.error?.includes('Invalid status transition') ||
+        result.error?.includes('already booked')
+      ) {
+        console.log('Appointment already booked by webhook — no action needed', { appointmentId });
+      } else {
+        console.warn('Appointment update non-success:', result.error);
+      }
+    } catch (err) {
+      console.error('Appointment update error:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (hasRun.current) return;
+    hasRun.current = true;
+
+    emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'l7AiKNhYSfG_q4eot');
+
+    const run = async () => {
+      // ── Step 1: get appointmentId from URL ──────────────────────────
+      const params        = new URLSearchParams(location.search);
+      const appointmentId = params.get('appointmentId');
+
+      // ── Step 2: load whatever localStorage has (may be empty in prod) ─
+      let localDetails = {};
+      try {
+        const fromLocal   = localStorage.getItem('pendingBooking');
+        const fromSession = sessionStorage.getItem('pendingBooking');
+        if (fromLocal)   localDetails = JSON.parse(fromLocal);
+        else if (fromSession) localDetails = JSON.parse(fromSession);
+      } catch (e) {
+        console.error('Could not parse localStorage booking details:', e);
       }
 
-      // Try to refresh the token first in case it expired during Yoco redirect
+      // ── Step 3: refresh token ────────────────────────────────────────
+      let token = localStorage.getItem('token');
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken) {
         try {
@@ -46,133 +89,118 @@ const PaymentSuccess = () => {
         }
       }
 
-      const res = await fetch(`${API_ROOT}/appointments/${appointmentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status:        'booked',
-          paymentStatus: 'deposit_paid',
-        }),
-      });
+      // ── Step 4: fetch appointment from API (reliable in production) ──
+      let details = { ...localDetails };
 
-      const result = await res.json();
+      if (appointmentId && token) {
+        try {
+          const res = await fetch(`${API_ROOT}/appointments/${appointmentId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const result = await res.json();
 
-      if (result.success) {
-        console.log('Appointment updated to booked + deposit_paid', { appointmentId });
-      } else if (
-        result.error?.includes('Invalid status transition') ||
-        result.error?.includes('already booked')
-      ) {
-        // Webhook already set it to booked — idempotent success
-        console.log('Appointment already booked by webhook — no action needed', { appointmentId });
+          if (result.success && result.data) {
+            const appt = result.data;
+
+            const totalPrice = appt.totalPrice?.$numberDecimal
+              ? parseFloat(appt.totalPrice.$numberDecimal)
+              : Number(appt.totalPrice) || localDetails.totalPrice || 0;
+
+            details = {
+              name:             appt.userName
+                                  || `${appt.user?.firstName || ''} ${appt.user?.lastName || ''}`.trim()
+                                  || localDetails.name
+                                  || '',
+              email:            appt.user?.email      || localDetails.email            || '',
+              appointmentDate:  appt.date              || localDetails.appointmentDate  || '',
+              appointmentTime:  appt.time              || localDetails.appointmentTime  || '',
+              selectedServices: appt.services?.map(s => s.name).filter(Boolean)
+                                  || localDetails.selectedServices
+                                  || [],
+              selectedEmployee: appt.employee?.name   || localDetails.selectedEmployee || '',
+              totalPrice,
+              totalDuration:    appt.totalDuration     || localDetails.totalDuration    || 0,
+              // contactNumber is not stored on appointment — keep from localStorage
+              contactNumber:    localDetails.contactNumber || '',
+            };
+
+            console.log('Booking details loaded from API:', details);
+          } else {
+            console.warn('API fetch failed, falling back to localStorage:', result.error);
+          }
+        } catch (e) {
+          console.error('Failed to fetch appointment from API:', e);
+        }
       } else {
-        console.warn('Appointment update non-success:', result.error);
+        console.warn('No appointmentId or token — using localStorage only');
       }
-    } catch (err) {
-      console.error('Appointment update error:', err);
-    }
-  };
 
-  useEffect(() => {
-    if (hasRun.current) return;
-    hasRun.current = true;
+      setBookingDetails(details);
 
-    emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'l7AiKNhYSfG_q4eot');
+      // ── Step 5: mark appointment as booked + deposit_paid ────────────
+      if (appointmentId && token) {
+        await updateAppointmentStatus(appointmentId, token);
+      }
 
-    // Try localStorage first, then sessionStorage as fallback
-    let details = {};
-    try {
-      const fromLocal = localStorage.getItem('pendingBooking');
-      const fromSession = sessionStorage.getItem('pendingBooking');
-      if (fromLocal) details = JSON.parse(fromLocal);
-      else if (fromSession) details = JSON.parse(fromSession);
-    } catch (e) {
-      console.error('Could not parse booking details:', e);
-    }
+      // ── Step 6: send confirmation email ─────────────────────────────
+      const sendConfirmationEmail = async () => {
+        try {
+          if (!details.email) {
+            console.warn('No email found in booking details, skipping email');
+            setEmailStatus('no-email');
+            return;
+          }
 
-    console.log('Booking details loaded:', details);
-    setBookingDetails(details);
+          if (localStorage.getItem('emailSent') === details.email) {
+            console.log('Email already sent for this booking, skipping');
+            setEmailStatus('sent');
+            return;
+          }
 
-    // ---------------------------------------------------------------
-    // UPDATE APPOINTMENT STATUS IN DATABASE
-    // Yoco redirects to /payment-success?appointmentId=xxx
-    // Use the existing PUT /appointments/:id endpoint to mark it as
-    // booked + deposit_paid. No new route needed — uses existing CRUD.
-    // Idempotent — safe if webhook already did it.
-    // ---------------------------------------------------------------
-    const params        = new URLSearchParams(location.search);
-    const appointmentId = params.get('appointmentId');
+          const totalDur = Number(details.totalDuration) || 0;
+          const mins = totalDur % 60;
+          const hrs  = Math.floor(totalDur / 60);
+          const durationStr = hrs > 0
+            ? `${hrs}h ${mins > 0 ? mins + 'min' : ''}`.trim()
+            : `${mins}min`;
 
-    if (appointmentId) {
-      updateAppointmentStatus(appointmentId);
-    } else {
-      console.warn('No appointmentId in URL — skipping update.');
-    }
-    // ---------------------------------------------------------------
+          const emailParams = {
+            customer_name:    details.name             || '',
+            appointment_date: details.appointmentDate  || '',
+            appointment_time: details.appointmentTime  || '',
+            services:         Array.isArray(details.selectedServices)
+                                ? details.selectedServices.join(', ')
+                                : '',
+            employee:         details.selectedEmployee || '',
+            total_price:      `R${details.totalPrice  || 0}`,
+            total_duration:   durationStr,
+            contact_number:   String(details.contactNumber || '').replace(/\D/g, ''),
+            salon_email:      'nxlbeautybar@gmail.com',
+            salon_phone:      '0685113394',
+            email:            details.email,
+          };
 
-    const sendConfirmationEmail = async () => {
-      try {
-        if (!details.email) {
-          console.warn('No email found in booking details, skipping email');
-          setEmailStatus('no-email');
-          return;
-        }
+          console.log('Sending email with params:', emailParams);
 
-        // Prevent duplicate emails on refresh
-        if (localStorage.getItem('emailSent') === details.email) {
-          console.log('Email already sent for this booking, skipping');
+          localStorage.setItem('emailSent', details.email);
+
+          const serviceId  = import.meta.env.VITE_EMAILJS_SERVICE_ID  || 'service_f0lbtzg';
+          const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_sbxxbii';
+
+          await emailjs.send(serviceId, templateId, emailParams);
+          console.log('Confirmation email sent successfully');
           setEmailStatus('sent');
-          return;
+        } catch (err) {
+          console.error('EmailJS error:', err);
+          localStorage.removeItem('emailSent');
+          setEmailStatus('error');
         }
+      };
 
-        const {
-          name, appointmentDate, appointmentTime, selectedServices,
-          selectedEmployee, totalPrice, totalDuration, contactNumber, email
-        } = details;
-
-        const totalDur = Number(totalDuration) || 0;
-        const mins = totalDur % 60;
-        const hrs = Math.floor(totalDur / 60);
-        const durationStr = hrs > 0
-          ? `${hrs}h ${mins > 0 ? mins + 'min' : ''}`.trim()
-          : `${mins}min`;
-
-        const emailParams = {
-          customer_name:    name             || '',
-          appointment_date: appointmentDate  || '',
-          appointment_time: appointmentTime  || '',
-          services:         Array.isArray(selectedServices) ? selectedServices.join(', ') : '',
-          employee:         selectedEmployee || '',
-          total_price:      `R${totalPrice  || 0}`,
-          total_duration:   durationStr,
-          contact_number:   String(contactNumber || '').replace(/\D/g, ''),
-          salon_email:      'nxlbeautybar@gmail.com',
-          salon_phone:      '0685113394',
-          email:            email,
-        };
-
-        console.log('Sending email with params:', emailParams);
-
-        // Mark as sent before sending to prevent duplicates on fast refresh
-        localStorage.setItem('emailSent', details.email);
-
-        const serviceId  = import.meta.env.VITE_EMAILJS_SERVICE_ID  || 'service_f0lbtzg';
-        const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_sbxxbii';
-
-        await emailjs.send(serviceId, templateId, emailParams);
-        console.log('Confirmation email sent successfully');
-        setEmailStatus('sent');
-      } catch (err) {
-        console.error('EmailJS error:', err);
-        localStorage.removeItem('emailSent');
-        setEmailStatus('error');
-      }
+      await sendConfirmationEmail();
     };
 
-    sendConfirmationEmail();
+    run();
   }, []);
 
   const clearBookingData = () => {
@@ -181,17 +209,19 @@ const PaymentSuccess = () => {
     sessionStorage.removeItem('pendingBooking');
   };
 
-  // --- Build Google Calendar link ---
   const buildCalendarLink = () => {
     if (!bookingDetails?.appointmentDate || !bookingDetails?.appointmentTime) return '#';
     try {
-      const { appointmentDate, appointmentTime, selectedServices, selectedEmployee, totalPrice, totalDuration } = bookingDetails;
+      const {
+        appointmentDate, appointmentTime, selectedServices,
+        selectedEmployee, totalPrice, totalDuration,
+      } = bookingDetails;
 
       const convertTo24Hour = (timeStr) => {
         const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
         if (!m) return timeStr;
         let hh = parseInt(m[1], 10);
-        const mm = m[2];
+        const mm  = m[2];
         const ampm = m[3]?.toLowerCase();
         if (ampm === 'pm' && hh !== 12) hh += 12;
         if (ampm === 'am' && hh === 12) hh = 0;
@@ -205,7 +235,7 @@ const PaymentSuccess = () => {
       const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
       const endDate    = new Date(startDate.getTime() + durationMs);
 
-      const pad         = (n) => String(n).padStart(2, '0');
+      const pad          = (n) => String(n).padStart(2, '0');
       const toGoogleDate = (d) =>
         `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
         `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
@@ -217,7 +247,7 @@ const PaymentSuccess = () => {
         selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
         `Total: R${totalPrice}`,
       ].filter(Boolean);
-      const calDetails = encodeURIComponent(detailLines.join('\n'));
+      const calDetails  = encodeURIComponent(detailLines.join('\n'));
       const calLocation = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
 
       return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${calLocation}&ctz=Africa/Johannesburg`;
