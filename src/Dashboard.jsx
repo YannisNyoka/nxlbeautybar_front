@@ -144,7 +144,11 @@ function Dashboard() {
       const result = await response.json();
       if (result.success) {
         const formattedSlots = result.data.map(appointment => {
-          if (appointment.status === 'cancelled' || appointment.status === 'pending') return null;
+          if (
+  appointment.status === 'cancelled' ||
+  appointment.status === 'pending' ||
+  appointment.paymentStatus === 'unpaid'
+) return null;
           const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/) ? appointment.date : new Date(appointment.date).toISOString().split('T')[0];
           const time12Hour = convertTo12Hour(appointment.time);
           let totalDuration = appointment.totalDuration || 60;
