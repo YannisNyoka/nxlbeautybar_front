@@ -10,6 +10,7 @@ function UserProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [cancellingId, setCancellingId] = useState(null);
+  const [payingId, setPayingId] = useState(null);
   const [rescheduleId, setRescheduleId] = useState(null);
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' });
@@ -18,6 +19,7 @@ function UserProfile() {
   const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   const API_ROOT = RAW_API_BASE ? `${RAW_API_BASE.replace(/\/api$/, '')}/api` : '/api';
   const APPOINTMENTS_URL = `${API_ROOT}/appointments`;
+  const BOOKING_FEE = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
 
   const normalizePrice = (val) => {
     if (val && typeof val === 'object' && '$numberDecimal' in val) {
@@ -74,7 +76,48 @@ function UserProfile() {
     }
   };
 
-  // FIXED: returns YYYY-MM-DD directly if already in that format, avoiding UTC shift
+  // ── Pay Now — redirect to Yoco checkout ──────────────────────────────────
+  const handlePayNow = async (appointment) => {
+    setPayingId(appointment._id);
+    try {
+      const token = localStorage.getItem('token');
+
+      // Save booking details so PaymentSuccess page can display them
+      localStorage.setItem('pendingBooking', JSON.stringify({
+        name:             appointment.userName || `${user?.firstName} ${user?.lastName}`,
+        email:            user?.email || '',
+        appointmentDate:  appointment.date,
+        appointmentTime:  appointment.time,
+        selectedServices: appointment.services?.map(s => s.name) || [],
+        selectedEmployee: appointment.employee?.name || '',
+        totalPrice:       Number(appointment.totalPrice) || 0,
+        totalDuration:    appointment.totalDuration || 0,
+        contactNumber:    '',
+      }));
+
+      const res = await fetch(`${API_ROOT}/payments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ appointmentId: appointment._id }),
+      });
+
+      const result = await res.json();
+
+      if (result.success && result.checkoutUrl) {
+        window.location.href = result.checkoutUrl;
+      } else {
+        setError(result.error || 'Could not initiate payment. Please try again.');
+        setPayingId(null);
+      }
+    } catch (err) {
+      setError('Payment failed. Please try again.');
+      setPayingId(null);
+    }
+  };
+
   const normalizeDateForApi = (dateStr) => {
     if (!dateStr) return null;
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())) return String(dateStr).trim();
@@ -137,7 +180,6 @@ function UserProfile() {
     }
   };
 
-  // FIXED: returns date string directly if already YYYY-MM-DD, avoiding UTC shift
   const toDateInputValue = (value) => {
     try {
       if (!value) return '';
@@ -190,7 +232,6 @@ function UserProfile() {
     }
   };
 
-  // FIXED: parses date parts directly to avoid UTC timezone shift
   const formatDate = (dateString) => {
     try {
       const [year, month, day] = dateString.split('-').map(Number);
@@ -201,12 +242,26 @@ function UserProfile() {
   };
 
   const now = new Date();
-  const upcomingAppointments = appointments
-    .filter(appt => { const dt = getAppointmentDateTime(appt); return dt && dt > now && appt.status !== 'cancelled'; })
+
+  // Unpaid/pending — needs payment to confirm
+  const unpaidAppointments = appointments
+    .filter(appt => appt.paymentStatus === 'unpaid' && appt.status !== 'cancelled')
     .sort((a, b) => getAppointmentDateTime(a) - getAppointmentDateTime(b));
 
+  // Upcoming — paid/confirmed, future date
+  const upcomingAppointments = appointments
+    .filter(appt => {
+      const dt = getAppointmentDateTime(appt);
+      return dt && dt > now && appt.status !== 'cancelled' && appt.paymentStatus !== 'unpaid';
+    })
+    .sort((a, b) => getAppointmentDateTime(a) - getAppointmentDateTime(b));
+
+  // Past — completed, cancelled, or past date
   const pastAppointments = appointments
-    .filter(appt => { const dt = getAppointmentDateTime(appt); return !dt || dt <= now || appt.status === 'completed' || appt.status === 'cancelled'; })
+    .filter(appt => {
+      const dt = getAppointmentDateTime(appt);
+      return !dt || dt <= now || appt.status === 'completed' || appt.status === 'cancelled';
+    })
     .sort((a, b) => getAppointmentDateTime(b) - getAppointmentDateTime(a));
 
   const handleLogout = () => {
@@ -245,6 +300,82 @@ function UserProfile() {
         {/* ── Error Banner ── */}
         {error && <div className="nxl-profile-error-banner">{error}</div>}
 
+        {/* ── Unpaid Appointments ── */}
+        {unpaidAppointments.length > 0 && (
+          <div className="nxl-profile-section nxl-unpaid-section">
+            <h2 className="nxl-profile-section-title">
+              <span>⚠️</span> Awaiting Payment
+              <span className="nxl-profile-section-count">{unpaidAppointments.length}</span>
+            </h2>
+            <p style={{ fontSize: '0.82rem', color: '#c07a3a', marginBottom: '1rem', marginTop: '-0.5rem' }}>
+              Complete your booking fee to secure these appointments.
+            </p>
+            <div className="nxl-profile-appts-grid">
+              {unpaidAppointments.map((appointment) => (
+                <div key={appointment._id} className="nxl-profile-appt-card nxl-unpaid-card">
+                  <div className="nxl-profile-appt-details">
+                    <h3 style={{ color: '#ffcc80' }}>
+                      💄 {appointment.services?.map(s => s.name).join(', ') || 'Service Appointment'}
+                    </h3>
+
+                    <div className="nxl-profile-appt-row">
+                      <span className="nxl-lbl">Date</span>
+                      <span className="nxl-val">{formatDate(appointment.date)}</span>
+                    </div>
+                    {appointment.time && (
+                      <div className="nxl-profile-appt-row">
+                        <span className="nxl-lbl">Time</span>
+                        <span className="nxl-val">{appointment.time}</span>
+                      </div>
+                    )}
+                    {appointment.employee?.name && (
+                      <div className="nxl-profile-appt-row">
+                        <span className="nxl-lbl">Stylist</span>
+                        <span className="nxl-val">{appointment.employee.name}</span>
+                      </div>
+                    )}
+                    <div className="nxl-profile-appt-row">
+                      <span className="nxl-lbl">Total</span>
+                      <span className="nxl-val">R{normalizePrice(appointment.totalPrice)}</span>
+                    </div>
+
+                    {/* Pay notice */}
+                    <div style={{
+                      marginTop: '0.75rem',
+                      padding: '0.6rem 0.8rem',
+                      background: 'rgba(255, 180, 0, 0.12)',
+                      border: '1px solid rgba(255, 180, 0, 0.3)',
+                      borderRadius: '8px',
+                      fontSize: '0.78rem',
+                      color: '#ffcc80',
+                      lineHeight: 1.5,
+                    }}>
+                      🔒 Pay the <strong>R{BOOKING_FEE} booking fee</strong> to confirm this appointment.
+                    </div>
+                  </div>
+
+                  <div className="nxl-profile-appt-actions">
+                    <button
+                      className="nxl-profile-btn-paynow"
+                      onClick={() => handlePayNow(appointment)}
+                      disabled={payingId === appointment._id}
+                    >
+                      {payingId === appointment._id ? 'Redirecting…' : '💳 Pay Now'}
+                    </button>
+                    <button
+                      className="nxl-profile-btn-cancel"
+                      onClick={() => handleCancelAppointment(appointment._id)}
+                      disabled={cancellingId === appointment._id}
+                    >
+                      {cancellingId === appointment._id ? 'Cancelling…' : 'Cancel'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* ── Upcoming Appointments ── */}
         <div className="nxl-profile-section">
           <h2 className="nxl-profile-section-title">
@@ -264,7 +395,7 @@ function UserProfile() {
               {upcomingAppointments.map((appointment) => (
                 <div key={appointment._id} className="nxl-profile-appt-card">
                   <div className="nxl-profile-appt-details">
-                    <h3>💄 {appointment.serviceIds ? 'Multiple Services' : 'Service Appointment'}</h3>
+                    <h3>💄 {appointment.services?.map(s => s.name).join(', ') || 'Service Appointment'}</h3>
 
                     <div className="nxl-profile-appt-row">
                       <span className="nxl-lbl">Date</span>
@@ -276,10 +407,12 @@ function UserProfile() {
                         <span className="nxl-val">{appointment.time}</span>
                       </div>
                     )}
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Stylist</span>
-                      <span className="nxl-val">{appointment.stylist}</span>
-                    </div>
+                    {appointment.employee?.name && (
+                      <div className="nxl-profile-appt-row">
+                        <span className="nxl-lbl">Stylist</span>
+                        <span className="nxl-val">{appointment.employee.name}</span>
+                      </div>
+                    )}
                     <div className="nxl-profile-appt-row">
                       <span className="nxl-lbl">Total</span>
                       <span className="nxl-val">R{normalizePrice(appointment.totalPrice)}</span>
@@ -288,18 +421,14 @@ function UserProfile() {
                       <span className="nxl-lbl">Duration</span>
                       <span className="nxl-val">{appointment.totalDuration} min</span>
                     </div>
-                    {appointment.manicureType && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Manicure</span>
-                        <span className="nxl-val">{appointment.manicureType}</span>
-                      </div>
-                    )}
-                    {appointment.pedicureType && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Pedicure</span>
-                        <span className="nxl-val">{appointment.pedicureType}</span>
-                      </div>
-                    )}
+                    <div className="nxl-profile-appt-row">
+                      <span className="nxl-lbl">Status</span>
+                      <span className="nxl-val">
+                        <span className={`nxl-status-badge ${appointment.paymentStatus === 'deposit_paid' ? 'completed' : 'pending'}`}>
+                          {appointment.paymentStatus === 'deposit_paid' ? '✅ Deposit Paid' : appointment.status}
+                        </span>
+                      </span>
+                    </div>
                   </div>
 
                   <div className="nxl-profile-appt-actions">
@@ -325,7 +454,6 @@ function UserProfile() {
           <div className="nxl-profile-modal-overlay">
             <div className="nxl-profile-modal">
               <h3>Reschedule Appointment</h3>
-
               <div className="nxl-profile-modal-field">
                 <label>Select Date</label>
                 <input
@@ -334,7 +462,6 @@ function UserProfile() {
                   onChange={(e) => setRescheduleForm({ ...rescheduleForm, date: e.target.value })}
                 />
               </div>
-
               <div className="nxl-profile-modal-field">
                 <label>Select Time</label>
                 <select
@@ -345,11 +472,8 @@ function UserProfile() {
                   {presetTimes.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
-
               <div className="nxl-profile-modal-actions">
-                <button className="nxl-profile-modal-cancel" onClick={() => setShowReschedule(false)}>
-                  Cancel
-                </button>
+                <button className="nxl-profile-modal-cancel" onClick={() => setShowReschedule(false)}>Cancel</button>
                 <button className="nxl-profile-modal-save" onClick={saveReschedule} disabled={savingReschedule}>
                   {savingReschedule ? 'Saving…' : 'Save Changes'}
                 </button>
@@ -374,8 +498,7 @@ function UserProfile() {
               {pastAppointments.map((appointment) => (
                 <div key={appointment._id} className="nxl-profile-appt-card past">
                   <div className="nxl-profile-appt-details">
-                    <h3>{appointment.serviceIds ? 'Multiple Services' : 'Service Appointment'}</h3>
-
+                    <h3>{appointment.services?.map(s => s.name).join(', ') || 'Service Appointment'}</h3>
                     <div className="nxl-profile-appt-row">
                       <span className="nxl-lbl">Date</span>
                       <span className="nxl-val">{formatDate(appointment.date)}</span>
@@ -386,10 +509,12 @@ function UserProfile() {
                         <span className="nxl-val">{appointment.time}</span>
                       </div>
                     )}
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Stylist</span>
-                      <span className="nxl-val">{appointment.stylist}</span>
-                    </div>
+                    {appointment.employee?.name && (
+                      <div className="nxl-profile-appt-row">
+                        <span className="nxl-lbl">Stylist</span>
+                        <span className="nxl-val">{appointment.employee.name}</span>
+                      </div>
+                    )}
                     <div className="nxl-profile-appt-row">
                       <span className="nxl-lbl">Total</span>
                       <span className="nxl-val">R{normalizePrice(appointment.totalPrice)}</span>

@@ -547,3 +547,50 @@
     padding: 2rem 10rem 4rem;
   }
 }
+
+/* ── Append these to the bottom of UserProfile.css ── */
+
+/* Unpaid section — amber warning tone */
+.nxl-unpaid-section {
+  border: 1.5px solid rgba(255, 180, 0, 0.35) !important;
+  background: rgba(255, 248, 230, 0.5) !important;
+}
+
+.nxl-unpaid-section .nxl-profile-section-title {
+  color: #7a4a00 !important;
+}
+
+/* Unpaid appointment card */
+.nxl-unpaid-card {
+  background: linear-gradient(160deg, #4a2800 0%, #7a4a00 100%) !important;
+  border: 1.5px solid rgba(255, 200, 80, 0.3) !important;
+}
+
+/* Pay Now button */
+.nxl-profile-btn-paynow {
+  padding: 0.55rem 1rem;
+  background: linear-gradient(135deg, #ffb300 0%, #e65c00 100%);
+  color: #1a0a00;
+  border: none;
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(255, 160, 0, 0.4);
+  letter-spacing: 0.02em;
+}
+
+.nxl-profile-btn-paynow:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ffd54f 0%, #ff6d00 100%);
+  box-shadow: 0 6px 20px rgba(255, 160, 0, 0.55);
+  transform: translateY(-1px);
+}
+
+.nxl-profile-btn-paynow:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
