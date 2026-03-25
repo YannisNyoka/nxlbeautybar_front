@@ -11,6 +11,7 @@ function UserProfile() {
   const [error, setError] = useState('');
   const [cancellingId, setCancellingId] = useState(null);
   const [payingId, setPayingId] = useState(null);
+  const [slotTakenId, setSlotTakenId] = useState(null);
   const [rescheduleId, setRescheduleId] = useState(null);
   const [showReschedule, setShowReschedule] = useState(false);
   const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' });
@@ -77,46 +78,75 @@ function UserProfile() {
   };
 
   // ── Pay Now — redirect to Yoco checkout ──────────────────────────────────
-  const handlePayNow = async (appointment) => {
-    setPayingId(appointment._id);
-    try {
-      const token = localStorage.getItem('token');
 
-      // Save booking details so PaymentSuccess page can display them
-      localStorage.setItem('pendingBooking', JSON.stringify({
-        name:             appointment.userName || `${user?.firstName} ${user?.lastName}`,
-        email:            user?.email || '',
-        appointmentDate:  appointment.date,
-        appointmentTime:  appointment.time,
-        selectedServices: appointment.services?.map(s => s.name) || [],
-        selectedEmployee: appointment.employee?.name || '',
-        totalPrice:       Number(appointment.totalPrice) || 0,
-        totalDuration:    appointment.totalDuration || 0,
-        contactNumber:    '',
-      }));
+         const handlePayNow = async (appointment) => {
+  setPayingId(appointment._id);
+  setError('');
+  setSlotTakenId(null);
 
-      const res = await fetch(`${API_ROOT}/payments`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ appointmentId: appointment._id }),
-      });
+  try {
+    const token = localStorage.getItem('token');
 
-      const result = await res.json();
+    // 1. Check for overlap with confirmed bookings
+    const checkRes = await fetch(`${API_ROOT}/appointments/check-availability`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        date: appointment.date,
+        time: appointment.time,
+        employeeId: appointment.employeeId?._id || appointment.employeeId,
+        appointmentId: appointment._id,
+      }),
+    });
 
-      if (result.success && result.checkoutUrl) {
-        window.location.href = result.checkoutUrl;
-      } else {
-        setError(result.error || 'Could not initiate payment. Please try again.');
-        setPayingId(null);
-      }
-    } catch (err) {
-      setError('Payment failed. Please try again.');
+    const checkResult = await checkRes.json();
+
+    if (!checkResult.available) {
+      setSlotTakenId(appointment._id);
+      setPayingId(null);
+      return;
+    }
+
+    // 2. No conflict → proceed to payment
+    localStorage.setItem('pendingBooking', JSON.stringify({
+      name: appointment.userName || `${user?.firstName} ${user?.lastName}`,
+      email: user?.email || '',
+      appointmentDate: appointment.date,
+      appointmentTime: appointment.time,
+      selectedServices: appointment.services?.map(s => s.name) || [],
+      selectedEmployee: appointment.employee?.name || '',
+      totalPrice: Number(appointment.totalPrice) || 0,
+      totalDuration: appointment.totalDuration || 0,
+      contactNumber: '',
+    }));
+
+    const res = await fetch(`${API_ROOT}/payments`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ appointmentId: appointment._id }),
+    });
+
+    const result = await res.json();
+
+    if (result.success && result.checkoutUrl) {
+      window.location.href = result.checkoutUrl;
+    } else {
+      setError(result.error || 'Could not initiate payment.');
       setPayingId(null);
     }
-  };
+
+  } catch (err) {
+    console.error(err);
+    setError('Something went wrong. Please try again.');
+    setPayingId(null);
+  }
+};
 
   const normalizeDateForApi = (dateStr) => {
     if (!dateStr) return null;
@@ -197,9 +227,8 @@ function UserProfile() {
     setShowReschedule(true);
   };
 
-  const presetTimes = ['7:00 am','7:30 am','8:00 am','8:30 am','09:00 am','09:30 am','10:00 am', '10:30 am', '11:00 am', '11:30 am', '12:00 pm', '12:30 pm','1:00 pm','1:30 pm','2:00 pm','2:30 pm','3:00 pm','3:30 pm','4:00 pm','4:30 pm','5:00 pm',
-    '5:30 pm','6:00 pm','6:30 pm','7:00 pm'
-  ];
+  const presetTimes = ['07:00 am','07:30 am','08:00 am','08:30 am','09:00 am', '9:30 am','10:00 am','10:30 am','11:00 am',
+    '11:30 am', '12:00 pm','12:30 pm','01:00 pm','01:30 pm','02:00 pm','02:30 pm','03:00 pm','03:30 pm','04:00 pm', '04:30 pm','05:00 pm','05:30 pm','06:00 pm','06:30 pm','07:00 pm'];
 
   const saveReschedule = async () => {
     if (!rescheduleForm.date || !rescheduleForm.time) { setError('Please select both a date and a time.'); return; }
@@ -342,36 +371,64 @@ function UserProfile() {
                     </div>
 
                     {/* Pay notice */}
-                    <div style={{
-                      marginTop: '0.75rem',
-                      padding: '0.6rem 0.8rem',
-                      background: 'rgba(255, 180, 0, 0.12)',
-                      border: '1px solid rgba(255, 180, 0, 0.3)',
-                      borderRadius: '8px',
-                      fontSize: '0.78rem',
-                      color: '#ffcc80',
-                      lineHeight: 1.5,
-                    }}>
-                      🔒 Pay the <strong>R{BOOKING_FEE} booking fee</strong> to confirm this appointment.
-                    </div>
+                    {/* Pay notice — slot taken warning OR normal notice */}
+{slotTakenId === appointment._id ? (
+  <div style={{
+    marginTop: '0.75rem',
+    padding: '0.75rem 0.9rem',
+    background: 'rgba(220, 50, 50, 0.15)',
+    border: '1px solid rgba(220, 50, 50, 0.45)',
+    borderRadius: '8px',
+    fontSize: '0.78rem',
+    color: '#ffb3a0',
+    lineHeight: 1.6,
+  }}>
+    ⚠️ <strong>This time slot has been taken by another client.</strong><br />
+    Please choose a different date and time to complete your booking.
+  </div>
+) : (
+  <div style={{
+    marginTop: '0.75rem',
+    padding: '0.6rem 0.8rem',
+    background: 'rgba(255, 180, 0, 0.12)',
+    border: '1px solid rgba(255, 180, 0, 0.3)',
+    borderRadius: '8px',
+    fontSize: '0.78rem',
+    color: '#ffcc80',
+    lineHeight: 1.5,
+  }}>
+    🔒 Pay the <strong>R{BOOKING_FEE} booking fee</strong> to confirm this appointment.
+  </div>
+)}
                   </div>
-
-                  <div className="nxl-profile-appt-actions">
-                    <button
-                      className="nxl-profile-btn-paynow"
-                      onClick={() => handlePayNow(appointment)}
-                      disabled={payingId === appointment._id}
-                    >
-                      {payingId === appointment._id ? 'Redirecting…' : '💳 Pay Now'}
-                    </button>
-                    <button
-                      className="nxl-profile-btn-cancel"
-                      onClick={() => handleCancelAppointment(appointment._id)}
-                      disabled={cancellingId === appointment._id}
-                    >
-                      {cancellingId === appointment._id ? 'Cancelling…' : 'Cancel'}
-                    </button>
-                  </div>
+<div className="nxl-profile-appt-actions">
+  {slotTakenId === appointment._id ? (
+    <button
+      className="nxl-profile-btn-reschedule"
+      onClick={() => {
+        setSlotTakenId(null);
+        handleReschedule(appointment._id);
+      }}
+    >
+      📅 Choose New Time
+    </button>
+  ) : (
+    <button
+      className="nxl-profile-btn-paynow"
+      onClick={() => handlePayNow(appointment)}
+      disabled={payingId === appointment._id}
+    >
+      {payingId === appointment._id ? 'Checking…' : '💳 Pay Now'}
+    </button>
+  )}
+  <button
+    className="nxl-profile-btn-cancel"
+    onClick={() => handleCancelAppointment(appointment._id)}
+    disabled={cancellingId === appointment._id}
+  >
+    {cancellingId === appointment._id ? 'Cancelling…' : 'Cancel'}
+  </button>
+</div>
                 </div>
               ))}
             </div>

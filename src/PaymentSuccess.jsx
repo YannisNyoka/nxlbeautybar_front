@@ -5,10 +5,12 @@ import emailjs from '@emailjs/browser';
 import './ConfirmationPopup.css';
 
 const PaymentSuccess = () => {
-  const navigate  = useNavigate();
-  const location  = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const { logout } = useAuth();
+
   const [bookingDetails, setBookingDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [emailStatus, setEmailStatus] = useState('');
   const hasRun = useRef(false);
 
@@ -17,33 +19,43 @@ const PaymentSuccess = () => {
     ? `${RAW_API_BASE.replace(/\/api$/, '')}/api`
     : '/api';
 
-  const updateAppointmentStatus = async (appointmentId, token) => {
+  // Fetch full appointment details from backend (most reliable)
+  const fetchAppointmentDetails = async (appointmentId, token) => {
     try {
       const res = await fetch(`${API_ROOT}/appointments/${appointmentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type':  'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status:        'booked',
-          paymentStatus: 'deposit_paid',
-        }),
+        headers: { Authorization: `Bearer ${token}` },
       });
+
       const result = await res.json();
-      if (result.success) {
-        console.log('Appointment updated to booked + deposit_paid', { appointmentId });
-      } else if (
-        result.error?.includes('Invalid status transition') ||
-        result.error?.includes('already booked')
-      ) {
-        console.log('Appointment already booked by webhook — no action needed', { appointmentId });
-      } else {
-        console.warn('Appointment update non-success:', result.error);
+
+      if (result.success && result.data) {
+        const appt = result.data;
+
+        const totalPrice = appt.totalPrice?.$numberDecimal
+          ? parseFloat(appt.totalPrice.$numberDecimal)
+          : Number(appt.totalPrice) || 0;
+
+        return {
+          name: appt.userName || 
+                `${appt.user?.firstName || ''} ${appt.user?.lastName || ''}`.trim() || 'Client',
+          email: appt.user?.email || '',
+          appointmentDate: appt.date || '',
+          appointmentTime: appt.time || '',
+          selectedServices: appt.services?.map(s => s.name).filter(Boolean) || [],
+          selectedEmployee: appt.employee?.name || '',
+          totalPrice,
+          totalDuration: appt.totalDuration || 
+                        appt.serviceIds?.reduce((sum, id) => {
+                          // You can improve this if you want to calculate from services
+                          return sum + 30; // fallback
+                        }, 0) || 0,
+          contactNumber: '', // not stored on appointment
+        };
       }
     } catch (err) {
-      console.error('Appointment update error:', err);
+      console.error('Failed to fetch appointment details:', err);
     }
+    return null;
   };
 
   useEffect(() => {
@@ -53,24 +65,13 @@ const PaymentSuccess = () => {
     emailjs.init(import.meta.env.VITE_EMAILJS_PUBLIC_KEY || 'l7AiKNhYSfG_q4eot');
 
     const run = async () => {
-      // ── Step 1: get appointmentId from URL ──────────────────────────
-      const params        = new URLSearchParams(location.search);
+      const params = new URLSearchParams(location.search);
       const appointmentId = params.get('appointmentId');
 
-      // ── Step 2: load whatever localStorage has (may be empty in prod) ─
-      let localDetails = {};
-      try {
-        const fromLocal   = localStorage.getItem('pendingBooking');
-        const fromSession = sessionStorage.getItem('pendingBooking');
-        if (fromLocal)   localDetails = JSON.parse(fromLocal);
-        else if (fromSession) localDetails = JSON.parse(fromSession);
-      } catch (e) {
-        console.error('Could not parse localStorage booking details:', e);
-      }
-
-      // ── Step 3: refresh token ────────────────────────────────────────
       let token = localStorage.getItem('token');
       const refreshToken = localStorage.getItem('refreshToken');
+
+      // Refresh token if possible
       if (refreshToken) {
         try {
           const refreshRes = await fetch(`${API_ROOT}/auth/refresh-token`, {
@@ -82,178 +83,117 @@ const PaymentSuccess = () => {
           if (refreshData.success && refreshData.token) {
             token = refreshData.token;
             localStorage.setItem('token', token);
-            console.log('Token refreshed successfully');
           }
         } catch (e) {
-          console.warn('Token refresh failed, using existing token:', e);
+          console.warn('Token refresh failed');
         }
       }
 
-      // ── Step 4: fetch appointment from API (reliable in production) ──
-      let details = { ...localDetails };
+      let details = null;
 
+      // Priority 1: Fetch from API (best for production)
       if (appointmentId && token) {
+        details = await fetchAppointmentDetails(appointmentId, token);
+      }
+
+      // Priority 2: Fallback to localStorage (only if API fails)
+      if (!details) {
         try {
-          const res = await fetch(`${API_ROOT}/appointments/${appointmentId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const result = await res.json();
-
-          if (result.success && result.data) {
-            const appt = result.data;
-
-            const totalPrice = appt.totalPrice?.$numberDecimal
-              ? parseFloat(appt.totalPrice.$numberDecimal)
-              : Number(appt.totalPrice) || localDetails.totalPrice || 0;
-
-            details = {
-              name:             appt.userName
-                                  || `${appt.user?.firstName || ''} ${appt.user?.lastName || ''}`.trim()
-                                  || localDetails.name
-                                  || '',
-              email:            appt.user?.email      || localDetails.email            || '',
-              appointmentDate:  appt.date              || localDetails.appointmentDate  || '',
-              appointmentTime:  appt.time              || localDetails.appointmentTime  || '',
-              selectedServices: appt.services?.map(s => s.name).filter(Boolean)
-                                  || localDetails.selectedServices
-                                  || [],
-              selectedEmployee: appt.employee?.name   || localDetails.selectedEmployee || '',
-              totalPrice,
-              totalDuration:    appt.totalDuration     || localDetails.totalDuration    || 0,
-              // contactNumber is not stored on appointment — keep from localStorage
-              contactNumber:    localDetails.contactNumber || '',
-            };
-
-            console.log('Booking details loaded from API:', details);
-          } else {
-            console.warn('API fetch failed, falling back to localStorage:', result.error);
-          }
+          const fromLocal = localStorage.getItem('pendingBooking');
+          if (fromLocal) details = JSON.parse(fromLocal);
         } catch (e) {
-          console.error('Failed to fetch appointment from API:', e);
+          console.error('Failed to parse localStorage:', e);
         }
-      } else {
-        console.warn('No appointmentId or token — using localStorage only');
+      }
+
+      // Final fallback
+      if (!details) {
+        details = {
+          name: 'Client',
+          email: '',
+          appointmentDate: '',
+          appointmentTime: '',
+          selectedServices: [],
+          selectedEmployee: '',
+          totalPrice: 0,
+          totalDuration: 0,
+        };
       }
 
       setBookingDetails(details);
+      setLoading(false);
 
-      // ── Step 5: mark appointment as booked + deposit_paid ────────────
+      // Update appointment status (idempotent)
       if (appointmentId && token) {
-        await updateAppointmentStatus(appointmentId, token);
+        try {
+          await fetch(`${API_ROOT}/payments/verify`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ appointmentId }),
+          });
+        } catch (e) {
+          console.warn('Verify call failed (webhook probably already did it)');
+        }
       }
 
-      // ── Step 6: send confirmation email ─────────────────────────────
-      const sendConfirmationEmail = async () => {
+      // Send confirmation email
+      if (details.email) {
         try {
-          if (!details.email) {
-            console.warn('No email found in booking details, skipping email');
-            setEmailStatus('no-email');
-            return;
-          }
-
           if (localStorage.getItem('emailSent') === details.email) {
-            console.log('Email already sent for this booking, skipping');
             setEmailStatus('sent');
             return;
           }
 
-          const totalDur = Number(details.totalDuration) || 0;
-          const mins = totalDur % 60;
-          const hrs  = Math.floor(totalDur / 60);
-          const durationStr = hrs > 0
-            ? `${hrs}h ${mins > 0 ? mins + 'min' : ''}`.trim()
-            : `${mins}min`;
+          const durationStr = details.totalDuration 
+            ? `${Math.floor(details.totalDuration / 60)}h ${details.totalDuration % 60}min`.trim()
+            : '30min';
 
           const emailParams = {
-            customer_name:    details.name             || '',
-            appointment_date: details.appointmentDate  || '',
-            appointment_time: details.appointmentTime  || '',
-            services:         Array.isArray(details.selectedServices)
-                                ? details.selectedServices.join(', ')
-                                : '',
-            employee:         details.selectedEmployee || '',
-            total_price:      `R${details.totalPrice  || 0}`,
-            total_duration:   durationStr,
-            contact_number:   String(details.contactNumber || '').replace(/\D/g, ''),
-            salon_email:      'nxlbeautybar@gmail.com',
-            salon_phone:      '0685113394',
-            email:            details.email,
+            customer_name: details.name,
+            appointment_date: details.appointmentDate,
+            appointment_time: details.appointmentTime,
+            services: details.selectedServices.join(', '),
+            employee: details.selectedEmployee,
+            total_price: `R${details.totalPrice}`,
+            total_duration: durationStr,
+            contact_number: details.contactNumber || '',
+            salon_email: 'nxlbeautybar@gmail.com',
+            salon_phone: '0685113394',
+            email: details.email,
           };
 
-          console.log('Sending email with params:', emailParams);
-
-          localStorage.setItem('emailSent', details.email);
-
-          const serviceId  = import.meta.env.VITE_EMAILJS_SERVICE_ID  || 'service_f0lbtzg';
+          const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID || 'service_f0lbtzg';
           const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID || 'template_sbxxbii';
 
           await emailjs.send(serviceId, templateId, emailParams);
-          console.log('Confirmation email sent successfully');
+          localStorage.setItem('emailSent', details.email);
           setEmailStatus('sent');
         } catch (err) {
-          console.error('EmailJS error:', err);
-          localStorage.removeItem('emailSent');
+          console.error('Email send failed:', err);
           setEmailStatus('error');
         }
-      };
-
-      await sendConfirmationEmail();
+      }
     };
 
     run();
-  }, []);
+  }, [location.search]);
+
+  if (loading) {
+    return <div className="cp-bg"><div className="cp-wrapper">Loading receipt...</div></div>;
+  }
+
+  const d = bookingDetails || {};
+  const durationStr = d.totalDuration 
+    ? `${Math.floor(d.totalDuration / 60)}h ${d.totalDuration % 60}min`.trim()
+    : '30min';
 
   const clearBookingData = () => {
     localStorage.removeItem('pendingBooking');
     localStorage.removeItem('emailSent');
     sessionStorage.removeItem('pendingBooking');
-  };
-
-  const buildCalendarLink = () => {
-    if (!bookingDetails?.appointmentDate || !bookingDetails?.appointmentTime) return '#';
-    try {
-      const {
-        appointmentDate, appointmentTime, selectedServices,
-        selectedEmployee, totalPrice, totalDuration,
-      } = bookingDetails;
-
-      const convertTo24Hour = (timeStr) => {
-        const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
-        if (!m) return timeStr;
-        let hh = parseInt(m[1], 10);
-        const mm  = m[2];
-        const ampm = m[3]?.toLowerCase();
-        if (ampm === 'pm' && hh !== 12) hh += 12;
-        if (ampm === 'am' && hh === 12) hh = 0;
-        return `${String(hh).padStart(2, '0')}:${mm}`;
-      };
-
-      const time24    = convertTo24Hour(appointmentTime);
-      const startDate = new Date(`${appointmentDate}T${time24}`);
-      if (isNaN(startDate.getTime())) return '#';
-
-      const durationMs = (Number(totalDuration) || 60) * 60 * 1000;
-      const endDate    = new Date(startDate.getTime() + durationMs);
-
-      const pad          = (n) => String(n).padStart(2, '0');
-      const toGoogleDate = (d) =>
-        `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}` +
-        `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
-
-      const dates      = `${toGoogleDate(startDate)}/${toGoogleDate(endDate)}`;
-      const text       = encodeURIComponent('NXL Beauty Bar Appointment');
-      const detailLines = [
-        `Services: ${(selectedServices || []).join(', ')}`,
-        selectedEmployee ? `Stylist: ${selectedEmployee}` : '',
-        `Total: R${totalPrice}`,
-      ].filter(Boolean);
-      const calDetails  = encodeURIComponent(detailLines.join('\n'));
-      const calLocation = encodeURIComponent('NXL Beauty Bar • Johannesburg, ZA');
-
-      return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${dates}&details=${calDetails}&location=${calLocation}&ctz=Africa/Johannesburg`;
-    } catch {
-      return '#';
-    }
   };
 
   const handleSignOut = () => {
@@ -262,36 +202,21 @@ const PaymentSuccess = () => {
     navigate('/', { replace: true });
   };
 
-  const d = bookingDetails || {};
-  const durationStr = d.totalDuration
-    ? Number(d.totalDuration) >= 60
-      ? `${Math.floor(Number(d.totalDuration) / 60)}h ${Number(d.totalDuration) % 60 > 0 ? (Number(d.totalDuration) % 60) + 'min' : ''}`.trim()
-      : `${d.totalDuration}min`
-    : '';
-
   return (
     <div className="cp-bg">
       <div className="cp-wrapper">
-
-        {/* Success Icon */}
+        {/* Success Icon + Heading */}
         <div className="cp-success-ring">
-          <div className="cp-success-icon">
-            <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
-              <polyline points="8,20 16,28 30,12" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
+          <div className="cp-success-icon">✓</div>
         </div>
-
-        {/* Heading */}
         <h1 className="cp-heading">Payment Successful!</h1>
         <p className="cp-subheading">
-          Your appointment is secured.{' '}
-          {emailStatus === 'sent'     && 'A confirmation email has been sent to you.'}
-          {emailStatus === 'error'    && 'Email could not be sent, but your booking is confirmed.'}
-          {emailStatus === 'no-email' && 'Your booking is confirmed.'}
+          Your appointment is secured. 
+          {emailStatus === 'sent' && ' A confirmation email has been sent to you.'}
+          {emailStatus === 'error' && ' Email could not be sent, but your booking is confirmed.'}
         </p>
 
-        {/* Summary Card */}
+        {/* Receipt Card */}
         <div className="cp-card">
           <div className="cp-card-header">
             <span className="cp-logo-dot" />
@@ -301,24 +226,26 @@ const PaymentSuccess = () => {
           <div className="cp-divider" />
 
           <div className="cp-details">
-            {d.name && (
-              <div className="cp-detail-row">
-                <span className="cp-detail-icon">👤</span>
-                <div>
-                  <div className="cp-detail-label">Client</div>
-                  <div className="cp-detail-value">{d.name}</div>
-                </div>
+            <div className="cp-detail-row">
+              <span className="cp-detail-icon">👤</span>
+              <div>
+                <div className="cp-detail-label">Client</div>
+                <div className="cp-detail-value">{d.name || 'Client'}</div>
               </div>
-            )}
+            </div>
+
             {d.appointmentDate && (
               <div className="cp-detail-row">
                 <span className="cp-detail-icon">📅</span>
                 <div>
                   <div className="cp-detail-label">Date & Time</div>
-                  <div className="cp-detail-value">{d.appointmentDate} {d.appointmentTime}</div>
+                  <div className="cp-detail-value">
+                    {d.appointmentDate} {d.appointmentTime}
+                  </div>
                 </div>
               </div>
             )}
+
             {d.selectedServices?.length > 0 && (
               <div className="cp-detail-row">
                 <span className="cp-detail-icon">💄</span>
@@ -328,6 +255,7 @@ const PaymentSuccess = () => {
                 </div>
               </div>
             )}
+
             {d.selectedEmployee && (
               <div className="cp-detail-row">
                 <span className="cp-detail-icon">👩‍💼</span>
@@ -337,29 +265,18 @@ const PaymentSuccess = () => {
                 </div>
               </div>
             )}
-            {durationStr && (
-              <div className="cp-detail-row">
-                <span className="cp-detail-icon">⏱️</span>
-                <div>
-                  <div className="cp-detail-label">Duration</div>
-                  <div className="cp-detail-value">{durationStr}</div>
-                </div>
+
+            <div className="cp-detail-row">
+              <span className="cp-detail-icon">⏱️</span>
+              <div>
+                <div className="cp-detail-label">Duration</div>
+                <div className="cp-detail-value">{durationStr}</div>
               </div>
-            )}
-            {d.contactNumber && (
-              <div className="cp-detail-row">
-                <span className="cp-detail-icon">📞</span>
-                <div>
-                  <div className="cp-detail-label">Contact</div>
-                  <div className="cp-detail-value">{d.contactNumber}</div>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
           <div className="cp-divider" />
 
-          {/* Pricing */}
           <div className="cp-pricing">
             <div className="cp-pricing-row">
               <span className="cp-pricing-label">Booking Fee Paid</span>
@@ -368,20 +285,20 @@ const PaymentSuccess = () => {
             {d.totalPrice > 0 && (
               <div className="cp-pricing-row">
                 <span className="cp-pricing-label">Balance Due at Salon</span>
-                <span className="cp-pricing-balance">R{Math.max(0, Number(d.totalPrice) - 100).toFixed(2)}</span>
+                <span className="cp-pricing-balance">
+                  R{Math.max(0, Number(d.totalPrice) - 100).toFixed(2)}
+                </span>
               </div>
             )}
           </div>
         </div>
 
-        {/* Calendar Link */}
-        <a href={buildCalendarLink()} target="_blank" rel="noopener noreferrer" className="cp-calendar-btn">
-          <span>📆</span> Add to Google Calendar
-        </a>
-
         {/* Actions */}
         <div className="cp-actions">
-          <button className="cp-book-btn" onClick={() => { clearBookingData(); navigate('/dashboard', { replace: true }); }}>
+          <button 
+            className="cp-book-btn" 
+            onClick={() => { clearBookingData(); navigate('/dashboard', { replace: true }); }}
+          >
             Book Another Appointment
           </button>
           <button className="cp-print-btn" onClick={() => window.print()}>
@@ -391,7 +308,6 @@ const PaymentSuccess = () => {
             Sign Out
           </button>
         </div>
-
       </div>
     </div>
   );
