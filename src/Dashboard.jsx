@@ -538,7 +538,7 @@ const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
       <div className="dashboard-navigation">
         <button onClick={handleLogout} className="logout-button">Sign Out</button>
         {user?.role === 'admin' && (
-          <button onClick={() => navigate('/admin')} style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.55rem 1.1rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 2px 8px rgba(79,70,229,0.35)' }}>🛠 Admin Panel</button>
+          <button onClick={() => navigate('/admin-dashboard')} style={{ background: 'linear-gradient(135deg, #4f46e5, #7c3aed)', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.55rem 1.1rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 2px 8px rgba(79,70,229,0.35)' }}>🛠 Admin Panel</button>
         )}
         <Link to="/" className="back-home-link">← Back to Home</Link>
       </div>
