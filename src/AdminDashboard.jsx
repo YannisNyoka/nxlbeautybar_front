@@ -1015,7 +1015,7 @@ function AdminDashboard() {
         <AppointmentModal services={services} staff={staff} clients={clients} onClose={() => setShowAppointmentModal(false)}
           onSubmit={async fd => {
             setIsSubmitting(true);
-            try { await apiRequest(API_ENDPOINTS.appointments, { method:'POST', body:JSON.stringify({ userId:fd.clientId, employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes }) }); await loadAll(); setShowAppointmentModal(false); showToast('Appointment created.'); }
+            try { await apiRequest(API_ENDPOINTS.appointments, { method:'POST', body:JSON.stringify({ userId:fd.clientId, employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes,paymentStatus: fd.paymentStatus,paymentMethod: fd.paymentMethod, }) }); await loadAll(); setShowAppointmentModal(false); showToast('Appointment created.'); }
             catch (e) { alert(e.message); } finally { setIsSubmitting(false); }
           }} isSubmitting={isSubmitting}
         />
@@ -1025,7 +1025,7 @@ function AdminDashboard() {
           onClose={() => { setShowEditAppointmentModal(false); setEditingAppointment(null); }}
           onSubmit={async fd => {
             setIsSubmitting(true);
-            try { await apiRequest(`${API_ENDPOINTS.appointments}/${editingAppointment._id}`, { method:'PUT', body:JSON.stringify({ employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes, status:fd.status }) }); await loadAll(); setShowEditAppointmentModal(false); setEditingAppointment(null); showToast('Appointment updated.'); }
+            try { await apiRequest(`${API_ENDPOINTS.appointments}/${editingAppointment._id}`, { method:'PUT', body:JSON.stringify({ employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes, status:fd.status,paymentStatus: fd.paymentStatus, paymentMethod: fd.paymentMethod, }) }); await loadAll(); setShowEditAppointmentModal(false); setEditingAppointment(null); showToast('Appointment updated.'); }
             catch (e) { alert(e.message); } finally { setIsSubmitting(false); }
           }} isSubmitting={isSubmitting}
         />
