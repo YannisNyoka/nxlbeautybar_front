@@ -133,7 +133,7 @@ function Dashboard() {
 
   const calculateRequiredSlots = (startTime, durationMinutes) => {
     const startIndex = allTimeSlots.indexOf(startTime); if (startIndex === -1) return [];
-    const slotsNeeded = Math.ceil(durationMinutes / 15); if (startIndex + slotsNeeded > allTimeSlots.length) return [];
+    const slotsNeeded = Math.ceil(durationMinutes / 15);
     return allTimeSlots.slice(startIndex, startIndex + slotsNeeded);
   };
 

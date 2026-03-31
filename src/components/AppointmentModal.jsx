@@ -1,14 +1,24 @@
 import { useState } from 'react';
 
-export default function AppointmentModal({ services, staff, clients, onClose, onSubmit, isSubmitting }) {
+export default function AppointmentModal({ 
+  services, 
+  staff, 
+  clients, 
+  onClose, 
+  onSubmit, 
+  isSubmitting 
+}) {
   const [formData, setFormData] = useState({
     clientId: '',
     employeeId: '',
     serviceIds: [],
     date: '',
     time: '',
-    notes: ''
+    notes: '',
+    paymentStatus: 'unpaid',        // new
+    paymentMethod: 'cash'           // new - only used when paymentStatus === 'paid'
   });
+
   const [errors, setErrors] = useState({});
 
   const handleSubmit = async (e) => {
@@ -42,11 +52,12 @@ export default function AppointmentModal({ services, staff, clients, onClose, on
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <header>
-          <h3>Create Appointment</h3>
+          <h3>Create Appointment (Admin)</h3>
           <button onClick={onClose}>✕</button>
         </header>
         
         <form onSubmit={handleSubmit} className="form-grid">
+          {/* Client */}
           <div>
             <label>Client *</label>
             <select
@@ -63,6 +74,7 @@ export default function AppointmentModal({ services, staff, clients, onClose, on
             {errors.clientId && <span className="error">{errors.clientId}</span>}
           </div>
 
+          {/* Staff */}
           <div>
             <label>Staff Member *</label>
             <select
@@ -77,6 +89,7 @@ export default function AppointmentModal({ services, staff, clients, onClose, on
             {errors.employeeId && <span className="error">{errors.employeeId}</span>}
           </div>
 
+          {/* Services */}
           <div style={{ gridColumn: '1 / -1' }}>
             <label>Services *</label>
             <div className="service-checkboxes">
@@ -94,6 +107,7 @@ export default function AppointmentModal({ services, staff, clients, onClose, on
             {errors.serviceIds && <span className="error">{errors.serviceIds}</span>}
           </div>
 
+          {/* Date & Time */}
           <div>
             <label>Date *</label>
             <input
@@ -115,6 +129,40 @@ export default function AppointmentModal({ services, staff, clients, onClose, on
             {errors.time && <span className="error">{errors.time}</span>}
           </div>
 
+          {/* Payment Status (new) */}
+          <div>
+            <label>Payment Status *</label>
+            <select
+              value={formData.paymentStatus}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                paymentStatus: e.target.value,
+                // Reset method when not paid
+                paymentMethod: e.target.value === 'paid' ? formData.paymentMethod : 'cash'
+              })}
+            >
+              <option value="unpaid">Unpaid</option>
+              <option value="deposit_paid">Deposit Paid</option>
+              <option value="paid">Fully Paid</option>
+            </select>
+          </div>
+
+          {/* Payment Method - shown only when "paid" */}
+          {formData.paymentStatus === 'paid' && (
+            <div>
+              <label>Payment Method</label>
+              <select
+                value={formData.paymentMethod}
+                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+              >
+                <option value="cash">Cash</option>
+                <option value="card">Card</option>
+                <option value="online">Online</option>
+              </select>
+            </div>
+          )}
+
+          {/* Notes */}
           <div style={{ gridColumn: '1 / -1' }}>
             <label>Notes</label>
             <textarea
