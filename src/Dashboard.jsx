@@ -30,6 +30,28 @@ const convertTo24Hour = (time12) => {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
+// ─── Token-aware fetch helper ─────────────────────────────────────────────────
+// Automatically redirects to /login on 401/403 (expired or invalid token)
+async function apiFetch(url, options = {}) {
+  const token = localStorage.getItem('token');
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+
+  if (res.status === 401 || res.status === 403) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    window.location.href = '/login';
+    return null; // prevent further processing
+  }
+
+  return res;
+}
+
 function Dashboard() {
   const defaultServices = [
     { name: 'Manicure', duration: 45, price: 150 },
@@ -116,8 +138,9 @@ function Dashboard() {
   useEffect(() => {
     async function fetchServices() {
       try {
-        setServicesError(''); const token = localStorage.getItem('token');
-        const response = await fetch(`${apiBase}/services`, { headers: { Authorization: `Bearer ${token}` } });
+        setServicesError('');
+        const response = await apiFetch(`${apiBase}/services`);
+        if (!response) return; // redirected due to auth failure
         const result = await response.json();
         if (response.ok && result.success && Array.isArray(result.data)) {
           const active = result.data.filter(s => s.isActive !== false).map(s => ({ _id: s._id || s.id, name: s.name, duration: s.durationMinutes, price: decimalToFloat(s.price), category: s.category || '' }));
@@ -139,22 +162,40 @@ function Dashboard() {
 
   const fetchAppointments = async () => {
     try {
-      setLoadingAppointments(true); const token = localStorage.getItem('token');
-      const response = await fetch(`${apiBase}/appointments`, { headers: { Authorization: `Bearer ${token}` } });
+      setLoadingAppointments(true);
+      const response = await apiFetch(`${apiBase}/appointments`);
+      if (!response) return; // redirected due to auth failure
       const result = await response.json();
       if (result.success) {
         const formattedSlots = result.data.map(appointment => {
           if (
-  appointment.status === 'cancelled' ||
-  appointment.status === 'pending' ||
-  appointment.paymentStatus === 'unpaid'
-) return null;
+            appointment.status === 'cancelled' ||
+            appointment.status === 'pending' ||
+            appointment.paymentStatus === 'unpaid'
+          ) return null;
           const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/) ? appointment.date : new Date(appointment.date).toISOString().split('T')[0];
           const time12Hour = convertTo12Hour(appointment.time);
-          let totalDuration = appointment.totalDuration || 60;
-          if (!appointment.totalDuration && appointment.serviceIds && Array.isArray(appointment.serviceIds)) {
-            totalDuration = appointment.serviceIds.reduce((sum, serviceId) => { const service = services.find(s => s._id === serviceId); return sum + (service ? service.duration : 0); }, 0) || 60;
+
+          // Use populated services array from API response first
+          let totalDuration = 0;
+          if (Array.isArray(appointment.services) && appointment.services.length > 0) {
+            totalDuration = appointment.services.reduce(
+              (sum, svc) => sum + (svc?.durationMinutes || 0), 0
+            );
           }
+          // Fallback: match by stringified _id
+          if (!totalDuration && Array.isArray(appointment.serviceIds)) {
+            totalDuration = appointment.serviceIds.reduce((sum, serviceId) => {
+              const idStr = typeof serviceId === 'object'
+                ? (serviceId.$oid || String(serviceId))
+                : String(serviceId);
+              const service = services.find(s => String(s._id) === idStr);
+              return sum + (service ? service.duration : 0);
+            }, 0);
+          }
+          // Final fallback
+          if (!totalDuration) totalDuration = appointment.totalDuration || 60;
+
           return { date: isoDate, time: time12Hour, userName: appointment.userName || 'Booked', serviceType: 'Service', appointmentId: appointment._id, duration: totalDuration };
         }).filter(slot => slot !== null && slot.time);
         setBookedSlots(formattedSlots);
@@ -165,10 +206,10 @@ function Dashboard() {
   useEffect(() => {
     async function fetchUnavailableSlots() {
       try {
-        const token = localStorage.getItem('token');
-        const response = await fetch(`${apiBase}/availability`, { headers: { Authorization: `Bearer ${token}` } });
+        const response = await apiFetch(`${apiBase}/availability`);
+        if (!response) return; // redirected due to auth failure
         const result = await response.json();
-       if (result.success && Array.isArray(result.data)) setUnavailableSlots(result.data);
+        if (result.success && Array.isArray(result.data)) setUnavailableSlots(result.data);
       } catch {
         let initial = []; try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; }
         setUnavailableSlots(pruneExpiredUnavailableSlots(initial));
@@ -281,40 +322,39 @@ function Dashboard() {
     return map;
   }, [bookedSlots]);
 
- 
-const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
-  const isoDate = dayToISO(day);
-  const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
-  const selectedEmp = employees.find(e => e.name === selectedEmployee);
-  return requiredSlots.some(slot => {
-    const slot24 = convertTo24Hour(slot);
-    return unavailableSlots.some(s => {
-      const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
-      const matchesDate = s.date === isoDate;
-      const matchesTime = sTime === slot24;
-      const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
-      return matchesDate && matchesTime && matchesEmployee;
+  const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
+    const isoDate = dayToISO(day);
+    const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
+    const selectedEmp = employees.find(e => e.name === selectedEmployee);
+    return requiredSlots.some(slot => {
+      const slot24 = convertTo24Hour(slot);
+      return unavailableSlots.some(s => {
+        const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
+        const matchesDate = s.date === isoDate;
+        const matchesTime = sTime === slot24;
+        const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
+        return matchesDate && matchesTime && matchesEmployee;
+      });
     });
-  });
-};
+  };
 
   const isDateFullyBooked = (day) => {
-  const isoDate = dayToISO(day);
-  const selectedEmp = employees.find(e => e.name === selectedEmployee);
-  return allTimeSlots.every(slot => {
-    const slot24 = convertTo24Hour(slot);
-    const isBlocked = unavailableSlots.some(s => {
-      const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
-      const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
-      return s.date === isoDate && sTime === slot24 && matchesEmployee;
+    const isoDate = dayToISO(day);
+    const selectedEmp = employees.find(e => e.name === selectedEmployee);
+    return allTimeSlots.every(slot => {
+      const slot24 = convertTo24Hour(slot);
+      const isBlocked = unavailableSlots.some(s => {
+        const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
+        const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
+        return s.date === isoDate && sTime === slot24 && matchesEmployee;
+      });
+      const isBooked = bookedSlots.some(booking => {
+        if (booking.date !== isoDate) return false;
+        return calculateRequiredSlots(booking.time, booking.duration || 15).includes(slot);
+      });
+      return isBooked || isBlocked;
     });
-    const isBooked = bookedSlots.some(booking => {
-      if (booking.date !== isoDate) return false;
-      return calculateRequiredSlots(booking.time, booking.duration || 15).includes(slot);
-    });
-    return isBooked || isBlocked;
-  });
-};
+  };
 
   const getTotalServiceDuration = () => selectedServices.reduce((total, serviceName) => { const service = services.find(s => s.name === serviceName); return total + (service ? service.duration : 0); }, 0);
   const isPartOfBookedRange = (date, time) => { const isoDate = dayToISO(date); return occupiedSlotsByDate[isoDate]?.has(time) || false; };
@@ -332,8 +372,8 @@ const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
     async function fetchEmployees() {
       setLoadingEmployees(true); setEmployeeError('');
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${apiBase}/employees`, { headers: { Authorization: token ? `Bearer ${token}` : '' }, signal: controller.signal });
+        const res = await apiFetch(`${apiBase}/employees`, { signal: controller.signal });
+        if (!res) return; // redirected due to auth failure
         const result = await res.json();
         if (!res.ok || !result.success) throw new Error(result.error || 'Failed to fetch employees');
         const list = Array.isArray(result.data) ? result.data : [];

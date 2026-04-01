@@ -36,11 +36,21 @@ const authHeaders = () => {
     : {};
 };
 
+// ─── UPDATED: apiRequest now auto-redirects to /login on 401/403 ─────────────
 async function apiRequest(endpoint, options = {}) {
   const res = await fetch(endpoint, {
     headers: { ...authHeaders(), ...(options.headers || {}) },
     ...options,
   });
+
+  // Token expired or invalid — clear storage and force redirect to login
+  if (res.status === 401 || res.status === 403) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
+    window.location.href = '/login';
+    return Promise.reject(new Error('Session expired. Please log in again.'));
+  }
+
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Request failed (${res.status})`);
@@ -463,7 +473,10 @@ function AdminDashboard() {
       computeReportMeta(appts, pays);
     } catch (err) {
       console.error('AdminDashboard load error:', err);
-      setError(err.message || 'Failed to load admin data');
+      // Don't set error if we're being redirected due to auth failure
+      if (!err.message.includes('Session expired')) {
+        setError(err.message || 'Failed to load admin data');
+      }
     } finally { setLoading(false); }
   };
 
@@ -1015,7 +1028,7 @@ function AdminDashboard() {
         <AppointmentModal services={services} staff={staff} clients={clients} onClose={() => setShowAppointmentModal(false)}
           onSubmit={async fd => {
             setIsSubmitting(true);
-            try { await apiRequest(API_ENDPOINTS.appointments, { method:'POST', body:JSON.stringify({ userId:fd.clientId, employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes,paymentStatus: fd.paymentStatus,paymentMethod: fd.paymentMethod, }) }); await loadAll(); setShowAppointmentModal(false); showToast('Appointment created.'); }
+            try { await apiRequest(API_ENDPOINTS.appointments, { method:'POST', body:JSON.stringify({ userId:fd.clientId, employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes, paymentStatus:fd.paymentStatus, paymentMethod:fd.paymentMethod }) }); await loadAll(); setShowAppointmentModal(false); showToast('Appointment created.'); }
             catch (e) { alert(e.message); } finally { setIsSubmitting(false); }
           }} isSubmitting={isSubmitting}
         />
@@ -1025,7 +1038,7 @@ function AdminDashboard() {
           onClose={() => { setShowEditAppointmentModal(false); setEditingAppointment(null); }}
           onSubmit={async fd => {
             setIsSubmitting(true);
-            try { await apiRequest(`${API_ENDPOINTS.appointments}/${editingAppointment._id}`, { method:'PUT', body:JSON.stringify({ employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes, status:fd.status,paymentStatus: fd.paymentStatus, paymentMethod: fd.paymentMethod, }) }); await loadAll(); setShowEditAppointmentModal(false); setEditingAppointment(null); showToast('Appointment updated.'); }
+            try { await apiRequest(`${API_ENDPOINTS.appointments}/${editingAppointment._id}`, { method:'PUT', body:JSON.stringify({ employeeId:fd.employeeId, serviceIds:fd.serviceIds, date:fd.date, time:fd.time, notes:fd.notes, status:fd.status, paymentStatus:fd.paymentStatus, paymentMethod:fd.paymentMethod }) }); await loadAll(); setShowEditAppointmentModal(false); setEditingAppointment(null); showToast('Appointment updated.'); }
             catch (e) { alert(e.message); } finally { setIsSubmitting(false); }
           }} isSubmitting={isSubmitting}
         />
