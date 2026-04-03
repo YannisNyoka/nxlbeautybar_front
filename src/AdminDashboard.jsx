@@ -20,6 +20,7 @@ const API_ENDPOINTS = {
   availability: `${API_BASE_URL}/availability`,
   clients:      `${API_BASE_URL}/users?limit=500`,
   payments:     `${API_BASE_URL}/payments`,
+  notifications: `${API_BASE_URL}/notifications`, 
 };
 
 const decimalToFloat = value => {
@@ -454,14 +455,17 @@ function AdminDashboard() {
   const loadAll = async () => {
     try {
       setLoading(true); setError('');
-      const [apptData, svcData, staffData, availData, clientData, payData] = await Promise.all([
-        apiRequest(API_ENDPOINTS.appointments),
-        apiRequest(API_ENDPOINTS.services),
-        apiRequest(API_ENDPOINTS.staff),
-        apiRequest(API_ENDPOINTS.availability),
-        apiRequest(API_ENDPOINTS.clients),
-        apiRequest(API_ENDPOINTS.payments),
-      ]);
+
+      const [apptData, svcData, staffData, availData, clientData, payData, notifData] = await Promise.all([
+  apiRequest(API_ENDPOINTS.appointments),
+  apiRequest(API_ENDPOINTS.services),
+  apiRequest(API_ENDPOINTS.staff),
+  apiRequest(API_ENDPOINTS.availability),
+  apiRequest(API_ENDPOINTS.clients),
+  apiRequest(API_ENDPOINTS.payments),
+  apiRequest(API_ENDPOINTS.notifications),
+]);
+
       const appts = apptData.data || [];
       const pays  = (payData.data || []).map(p => ({ ...p, amount: decimalToFloat(p.amount) }));
       setAppointments(appts);
@@ -471,6 +475,7 @@ function AdminDashboard() {
       setClients((clientData.data || []).filter(c => c.role !== 'admin'));
       setPayments(pays);
       computeReportMeta(appts, pays);
+      setNotifications(notifData.data || []);
     } catch (err) {
       console.error('AdminDashboard load error:', err);
       // Don't set error if we're being redirected due to auth failure
@@ -593,9 +598,18 @@ function AdminDashboard() {
     setClients((clientData.data || []).filter(c => c.role !== 'admin'));
   }
 
-  function addNotification(msg) {
-    setNotifications(prev => [{ id:Date.now(), message:msg, createdAt:new Date() }, ...prev]);
+  async function addNotification(msg) {
+  try {
+    const data = await apiRequest(API_ENDPOINTS.notifications, {
+      method: 'POST',
+      body: JSON.stringify({ message: msg, target: 'staff' }),
+    });
+    setNotifications(prev => [data.data, ...prev]);
+  } catch (err) {
+    // Fallback to local state if API fails
+    setNotifications(prev => [{ id: Date.now(), message: msg, createdAt: new Date() }, ...prev]);
   }
+}
 
   const exportCSV = () => {
     const rows = [
@@ -952,7 +966,14 @@ function AdminDashboard() {
 
   const renderNotifications = () => (
     <section className="panel">
-      <header><h3>Activity Log</h3><button className="btn ghost" onClick={() => setNotifications([])}>Clear All</button></header>
+      <header><h3>Activity Log</h3><button className="btn ghost" onClick={async () => {
+  try {
+    await apiRequest(API_ENDPOINTS.notifications, { method: 'DELETE' });
+    setNotifications([]);
+  } catch (e) {
+    alert('Failed to clear notifications: ' + e.message);
+  }
+}}>Clear All</button></header>
       <ul className="notification-feed">
         {notifications.map(n => (<li key={n.id}><span>{n.message}</span><small>{new Date(n.createdAt).toLocaleString()}</small></li>))}
         {!notifications.length && <li className="empty-row">No activity yet.</li>}
