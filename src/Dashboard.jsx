@@ -30,6 +30,13 @@ const convertTo24Hour = (time12) => {
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
+const isOffPeakSlot = (time) => {
+  if (!time) return false;
+  const time24 = convertTo24Hour(time);
+  const [h] = time24.split(':').map(Number);
+  return h < 9 || h >= 17; // before 09:00 or 17:00 and later
+};
+
 // ─── Token-aware fetch helper ─────────────────────────────────────────────────
 // Automatically redirects to /login on 401/403 (expired or invalid token)
 async function apiFetch(url, options = {}) {
@@ -278,10 +285,19 @@ function Dashboard() {
     });
   };
 
-  const handleBookAppointment = () => {
-    if (selectedServices.length && selectedDate && selectedTime) setShowSummary(true);
-    else alert('Please select a service, date, and time');
-  };
+ const handleBookAppointment = () => {
+  if (selectedServices.length && selectedDate && selectedTime) {
+    if (isOffPeakSlot(selectedTime)) {
+      const confirmed = window.confirm(
+        '⚠️ Off-Peak Surcharge\n\nThis time slot is before 09:00 or after 17:00.\nAn additional R50 will be added to your total.\n\nDo you want to continue?'
+      );
+      if (!confirmed) return;
+    }
+    setShowSummary(true);
+  } else {
+    alert('Please select a service, date, and time');
+  }
+};
 
   const handleCloseSummary = () => setShowSummary(false);
   const handleEditDateTime = () => setShowSummary(false);
@@ -409,8 +425,8 @@ function Dashboard() {
     const slotStyle = isUnavailableBooked
       ? { background: isPastSlot ? '#f5ece8' : '#ffe5e5', borderLeft: isPastSlot ? '3px solid #e0ccc4' : '3px solid #e05252', color: isPastSlot ? '#c4a898' : '#c0392b', opacity: 0.75, pointerEvents: 'none', cursor: 'not-allowed' }
       : inSelectedRange ? { background: 'linear-gradient(135deg, #fce8db 0%, #f9c8a8 100%)', borderLeft: '3px solid #a0502e', color: '#3d1f15', fontWeight: 700, boxShadow: '0 2px 10px rgba(160, 80, 46, 0.25)' }
-      : selectedServices.length === 0 ? { opacity: 0.5, cursor: 'default' } : {};
-
+     : isOffPeakSlot(time) ? { background: '#fffbeb', borderLeft: '3px solid #f59e0b', color: '#92400e' }
+: selectedServices.length === 0 ? { opacity: 0.5, cursor: 'default' } : {};
     return (
       <div key={index} className="time-slot-stack">
         <div
@@ -539,11 +555,17 @@ function Dashboard() {
           {!collapsedPanels.time && (
             <div className="panel-content">
               {selectedServices.length > 0 && (
-                <div style={{ padding:'0.5rem 0.7rem', marginBottom:'0.6rem', background:'linear-gradient(135deg, #fdf6f0, #fce8db)', borderRadius:8, fontSize:'0.78rem', border:'1px solid #e0ccc4' }}>
-                  <strong style={{ color:'#3d1f15' }}>{getTotalServiceDuration()} min</strong>
-                  <span style={{ color:'#9e7060' }}> · {Math.ceil(getTotalServiceDuration() / 15)} slots</span>
-                </div>
-              )}
+  <div style={{ padding:'0.5rem 0.7rem', marginBottom:'0.6rem', background:'linear-gradient(135deg, #fdf6f0, #fce8db)', borderRadius:8, fontSize:'0.78rem', border:'1px solid #e0ccc4' }}>
+    <strong style={{ color:'#3d1f15' }}>{getTotalServiceDuration()} min</strong>
+    <span style={{ color:'#9e7060' }}> · {Math.ceil(getTotalServiceDuration() / 15)} slots</span>
+  </div>
+)}
+{selectedTime && isOffPeakSlot(selectedTime) && (
+  <div style={{ padding:'0.5rem 0.7rem', marginBottom:'0.6rem', background:'#fffbeb', borderRadius:8, fontSize:'0.78rem', border:'1px solid #f59e0b', display:'flex', alignItems:'center', gap:'0.4rem' }}>
+    <span>⚠️</span>
+    <span style={{ color:'#92400e', fontWeight:600 }}>Early/late slot — R50 surcharge applies (before 09:00 or after 17:00)</span>
+  </div>
+)}
               <div className="time-section"><h4>Morning</h4><div className="time-slots">{timeSlots.morning.map((time, index) => renderTimeSlot(time, index))}</div></div>
               <div className="time-section"><h4>Afternoon</h4><div className="time-slots">{timeSlots.afternoon.map((time, index) => renderTimeSlot(time, index))}</div></div>
             </div>
