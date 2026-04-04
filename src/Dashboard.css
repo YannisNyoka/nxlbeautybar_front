@@ -537,7 +537,7 @@
   /* Remove grey gradient, use warm */
   background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%) !important;
   border-radius: 6px !important;
-  border-left: 3px solid var(--nxl-accent) !important;
+ /* border-left: 3px solid var(--nxl-accent) !important;*/
   text-align: left !important;
 }
 
