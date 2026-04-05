@@ -21,6 +21,7 @@ const API_ENDPOINTS = {
   clients:      `${API_BASE_URL}/users?limit=500`,
   payments:     `${API_BASE_URL}/payments`,
   notifications: `${API_BASE_URL}/notifications`, 
+  gallery: `${API_BASE_URL}/gallery`,
 };
 
 const decimalToFloat = value => {
@@ -442,6 +443,24 @@ function AdminDashboard() {
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [showPaymentModal,         setShowPaymentModal]         = useState(false);
   const [selectedAppointment,      setSelectedAppointment]      = useState(null);
+
+  // Add these alongside your other state declarations
+const [galleryItems, setGalleryItems] = useState([]);
+const [galleryForm, setGalleryForm] = useState({ imageUrl: '', clientName: '', caption: '' });
+const [galleryLoading, setGalleryLoading] = useState(false);
+const [galleryUploading, setGalleryUploading] = useState(false);
+
+
+const loadGallery = async () => {
+  try {
+    setGalleryLoading(true);
+    const data = await apiRequest(API_ENDPOINTS.gallery);
+    setGalleryItems(data.data || []);
+  } catch (e) { console.error(e); }
+  finally { setGalleryLoading(false); }
+};
+
+useEffect(() => { if (activeSection === 'gallery') loadGallery(); }, [activeSection]);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type, id: Date.now() });
@@ -997,9 +1016,134 @@ function AdminDashboard() {
       case 'availability':  return renderAvailability();
       case 'payments':      return renderPayments();
       case 'notifications': return renderNotifications();
+      case 'gallery': return renderGallery();
       default:              return renderOverview();
     }
   };
+
+ 
+
+const renderGallery = () => (
+  <section className="panel">
+    <header><h3>Gallery Posts</h3></header>
+
+    {/* Add new post form */}
+    <div style={{ background:'#f9fafb', borderRadius:'10px', padding:'1.25rem', marginBottom:'1.25rem', border:'1px solid #e5e7eb' }}>
+      <h4 style={{ marginBottom:'0.875rem', fontSize:'0.875rem', fontWeight:700, color:'#374151' }}>➕ Add New Post</h4>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.65rem' }}>
+       
+        <input
+  type="file"
+  accept="image/*,video/*"
+  onChange={async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setGalleryUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('upload_preset', 'NXLBEAUTYBAR'); // ← replace
+      formData.append('cloud_name', 'djjxu9yg9');       // ← replace
+
+      const res = await fetch(
+        `https://api.cloudinary.com/v1_1/djjxu9yg9/auto/upload`, // ← replace
+        { method: 'POST', body: formData }
+      );
+      const data = await res.json();
+      setGalleryForm(f => ({ ...f, imageUrl: data.secure_url }));
+      showToast('File uploaded!');
+    } catch (err) {
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setGalleryUploading(false);
+    }
+  }}
+  style={{ gridColumn:'1 / -1', padding:'0.6rem 0.875rem', border:'1px solid #e5e7eb', borderRadius:'8px', fontSize:'0.85rem' }}
+/>
+
+{/* Show preview if URL is set */}
+{galleryForm.imageUrl && (
+  <div style={{ gridColumn:'1 / -1', marginTop:'0.5rem' }}>
+    {galleryForm.imageUrl.match(/\.(mp4|webm|mov)$/i)
+      ? <video src={galleryForm.imageUrl} style={{ width:'100%', maxHeight:'200px', borderRadius:'8px' }} controls muted />
+      : <img src={galleryForm.imageUrl} style={{ width:'100%', maxHeight:'200px', objectFit:'cover', borderRadius:'8px' }} alt="preview" />
+    }
+  </div>
+)}
+
+{galleryUploading && (
+  <div style={{ gridColumn:'1 / -1', color:'#6b7280', fontSize:'0.82rem' }}>Uploading…</div>
+)}
+
+        <input
+          placeholder="Client name (e.g. Ayanda R.)"
+          value={galleryForm.clientName}
+          onChange={e => setGalleryForm(f => ({ ...f, clientName: e.target.value }))}
+          style={{ padding:'0.6rem 0.875rem', border:'1px solid #e5e7eb', borderRadius:'8px', fontSize:'0.85rem', fontFamily:'inherit' }}
+        />
+        <input
+          placeholder="Caption (optional)"
+          value={galleryForm.caption}
+          onChange={e => setGalleryForm(f => ({ ...f, caption: e.target.value }))}
+          style={{ padding:'0.6rem 0.875rem', border:'1px solid #e5e7eb', borderRadius:'8px', fontSize:'0.85rem', fontFamily:'inherit' }}
+        />
+      </div>
+      <button
+        className="btn primary"
+        style={{ marginTop:'0.875rem' }}
+        disabled={!galleryForm.imageUrl.trim() || isSubmitting || galleryUploading}
+        onClick={async () => {
+          if (!galleryForm.imageUrl.trim()) return;
+          setIsSubmitting(true);
+          try {
+            await apiRequest(API_ENDPOINTS.gallery, { method:'POST', body:JSON.stringify(galleryForm) });
+            setGalleryForm({ imageUrl:'', clientName:'', caption:'' });
+            await loadGallery();
+            showToast('Gallery post added.');
+            await addNotification(`Admin added a gallery post for ${galleryForm.clientName || 'a client'}`);
+          } catch (e) { alert(e.message); }
+          finally { setIsSubmitting(false); }
+        }}
+      >
+        {isSubmitting ? 'Posting…' : 'Post to Gallery'}
+      </button>
+    </div>
+
+    {/* Gallery grid */}
+    {galleryLoading ? (
+      <div style={{ textAlign:'center', padding:'2rem', color:'#9ca3af' }}>Loading…</div>
+    ) : (
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))', gap:'1rem' }}>
+        {galleryItems.map(item => (
+          <div key={item._id} style={{ background:'#fff', borderRadius:'10px', overflow:'hidden', border:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+            {item.imageUrl.match(/\.(mp4|webm|mov)$/i) ? (
+              <video src={item.imageUrl} style={{ width:'100%', height:'160px', objectFit:'cover' }} muted />
+            ) : (
+              <img src={item.imageUrl} alt={item.clientName} style={{ width:'100%', height:'160px', objectFit:'cover', display:'block' }} />
+            )}
+            <div style={{ padding:'0.75rem' }}>
+              {item.clientName && <div style={{ fontWeight:700, fontSize:'0.82rem', color:'#111827' }}>{item.clientName}</div>}
+              {item.caption && <div style={{ fontSize:'0.75rem', color:'#6b7280', marginTop:'0.2rem' }}>{item.caption}</div>}
+              <button
+                className="action-btn delete-btn"
+                style={{ marginTop:'0.6rem', width:'100%', justifyContent:'center' }}
+                onClick={async () => {
+                  if (!window.confirm('Delete this post?')) return;
+                  try {
+                    await apiRequest(`${API_ENDPOINTS.gallery}/${item._id}`, { method:'DELETE' });
+                    await loadGallery();
+                    showToast('Post deleted.');
+                  } catch (e) { alert(e.message); }
+                }}
+              >🗑 Delete</button>
+            </div>
+          </div>
+        ))}
+        {!galleryItems.length && <div style={{ gridColumn:'1 / -1', textAlign:'center', padding:'2rem', color:'#9ca3af', fontStyle:'italic' }}>No gallery posts yet. Add one above.</div>}
+      </div>
+    )}
+  </section>
+);
 
   return (
     <div className="admin-shell">
@@ -1020,6 +1164,7 @@ function AdminDashboard() {
           <SidebarBtn icon="🗓️" label="Availability"  section="availability"  active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
           <SidebarBtn icon="💸" label="Payments"      section="payments"      active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
           <SidebarBtn icon="🔔" label="Activity Log"  section="notifications" active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} badge={notifications.length || null} />
+          <SidebarBtn icon="🖼️" label="Gallery" section="gallery" active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
         </nav>
         <footer>
           <button className="btn ghost" onClick={() => { localStorage.removeItem('adminActiveSection'); navigate('/dashboard'); }}>← User View</button>
@@ -1117,6 +1262,7 @@ const SECTION_TITLES = {
   availability:  'Availability',
   payments:      'Payments & Reports',
   notifications: 'Activity Log',
+  gallery: 'Gallery Management',
 };
 
 const COLOR_MAP = {

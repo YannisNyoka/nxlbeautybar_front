@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './HomePage.css';
 import noxoloImage from './assets/images/Logo.jpeg';
 import manicureImage from './assets/images/NxlPic5.jpg';
@@ -77,6 +77,89 @@ function ServiceCard({ label, desc, image, backItems, flipped, onFlip }) {
           </ul>
           <span className="hp-flip-hint" style={{ marginTop: '1rem' }}>Tap to go back</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function GallerySection({ apiBase }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lightbox, setLightbox] = useState(null); // { imageUrl, clientName, caption }
+
+  useEffect(() => {
+    fetch(`${apiBase}/gallery`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setItems(d.data || []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [apiBase]);
+
+  if (loading) return (
+    <div style={{ textAlign:'center', padding:'3rem', color:'#9e7060' }}>Loading gallery…</div>
+  );
+
+  if (!items.length) return (
+    <div className="about-section">
+      <h2 className="section-title">Our Work</h2>
+      <p style={{ textAlign:'center', color:'#9e7060' }}>No posts yet — check back soon!</p>
+    </div>
+  );
+
+  return (
+    <div className="about-section" style={{ maxWidth:'900px', textAlign:'center' }}>
+      <h2 className="section-title">Our Work</h2>
+      <p style={{ color:'#9e7060', marginBottom:'1.5rem', fontSize:'0.9rem' }}>
+        Real clients, real results 
+      </p>
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          onClick={() => setLightbox(null)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.85)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem', cursor:'pointer' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ maxWidth:'600px', width:'100%', background:'#fff', borderRadius:'16px', overflow:'hidden', boxShadow:'0 20px 60px rgba(0,0,0,0.4)' }}>
+            {lightbox.imageUrl.match(/\.(mp4|webm|mov)$/i) ? (
+              <video src={lightbox.imageUrl} controls autoPlay style={{ width:'100%', maxHeight:'70vh', objectFit:'contain', background:'#000' }} />
+            ) : (
+              <img src={lightbox.imageUrl} alt={lightbox.clientName} style={{ width:'100%', maxHeight:'70vh', objectFit:'contain', background:'#f9f9f9' }} />
+            )}
+            <div style={{ padding:'1rem 1.25rem' }}>
+              {lightbox.clientName && <div style={{ fontWeight:700, color:'#3d1f15', fontSize:'1rem' }}>{lightbox.clientName}</div>}
+              {lightbox.caption && <div style={{ color:'#9e7060', fontSize:'0.85rem', marginTop:'0.25rem' }}>{lightbox.caption}</div>}
+            </div>
+            <button onClick={() => setLightbox(null)} style={{ position:'absolute', top:'1rem', right:'1rem', background:'rgba(0,0,0,0.5)', color:'#fff', border:'none', borderRadius:'50%', width:'36px', height:'36px', cursor:'pointer', fontSize:'1.1rem', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {/* Grid */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))', gap:'1rem' }}>
+        {items.map(item => (
+          <div
+            key={item._id}
+            onClick={() => setLightbox(item)}
+            style={{ background:'#fff', borderRadius:'14px', overflow:'hidden', border:'1px solid #e0ccc4', boxShadow:'0 4px 16px rgba(61,31,21,0.08)', cursor:'pointer', transition:'transform 0.2s, box-shadow 0.2s' }}
+            onMouseEnter={e => { e.currentTarget.style.transform='translateY(-4px)'; e.currentTarget.style.boxShadow='0 8px 28px rgba(61,31,21,0.16)'; }}
+            onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='0 4px 16px rgba(61,31,21,0.08)'; }}
+          >
+            {item.imageUrl.match(/\.(mp4|webm|mov)$/i) ? (
+              <div style={{ position:'relative', height:'200px', background:'#000' }}>
+                <video src={item.imageUrl} style={{ width:'100%', height:'100%', objectFit:'cover', opacity:0.85 }} muted />
+                <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontSize:'2.5rem', filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>▶️</span>
+                </div>
+              </div>
+            ) : (
+              <img src={item.imageUrl} alt={item.clientName || 'Gallery'} style={{ width:'100%', height:'200px', objectFit:'cover', display:'block' }} />
+            )}
+            <div style={{ padding:'0.75rem 1rem' }}>
+              {item.clientName && <div style={{ fontWeight:700, color:'#3d1f15', fontSize:'0.88rem' }}>{item.clientName}</div>}
+              {item.caption && <div style={{ color:'#9e7060', fontSize:'0.78rem', marginTop:'0.2rem', lineHeight:1.4 }}>{item.caption}</div>}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -171,19 +254,10 @@ function HomePage() {
         </div>
       </div>
 
-      {/* ---- About ---- */}
-      <div className="about-section">
-        <h2 className="section-title">Say hello to your nail artist</h2>
-        <div className="about-content">
-          <p>
-            Welcome to NXL Beauty Bar! We are passionate about creating beautiful,
-            long-lasting nails and lashes that make you feel confident and radiant.
-            With years of experience in the beauty industry, we specialise in all kinds
-            of manicures, pedicures, and eyelash extensions. Every client receives
-            personalised attention and care to ensure the perfect result — to your satisfaction.
-          </p>
-        </div>
-      </div>
+      {/* ---- About / Gallery ---- */}
+
+<GallerySection apiBase={import.meta.env.VITE_API_BASE_URL || ''} />
+
 
       {/* ---- Services ---- */}
       <div className="services-preview">
