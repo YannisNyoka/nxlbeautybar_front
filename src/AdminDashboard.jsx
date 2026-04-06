@@ -61,7 +61,7 @@ async function apiRequest(endpoint, options = {}) {
 }
 
 // ─── AvailabilityModal ───────────────────────────────────────────────────────
-function generateTimeSlots(start = '07:00', end = '19:00', interval = 15) {
+function generateTimeSlots(start = '07:00', end = '19:00', interval = 30) {
   const slots = [];
   let [h, m] = start.split(':').map(Number);
   const [endH, endM] = end.split(':').map(Number);
@@ -73,7 +73,7 @@ function generateTimeSlots(start = '07:00', end = '19:00', interval = 15) {
   return slots;
 }
 
-const ALL_SLOTS = generateTimeSlots('07:00', '19:00', 15);
+const ALL_SLOTS = generateTimeSlots('07:00', '19:00', 30);
 
 function avPad2(n) { return String(n).padStart(2, '0'); }
 

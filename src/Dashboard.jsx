@@ -101,7 +101,7 @@ function Dashboard() {
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const generateTimeSlots = (start = '09:00', end = '17:00', interval = 15) => {
+  const generateTimeSlots = (start = '07:00', end = '19:00', interval = 30) => {
     const slots = []; let [h, m] = start.split(':').map(Number); const [endH, endM] = end.split(':').map(Number);
     while (h < endH || (h === endH && m <= endM)) {
       const hour12 = h % 12 === 0 ? 12 : h % 12; const ampm = h < 12 ? 'am' : 'pm';
@@ -111,7 +111,7 @@ function Dashboard() {
     return slots;
   };
 
-  const allTimeSlots = generateTimeSlots('07:00', '19:00', 15);
+  const allTimeSlots = generateTimeSlots('07:00', '19:00', 30);
   const timeSlots = {
     morning:   allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('am') && h < 12; }),
     afternoon: allTimeSlots.filter(t => t.includes('pm')),
@@ -163,7 +163,7 @@ function Dashboard() {
 
   const calculateRequiredSlots = (startTime, durationMinutes) => {
     const startIndex = allTimeSlots.indexOf(startTime); if (startIndex === -1) return [];
-    const slotsNeeded = Math.ceil(durationMinutes / 15);
+    const slotsNeeded = Math.ceil(durationMinutes / 30);
     return allTimeSlots.slice(startIndex, startIndex + slotsNeeded);
   };
 
@@ -557,7 +557,7 @@ function Dashboard() {
               {selectedServices.length > 0 && (
   <div style={{ padding:'0.5rem 0.7rem', marginBottom:'0.6rem', background:'linear-gradient(135deg, #fdf6f0, #fce8db)', borderRadius:8, fontSize:'0.78rem', border:'1px solid #e0ccc4' }}>
     <strong style={{ color:'#3d1f15' }}>{getTotalServiceDuration()} min</strong>
-    <span style={{ color:'#9e7060' }}> · {Math.ceil(getTotalServiceDuration() / 15)} slots</span>
+    <span style={{ color:'#9e7060' }}> · {Math.ceil(getTotalServiceDuration() / 30)} slots</span>
   </div>
 )}
 {selectedTime && isOffPeakSlot(selectedTime) && (
