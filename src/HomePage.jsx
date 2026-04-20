@@ -265,7 +265,7 @@ function HomePage() {
         </div>
 
         {/* CHANGED: was Booking Policy button — now Book Now link */}
-        <div style={{ position: 'absolute', top: '1.5rem', right: '2rem', zIndex: 100 }}>
+        <div style={{ position: 'absolute', top: '3.9rem', right: '0.5rem', zIndex: 100 }}>
           <Link to="/login" className="hp-policy-btn hp-glow">
             Book Now 
           </Link>
