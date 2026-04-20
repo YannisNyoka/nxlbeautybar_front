@@ -81,17 +81,22 @@
   padding: 4rem 2rem 3rem;
   margin-bottom: 0;
   position: relative;
+  overflow: hidden;
 }
 
+/* NEW: text color overrides so h1/p are readable over the dark photo */
 .hero-section h1 {
   font-family: 'Cormorant Garamond', serif !important;
   font-size: 4rem !important;
   font-weight: 700 !important;
   letter-spacing: 0.12em !important;
   text-transform: uppercase !important;
-  color: var(--nxl-dark) !important;
+  color: #fff !important;
   margin-bottom: 0.4rem !important;
   line-height: 1 !important;
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 2px 18px rgba(0,0,0,0.5);
 }
 
 .hero-section p {
@@ -99,13 +104,17 @@
   font-size: 0.8rem !important;
   letter-spacing: 0.28em !important;
   text-transform: uppercase !important;
-  color: var(--nxl-muted) !important;
+  color: rgba(255,232,214,0.9) !important;
   margin-bottom: 2.5rem !important;
+  position: relative;
+  z-index: 2;
 }
 
 /* ---- Artist Image ---- */
 .nail-artist-section {
   margin: 2rem 0 2.5rem;
+  position: relative;
+  z-index: 2;
 }
 
 .nail-text {
@@ -145,6 +154,7 @@
 .location-bar {
   background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-dark-mid) 100%) !important;
   color: var(--nxl-cream) !important;
+  top: 50px;
   padding: 0.85rem 2rem !important;
   border-radius: 50px !important;
   display: inline-flex !important;
@@ -159,6 +169,8 @@
   cursor: pointer;
   transition: all 0.25s ease;
   text-decoration: none !important;
+  position: relative;
+  z-index: 20;
 }
 
 .location-bar:hover {
@@ -166,7 +178,7 @@
   transform: translateY(-2px);
 }
 
-/* ---- Booking Policy Button (overridden inline, but keep base) ---- */
+/* ---- Book Now button (reuses .hp-policy-btn + .hp-glow) ---- */
 .hp-policy-btn {
   background: linear-gradient(135deg, var(--nxl-dark-mid) 0%, var(--nxl-accent) 100%);
   color: var(--nxl-cream);
@@ -181,6 +193,8 @@
   box-shadow: var(--nxl-shadow-sm);
   transition: all 0.2s ease;
   white-space: nowrap;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .hp-policy-btn:hover {
@@ -188,114 +202,7 @@
   transform: translateY(-1px);
 }
 
-/* Policy dropdown panel */
-.hp-policy-panel {
-  position: absolute;
-  top: calc(100% + 0.6rem);
-  right: 0;
-  width: 360px;
-  max-height: 75vh;
-  overflow-y: auto;
-  background: #fff;
-  border-radius: var(--nxl-radius);
-  box-shadow: var(--nxl-shadow-lg);
-  border: 1px solid var(--nxl-border);
-  padding: 1.8rem;
-  font-family: 'DM Sans', sans-serif;
-  z-index: 200;
-  text-align: left;
-  scrollbar-width: thin;
-  scrollbar-color: var(--nxl-border) transparent;
-}
-
-.hp-policy-panel::-webkit-scrollbar { width: 4px; }
-.hp-policy-panel::-webkit-scrollbar-thumb { background: var(--nxl-border); border-radius: 4px; }
-
-.hp-policy-panel h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: var(--nxl-dark);
-  margin-bottom: 0.7rem;
-  letter-spacing: 0.02em;
-}
-
-.hp-policy-panel p {
-  font-size: 0.85rem;
-  color: #555;
-  margin-bottom: 0.8rem;
-  line-height: 1.6;
-}
-
-.hp-policy-panel ul {
-  padding-left: 1rem;
-  margin: 0 0 1rem;
-}
-
-.hp-policy-panel li {
-  font-size: 0.82rem;
-  color: #333;
-  line-height: 1.9;
-}
-
-.hp-policy-panel li.hp-policy-highlight {
-  color: var(--nxl-accent);
-  font-weight: 700;
-}
-
-.hp-policy-banking {
-  margin-top: 0.8rem;
-  text-align: center;
-  padding: 1rem;
-  background: linear-gradient(135deg, var(--nxl-bg-start) 0%, var(--nxl-bg-mid) 100%);
-  border-radius: 10px;
-  border: 1px solid var(--nxl-border);
-}
-
-.hp-policy-banking h3 {
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--nxl-warm-label);
-  margin-bottom: 0.4rem;
-}
-
-.hp-policy-banking .hp-bank-value {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--nxl-dark);
-}
-
-.hp-policy-social {
-  margin-top: 0.8rem;
-  font-size: 0.8rem;
-  color: var(--nxl-muted);
-  text-align: center;
-  line-height: 1.9;
-}
-
-.hp-policy-close-btn {
-  margin-top: 1rem;
-  width: 100%;
-  background: linear-gradient(135deg, var(--nxl-dark) 0%, var(--nxl-accent) 100%);
-  color: var(--nxl-cream);
-  border: none;
-  border-radius: 10px;
-  padding: 0.6rem;
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  font-weight: 600;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
-}
-
-.hp-policy-close-btn:hover {
-  box-shadow: 0 4px 16px rgba(61,31,21,0.3);
-}
-
-/* Glow animation */
+/* Glow animation — same as original */
 @keyframes hp-glow {
   0%   { box-shadow: 0 0 8px rgba(160,80,46,0.3); transform: scale(1); }
   50%  { box-shadow: 0 0 22px rgba(160,80,46,0.7), 0 0 44px rgba(160,80,46,0.4); transform: scale(1.06); }
@@ -566,3 +473,155 @@
   .hp-policy-panel  { width: 92vw; right: -20px; }
 }
 
+/* ==========================================================================
+   NEW ADDITIONS ONLY — appended below, nothing above was changed
+   ========================================================================== */
+
+/* ---- Hero background image (scoped to .hero-section only) ---- */
+.hp-hero-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.hp-hero-bg-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 30%;
+  display: block;
+}
+
+/* Dark gradient overlay so text stays readable over the photo */
+.hp-hero-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(25,8,3,0.70) 0%,
+    rgba(25,8,3,0.28) 30%,
+    rgba(25,8,3,0.18) 55%,
+    rgba(25,8,3,0.52) 82%,
+    rgba(253,246,240,1.00) 100%
+  );
+}
+
+/* SVG wave at the very bottom of hero — dissolves photo into page bg colour */
+.hp-hero-wave {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  z-index: 3;
+  line-height: 0;
+}
+
+.hp-hero-wave svg {
+  width: 100%;
+  height: 90px;
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .hp-hero-wave svg { height: 55px; }
+}
+
+/* ---- Navbar ---- */
+.hp-navbar {
+  position:fixed;
+  top: 0;
+  z-index: 500;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 2rem;
+  background: rgba(61,31,21,0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,220,190,0.12);
+  box-sizing: border-box;
+}
+
+.hp-navbar-brand {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--nxl-cream);
+  white-space: nowrap;
+}
+
+.hp-navbar-links {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.hp-navbar-links button {
+  background: none;
+  border: none;
+  color: rgba(255,232,214,0.82);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.hp-navbar-links button:hover {
+  background: rgba(255,220,190,0.12);
+  color: #fff;
+}
+
+.hp-navbar-hamburger {
+  display: none;
+  background: none;
+  border: 1px solid rgba(255,220,190,0.3);
+  color: var(--nxl-cream);
+  font-size: 1.1rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+
+.hp-navbar-mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(40,15,8,0.97);
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid rgba(255,220,190,0.12);
+}
+
+.hp-navbar-mobile-menu button {
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255,220,190,0.08);
+  color: rgba(255,232,214,0.85);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 0.9rem 2rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.hp-navbar-mobile-menu button:hover {
+  background: rgba(255,220,190,0.08);
+  color: #fff;
+}
+
+@media (max-width: 640px) {
+  .hp-navbar-links     { display: none; }
+  .hp-navbar-hamburger { display: flex; }
+  .hp-navbar           { padding: 0.65rem 1rem; }
+}

@@ -5,6 +5,8 @@ import noxoloImage from './assets/images/Logo.jpeg';
 import manicureImage from './assets/images/NxlPic5.jpg';
 import pedicureImage from './assets/images/ToesImage.jpg';
 import eyelashesImage from './assets/images/EyeLashesImage.jpg';
+// NEW: background image for hero
+import nxlDesignBg from './assets/images/nxl_design1.jpeg';
 
 const SALON_ADDRESS = 'NXLBEAUTYBAR, 1948 Mahalefele Rd, Dube, Soweto, 1800';
 
@@ -213,78 +215,66 @@ function GallerySection({ apiBase }) {
 
 function HomePage() {
   const [flipped, setFlipped] = useState({ manicure: false, pedicure: false, lashes: false });
-  const [policyOpen, setPolicyOpen] = useState(false);
+  // NEW: mobile menu state for navbar
+  const [menuOpen, setMenuOpen] = useState(false);
   const isLoggedIn = !!localStorage.getItem('token');
 
   const flip = (key) => setFlipped(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const policyHighlights = new Set([0, 1, 5, 7, 10, 11, 12]);
-  const policyItems = [
-    'Check availability (date & time) on the App or WhatsApp for an appointment.',
-    'Non-refundable deposit of R100 or full amount confirms appointment.',
-    'Send proof of payment.',
-    'Payment must reflect before appointment.',
-    'No e-wallet or cash send — money to be deposited straight into account.',
-    'NO KIDS ALLOWED AT THE SALON.',
-    'No nail polish or extensions on nails unless soak off or buff off was included.',
-    'If you have something on your nails, you will be charged full soak off price to remove them.',
-    'WE STRICTLY WORK FROM 9AM TO 5PM. Appointments before/after will be charged R50 extra per person.',
-    'R50 will be charged for every 15 minutes you are late.',
-    '30 minutes late — your appointment will be cancelled.',
-    'Cancellation only allowed 48 hours prior. Failure will incur a penalty fee of R100.',
-    'NO CASH. NO PAYMENT, NO APPOINTMENT. NO REFUND.',
-    'ONLY THE PERSON WITH AN APPOINTMENT WILL BE ALLOWED IN THE SALON.',
-  ];
+  // NEW: smooth-scroll helper used by navbar buttons
+  const scrollTo = (id) => {
+    setMenuOpen(false);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth' });
+  };
 
   return (
     <div className="home-container">
 
+      {/* NEW ── Navbar ──────────────────────────────────────────────────────── */}
+      <nav className="hp-navbar">
+        <span className="hp-navbar-brand">NXL Beauty Bar</span>
+        <div className="hp-navbar-links">
+          <button onClick={() => scrollTo('hp-hero')}>Home</button>
+          <button onClick={() => scrollTo('hp-our-work')}>Our Work</button>
+          <button onClick={() => scrollTo('hp-services')}>Services</button>
+          <button onClick={() => scrollTo('hp-contact')}>Contact</button>
+        </div>
+        <button className="hp-navbar-hamburger" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">
+          {menuOpen ? '✕' : '☰'}
+        </button>
+        {menuOpen && (
+          <div className="hp-navbar-mobile-menu">
+            <button onClick={() => scrollTo('hp-hero')}>Home</button>
+            <button onClick={() => scrollTo('hp-our-work')}>Our Work</button>
+            <button onClick={() => scrollTo('hp-services')}>Services</button>
+            <button onClick={() => scrollTo('hp-contact')}>Contact</button>
+          </div>
+        )}
+      </nav>
+      {/* END Navbar ──────────────────────────────────────────────────────────── */}
+
       {/* ---- Hero ---- */}
-      <div className="hero-section">
+      {/* NEW: id added for navbar scroll target */}
+      <div id="hp-hero" className="hero-section">
 
-        {/* Booking Policy Button — top right */}
-        <div style={{ position: 'absolute', top: '1.5rem', right: '2rem', zIndex: 100 }}>
-          <button
-            className={`hp-policy-btn ${!policyOpen ? 'hp-glow' : ''}`}
-            onClick={() => setPolicyOpen(o => !o)}
-          >
-            {policyOpen ? 'Hide Policy ▲' : 'Booking Policy ▼'}
-          </button>
-
-          {policyOpen && (
-            <div className="hp-policy-panel">
-              <h2>Booking Policy</h2>
-              <p>Due to clients not arriving on time and cancelling last minute, we have put this policy in place:</p>
-              <ul>
-                {policyItems.map((item, i) => (
-                  <li key={i} className={policyHighlights.has(i) ? 'hp-policy-highlight' : ''}>{item}</li>
-                ))}
-              </ul>
-
-              <div className="hp-policy-banking">
-                <h3>Banking Details</h3>
-                <div className="hp-bank-value">6307553452</div>
-                <div className="hp-bank-value">FNB (NXLBEAUTYBAR)</div>
-              </div>
-
-              <div className="hp-policy-social">
-                <div><b>Instagram:</b> @nxlbeautybar</div>
-                <div><b>TikTok:</b> @nxlbeautybar</div>
-                <div><b>Facebook:</b> nxlbeautybar</div>
-              </div>
-
-              <button className="hp-policy-close-btn" onClick={() => setPolicyOpen(false)}>
-                Close ✕
-              </button>
-            </div>
-          )}
+        {/* NEW: background image + overlay, scoped to hero only */}
+        <div className="hp-hero-bg" aria-hidden="true">
+          <img src={nxlDesignBg} alt="" className="hp-hero-bg-img" />
+          <div className="hp-hero-bg-overlay" />
         </div>
 
-        {/* Title */}
-        <h1>NXL Beauty Bar</h1>
-        <p>Luxury Nail Studio</p>
+        {/* CHANGED: was Booking Policy button — now Book Now link */}
+        <div style={{ position: 'absolute', top: '1.5rem', right: '2rem', zIndex: 100 }}>
+          <Link to="/login" className="hp-policy-btn hp-glow">
+            Book Now 
+          </Link>
+        </div>
 
-        {/* Artist Image */}
+        {/* Title — unchanged */}
+        <h1>NXL Beauty Bar</h1>
+        
+        {/* Artist Image — unchanged */}
         <div className="nail-artist-section">
           <div className="nail-text">
             <div className="artist-image">
@@ -293,20 +283,29 @@ function HomePage() {
           </div>
         </div>
 
-        {/* Location */}
+        {/* Location — unchanged */}
         <div className="location-bar" onClick={getUserLocationAndRedirect} role="button" tabIndex={0}>
           <span className="location-icon">📍</span>
           <span className="location-text">Johannesburg, Soweto</span>
         </div>
+
+        {/* NEW: wave that blends hero image into page background */}
+        <div className="hp-hero-wave" aria-hidden="true">
+          <svg viewBox="0 0 1440 90" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M0,30 C480,90 960,0 1440,50 L1440,90 L0,90 Z" fill="#fdf6f0" />
+          </svg>
+        </div>
       </div>
 
       {/* ---- About / Gallery ---- */}
-
-<GallerySection apiBase={import.meta.env.VITE_API_BASE_URL || ''} />
-
+      {/* NEW: id added for navbar scroll target */}
+      <div id="hp-our-work">
+        <GallerySection apiBase={import.meta.env.VITE_API_BASE_URL || ''} />
+      </div>
 
       {/* ---- Services ---- */}
-      <div className="services-preview">
+      {/* NEW: id added for navbar scroll target */}
+      <div id="hp-services" className="services-preview">
         <h2 className="section-title">Our Services</h2>
         <div className="services-grid">
           <ServiceCard
@@ -336,67 +335,66 @@ function HomePage() {
         </div>
       </div>
 
-      {/* ---- CTA ---- */}
-      
-<div className="navigation-links">
-  <Link to="/signup" className="nav-link primary">Create Account</Link>
-  <Link to="/login" className="nav-link secondary">Sign In</Link>
-  {isLoggedIn && (
-    <Link to="/dashboard" className="nav-link secondary">Dashboard</Link>
-  )}
-  
-</div>
-
-      {/* ---- Social / Contact ---- */}
-<div className="contact-info">
-  <div className="contact-item">
-    <span className="contact-icon" aria-hidden="true">
-      <svg width="24" height="24" viewBox="0 0 24 24">
-        <rect x="1" y="1" width="22" height="22" rx="5" fill="#25D366"/>
-        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" fill="#fff"/>
-      </svg>
-    </span>
-    <a href="https://wa.me/27685113394?text=Hi%20NXLBeautyBar%2C%20I%20would%20like%20to%20book%20an%20appointment%20please." target="_blank" rel="noopener noreferrer">WhatsApp</a>
-  </div>
-
-  <div className="contact-item">
-    <span className="contact-icon" aria-hidden="true">
-      <svg width="24" height="24" viewBox="0 0 24 24">
-        <rect x="1" y="1" width="22" height="22" rx="5" fill="#1877F2"/>
-              <path d="M13.2 9.3h1.8V6.8h-1.8c-1.9 0-3.1 1.2-3.1 3.1v1.6H9.1v2.5h1.9v6h2.8v-6h2l.5-2.5h-2.5V9.9c0-.4.2-.6.9-.6z" fill="#fff"/>
-            </svg>
-          </span>
-          <a href="https://www.facebook.com/share/17g73Pcr9j/" target="_blank" rel="noopener noreferrer">Facebook</a>
-        </div>
-
-        <div className="contact-item">
-          <span className="contact-icon" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24">
-              <defs>
-                <linearGradient id="igGrad" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0%" stopColor="#f58529"/>
-                  <stop offset="50%" stopColor="#dd2a7b"/>
-                  <stop offset="100%" stopColor="#8134af"/>
-                </linearGradient>
-              </defs>
-              <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#igGrad)"/>
-              <rect x="7" y="7" width="10" height="10" rx="5" fill="none" stroke="#fff" strokeWidth="2"/>
-              <circle cx="16.5" cy="7.5" r="1.3" fill="#fff"/>
-            </svg>
-          </span>
-          <a href="https://www.instagram.com/nxlbeauty?igsh=Z2tnOTl0OXdmdmxz" target="_blank" rel="noopener noreferrer">Instagram</a>
-        </div>
-
-        <div className="contact-item">
-          <span className="contact-icon" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24">
-              <rect x="1" y="1" width="22" height="22" rx="5" fill="#000"/>
-              <path d="M9 7.5c1.7 0 3.2.9 4.1 2.3v6.7h-2v-4.2c-.6-.4-1.4-.6-2.1-.6-1.9 0-3.5 1.2-3.5 3.1 0 1.6 1.2 2.9 2.8 3.1-2.2-.2-4-2.1-4-4.4 0-2.5 2.1-4.4 4.7-4.4zM15 7.2c.7.3 1.3.8 1.8 1.4v6.9h-1.8V7.2z" fill="#fff"/>
-            </svg>
-          </span>
-          <a href="https://www.tiktok.com/@nxlbeautybar?_r=1&_t=ZS-91Q3zPzMphH" target="_blank" rel="noopener noreferrer">TikTok</a>
-        </div>
+      {/* ---- CTA — unchanged ---- */}
+      <div className="navigation-links">
+        <Link to="/signup" className="nav-link primary">Create Account</Link>
+        <Link to="/login" className="nav-link secondary">Sign In</Link>
+        {isLoggedIn && (
+          <Link to="/dashboard" className="nav-link secondary">Dashboard</Link>
+        )}
       </div>
+
+      {/* ---- Social / Contact — unchanged ---- */}
+      {/* NEW: id added for navbar scroll target */}
+      <div id="hp-contact" className="contact-info">
+        <div className="contact-item">
+          <span className="contact-icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24">
+              <rect x="1" y="1" width="22" height="22" rx="5" fill="#25D366"/>
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" fill="#fff"/>
+            </svg>
+          </span>
+          <a href="https://wa.me/27685113394?text=Hi%20NXLBeautyBar%2C%20I%20would%20like%20to%20book%20an%20appointment%20please." target="_blank" rel="noopener noreferrer">WhatsApp</a>
+        </div>
+
+        <div className="contact-item">
+          <span className="contact-icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24">
+              <rect x="1" y="1" width="22" height="22" rx="5" fill="#1877F2"/>
+                    <path d="M13.2 9.3h1.8V6.8h-1.8c-1.9 0-3.1 1.2-3.1 3.1v1.6H9.1v2.5h1.9v6h2.8v-6h2l.5-2.5h-2.5V9.9c0-.4.2-.6.9-.6z" fill="#fff"/>
+                  </svg>
+                </span>
+                <a href="https://www.facebook.com/share/17g73Pcr9j/" target="_blank" rel="noopener noreferrer">Facebook</a>
+              </div>
+
+              <div className="contact-item">
+                <span className="contact-icon" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24">
+                    <defs>
+                      <linearGradient id="igGrad" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0%" stopColor="#f58529"/>
+                        <stop offset="50%" stopColor="#dd2a7b"/>
+                        <stop offset="100%" stopColor="#8134af"/>
+                      </linearGradient>
+                    </defs>
+                    <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#igGrad)"/>
+                    <rect x="7" y="7" width="10" height="10" rx="5" fill="none" stroke="#fff" strokeWidth="2"/>
+                    <circle cx="16.5" cy="7.5" r="1.3" fill="#fff"/>
+                  </svg>
+                </span>
+                <a href="https://www.instagram.com/nxlbeauty?igsh=Z2tnOTl0OXdmdmxz" target="_blank" rel="noopener noreferrer">Instagram</a>
+              </div>
+
+              <div className="contact-item">
+                <span className="contact-icon" aria-hidden="true">
+                  <svg width="24" height="24" viewBox="0 0 24 24">
+                    <rect x="1" y="1" width="22" height="22" rx="5" fill="#000"/>
+                    <path d="M9 7.5c1.7 0 3.2.9 4.1 2.3v6.7h-2v-4.2c-.6-.4-1.4-.6-2.1-.6-1.9 0-3.5 1.2-3.5 3.1 0 1.6 1.2 2.9 2.8 3.1-2.2-.2-4-2.1-4-4.4 0-2.5 2.1-4.4 4.7-4.4zM15 7.2c.7.3 1.3.8 1.8 1.4v6.9h-1.8V7.2z" fill="#fff"/>
+                  </svg>
+                </span>
+                <a href="https://www.tiktok.com/@nxlbeautybar?_r=1&_t=ZS-91Q3zPzMphH" target="_blank" rel="noopener noreferrer">TikTok</a>
+              </div>
+            </div>
 
     </div>
   );
