@@ -111,6 +111,229 @@ function BookingPolicyCard() {
   );
 }
 
+// ─── NEW: Add to Calendar button ──────────────────────────────────────────────
+// Builds a Google Calendar URL and an .ics file for Apple/Outlook.
+// Pure JS — no external libraries required.
+
+/**
+ * Format a date+time string into the Google Calendar format: YYYYMMDDTHHmmss
+ * @param {string} dateStr  e.g. "2026-05-10"
+ * @param {string} timeStr  e.g. "10:30"
+ * @returns {string}        e.g. "20260510T103000"
+ */
+function toCalDateStr(dateStr, timeStr) {
+  if (!dateStr || !timeStr) return '';
+  // Remove dashes/colons and append seconds
+  const d = dateStr.replace(/-/g, '');
+  const t = timeStr.replace(/:/g, '') + '00';
+  return `${d}T${t}`;
+}
+
+/**
+ * Add durationMinutes to a time string and return the new time string.
+ * @param {string} timeStr        e.g. "10:30"
+ * @param {number} durationMins   e.g. 90
+ * @returns {string}              e.g. "12:00"
+ */
+function addMinutesToTime(timeStr, durationMins) {
+  if (!timeStr) return '';
+  const [h, m] = timeStr.split(':').map(Number);
+  const total = h * 60 + m + (durationMins || 60);
+  const endH = Math.floor(total / 60) % 24;
+  const endM = total % 60;
+  return `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+}
+
+/**
+ * Generate and download a .ics file (works on iOS, Android, Outlook, macOS).
+ */
+function downloadICS({ dateStr, timeStr, endTimeStr, title, description, location }) {
+  const start = toCalDateStr(dateStr, timeStr);
+  const end   = toCalDateStr(dateStr, endTimeStr);
+  if (!start || !end) return;
+
+  const uid = `nxl-${Date.now()}@nxlbeautybar.co.za`;
+  const now  = toCalDateStr(
+    new Date().toISOString().slice(0, 10),
+    new Date().toTimeString().slice(0, 5)
+  );
+
+  const ics = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//NXL Beauty Bar//NXL//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${now}Z`,
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    `SUMMARY:${title}`,
+    `DESCRIPTION:${description.replace(/\n/g, '\\n')}`,
+    `LOCATION:${location}`,
+    'STATUS:CONFIRMED',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT60M',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:Reminder: ${title} in 1 hour`,
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'nxl-appointment.ics';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Open a Google Calendar pre-filled event in a new tab.
+ */
+function openGoogleCalendar({ dateStr, timeStr, endTimeStr, title, description, location }) {
+  const start = toCalDateStr(dateStr, timeStr);
+  const end   = toCalDateStr(dateStr, endTimeStr);
+  if (!start || !end) return;
+
+  const params = new URLSearchParams({
+    action:   'TEMPLATE',
+    text:     title,
+    dates:    `${start}/${end}`,
+    details:  description,
+    location,
+  });
+  window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank');
+}
+
+/**
+ * The actual button component rendered on the success page.
+ */
+function AddToCalendarButton({ dateStr, timeStr, durationMins, services, employee }) {
+  const [open, setOpen] = useState(false);
+  const dropRef = useRef(null);
+
+  const endTimeStr  = addMinutesToTime(timeStr, durationMins);
+  const title       = 'NXL Beauty Bar Appointment';
+  const serviceList = Array.isArray(services) ? services.join(', ') : services || '';
+  const description = [
+    'Your NXL Beauty Bar appointment is confirmed.',
+    serviceList  ? `Services: ${serviceList}` : '',
+    employee     ? `Stylist: ${employee}`      : '',
+    'Please arrive on time. Cancellations must be made 48 hours in advance.',
+    'Contact: 068 511 3394 | nxlbeautybar@gmail.com',
+  ].filter(Boolean).join('\n');
+  const location = 'NXLBEAUTYBAR, 1948 Mahalefele Rd, Dube, Soweto, 1800';
+
+  const calArgs = { dateStr, timeStr, endTimeStr, title, description, location };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e) => {
+      if (dropRef.current && !dropRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
+
+  // Disable if we don't have enough data to build a valid event
+  const disabled = !dateStr || !timeStr;
+
+  return (
+    <div ref={dropRef} style={{ position: 'relative', display: 'inline-block' }}>
+      <button
+        onClick={() => !disabled && setOpen(o => !o)}
+        disabled={disabled}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.5rem',
+          padding: '0.75rem 1.5rem',
+          background: disabled
+            ? '#e0ccc4'
+            : 'linear-gradient(135deg, #3d1f15 0%, #6b3528 100%)',
+          color: disabled ? '#9e7060' : '#ffe8d6',
+          border: 'none',
+          borderRadius: '50px',
+          fontFamily: "'DM Sans', sans-serif",
+          fontWeight: 600,
+          fontSize: '0.88rem',
+          letterSpacing: '0.04em',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          boxShadow: disabled ? 'none' : '0 4px 16px rgba(61,31,21,0.25)',
+          transition: 'all 0.2s ease',
+          whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={e => { if (!disabled) e.currentTarget.style.boxShadow = '0 6px 24px rgba(61,31,21,0.35)'; }}
+        onMouseLeave={e => { if (!disabled) e.currentTarget.style.boxShadow = '0 4px 16px rgba(61,31,21,0.25)'; }}
+      >
+        📅 Add to Calendar
+        <span style={{ fontSize: '0.7rem', opacity: 0.75 }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 0.5rem)',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#fff',
+          border: '1px solid #e0ccc4',
+          borderRadius: '12px',
+          boxShadow: '0 8px 32px rgba(61,31,21,0.18)',
+          overflow: 'hidden',
+          minWidth: '210px',
+          zIndex: 50,
+        }}>
+          {/* Google Calendar */}
+          <button
+            onClick={() => { openGoogleCalendar(calArgs); setOpen(false); }}
+            style={dropItemStyle}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fdf6f0'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
+          >
+            <span style={{ fontSize: '1.1rem' }}>🗓️</span>
+            Google Calendar
+          </button>
+
+          {/* Apple / Outlook (.ics) */}
+          <button
+            onClick={() => { downloadICS(calArgs); setOpen(false); }}
+            style={{ ...dropItemStyle, borderTop: '1px solid #f0e8e2' }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fdf6f0'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
+          >
+            <span style={{ fontSize: '1.1rem' }}>📲</span>
+            Apple / Outlook
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const dropItemStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.6rem',
+  width: '100%',
+  padding: '0.75rem 1.1rem',
+  background: '#fff',
+  border: 'none',
+  cursor: 'pointer',
+  fontFamily: "'DM Sans', sans-serif",
+  fontSize: '0.85rem',
+  fontWeight: 500,
+  color: '#3d1f15',
+  textAlign: 'left',
+  transition: 'background 0.15s',
+};
+// ─── END: Add to Calendar ─────────────────────────────────────────────────────
+
 // ─── PaymentSuccess ───────────────────────────────────────────────────────────
 const PaymentSuccess = () => {
   const navigate = useNavigate();
@@ -381,6 +604,16 @@ const PaymentSuccess = () => {
           >
             Book Another Appointment
           </button>
+
+          {/* NEW: Add to Calendar — sits between Book Another and Print */}
+          <AddToCalendarButton
+            dateStr={d.appointmentDate}
+            timeStr={d.appointmentTime}
+            durationMins={d.totalDuration || 60}
+            services={d.selectedServices}
+            employee={d.selectedEmployee}
+          />
+
           <button className="cp-print-btn" onClick={() => window.print()}>
             🖨️ Print Receipt
           </button>
