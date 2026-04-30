@@ -67,7 +67,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/signup" element={<Signup onSignup={() => window.location.replace('/')} />} />
         <Route path="/login" element={<SignIn />} />
-        <Route path="/resetpassword" element={<ResetPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/dashboard"
           element={
