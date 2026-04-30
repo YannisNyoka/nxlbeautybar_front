@@ -10,6 +10,7 @@ import PaymentCancel from './PaymentCancel';
 import './App.css';
 import AdminDashboard from './AdminDashboard';
 import { useAuth } from './AuthContext';
+import ResetPassword from './ResetPassword';
 
 const LoadingScreen = () => (
   <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -66,6 +67,7 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/signup" element={<Signup onSignup={() => window.location.replace('/')} />} />
         <Route path="/login" element={<SignIn />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route
           path="/dashboard"
           element={

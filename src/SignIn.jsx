@@ -12,7 +12,15 @@ function SignIn({ onSignIn }) {
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState('');
   const [apiSuccess, setApiSuccess] = useState('');
-  
+
+  // ── NEW: forgot-password state ─────────────────────────────────────────────
+  const [showForgot, setShowForgot]         = useState(false);
+  const [forgotEmail, setForgotEmail]       = useState('');
+  const [forgotLoading, setForgotLoading]   = useState(false);
+  const [forgotError, setForgotError]       = useState('');
+  const [forgotSuccess, setForgotSuccess]   = useState('');
+  // ──────────────────────────────────────────────────────────────────────────
+
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -114,6 +122,41 @@ function SignIn({ onSignIn }) {
     }
   };
 
+  // ── NEW: forgot-password submit ────────────────────────────────────────────
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotSuccess('');
+
+    if (!forgotEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(forgotEmail)) {
+      setForgotError('Please enter a valid email address.');
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/request-password-reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: forgotEmail }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        // The backend always returns success (even for unknown emails) to
+        // prevent user enumeration — so we always show the same message.
+        setForgotSuccess('If that email is registered, a reset link has been sent. Please check your inbox.');
+        setForgotEmail('');
+      } else {
+        setForgotError(result.error || 'Something went wrong. Please try again.');
+      }
+    } catch (err) {
+      setForgotError('Network error. Please check your connection and try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+  // ──────────────────────────────────────────────────────────────────────────
+
   return (
     <div className="nxl-signin-bg">
       <div className="nxl-signin-card">
@@ -125,51 +168,102 @@ function SignIn({ onSignIn }) {
           <p>Sign in to your NXL Beauty Bar account</p>
         </div>
 
-        {/* Form Panel */}
-        <div className="nxl-signin-panel">
-          <form onSubmit={handleSubmit} noValidate>
-
-            <div className="nxl-signin-field">
-              <label>Email Address</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Enter your email address"
-              />
-              {errors.email && <span className="nxl-signin-error-inline">{errors.email}</span>}
+        {/* ── NEW: Forgot Password panel ──────────────────────────────────────── */}
+        {showForgot ? (
+          <div className="nxl-signin-panel">
+            <div className="nxl-forgot-header">
+              <h2>Reset Password</h2>
+              <p>Enter your account email and we'll send you a reset link.</p>
             </div>
 
-            <div className="nxl-signin-field">
-              <label>Password</label>
-              <input
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Enter your password"
-              />
-              {errors.password && <span className="nxl-signin-error-inline">{errors.password}</span>}
+            <form onSubmit={handleForgotSubmit} noValidate>
+              <div className="nxl-signin-field">
+                <label>Email Address</label>
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={e => { setForgotEmail(e.target.value); setForgotError(''); setForgotSuccess(''); }}
+                  disabled={forgotLoading}
+                  placeholder="Enter your registered email"
+                />
+                {forgotError   && <span className="nxl-signin-error-inline">{forgotError}</span>}
+              </div>
+
+              <button type="submit" className="nxl-signin-submit" disabled={forgotLoading}>
+                {forgotLoading ? 'Sending…' : 'Send Reset Link'}
+              </button>
+
+              {forgotSuccess && <div className="nxl-signin-success-msg">{forgotSuccess}</div>}
+            </form>
+
+            <div className="nxl-signin-footer">
+              <button
+                className="nxl-forgot-back-btn"
+                onClick={() => { setShowForgot(false); setForgotEmail(''); setForgotError(''); setForgotSuccess(''); }}
+              >
+                ← Back to Sign In
+              </button>
             </div>
-
-            <button type="submit" className="nxl-signin-submit" disabled={loading}>
-              {loading ? 'Signing In…' : 'Sign In'}
-            </button>
-
-            {apiSuccess && <div className="nxl-signin-success-msg">{apiSuccess}</div>}
-            {apiError   && <div className="nxl-signin-error-msg">{apiError}</div>}
-
-          </form>
-
-          {/* Footer Links */}
-          <div className="nxl-signin-footer">
-            <p>Don't have an account? <Link to="/signup" className="">Create Account</Link></p>
-            <Link to="/" className="nxl-signin-back">← Back to Home</Link>
           </div>
-        </div>
+        ) : (
+        /* ── Sign In panel (original, unchanged) ────────────────────────────── */
+          <div className="nxl-signin-panel">
+            <form onSubmit={handleSubmit} noValidate>
+
+              <div className="nxl-signin-field">
+                <label>Email Address</label>
+                <input
+                  type="email"
+                  name="email"
+                  value={form.email}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Enter your email address"
+                />
+                {errors.email && <span className="nxl-signin-error-inline">{errors.email}</span>}
+              </div>
+
+              <div className="nxl-signin-field">
+                <label>Password</label>
+                <input
+                  type="password"
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  disabled={loading}
+                  placeholder="Enter your password"
+                />
+                {errors.password && <span className="nxl-signin-error-inline">{errors.password}</span>}
+              </div>
+
+              {/* NEW: Forgot password link — sits below the password field */}
+              <div className="nxl-forgot-link-row">
+                <button
+                  type="button"
+                  className="nxl-forgot-link"
+                  onClick={() => { setShowForgot(true); setApiError(''); setApiSuccess(''); }}
+                >
+                  Forgot password?
+                </button>
+              </div>
+
+              <button type="submit" className="nxl-signin-submit" disabled={loading}>
+                {loading ? 'Signing In…' : 'Sign In'}
+              </button>
+
+              {apiSuccess && <div className="nxl-signin-success-msg">{apiSuccess}</div>}
+              {apiError   && <div className="nxl-signin-error-msg">{apiError}</div>}
+
+            </form>
+
+            {/* Footer Links — unchanged */}
+            <div className="nxl-signin-footer">
+              <p>Don't have an account? <Link to="/signup" className="">Create Account</Link></p>
+              <Link to="/" className="nxl-signin-back">← Back to Home</Link>
+            </div>
+          </div>
+        )}
+        {/* ────────────────────────────────────────────────────────────────────── */}
 
       </div>
 

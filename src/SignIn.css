@@ -288,3 +288,137 @@
     padding: 2rem 24rem 5rem;
   }
 }
+
+
+.nxl-forgot-link-row {
+  display: flex;
+  justify-content: flex-end;
+  margin: -0.25rem 0 0.75rem;
+}
+
+.nxl-forgot-link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #a0502e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+
+.nxl-forgot-link:hover {
+  color: #6b3528;
+}
+
+/* ── Forgot password panel header ─────────────────────────────────────────── */
+.nxl-forgot-header {
+  margin-bottom: 1.25rem;
+  text-align: center;
+}
+
+.nxl-forgot-header h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #3d1f15;
+  margin-bottom: 0.35rem;
+}
+
+.nxl-forgot-header p {
+  font-size: 0.82rem;
+  color: #9e7060;
+  line-height: 1.55;
+}
+
+/* ── Back to Sign In button inside forgot panel ───────────────────────────── */
+.nxl-forgot-back-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #a0502e;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.15s;
+  display: inline-block;
+  margin-top: 0.5rem;
+}
+
+.nxl-forgot-back-btn:hover {
+  color: #6b3528;
+}
+
+/* ── Password field with show/hide toggle (used on ResetPassword page) ────── */
+.nxl-password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nxl-password-wrap input {
+  flex: 1;
+  padding-right: 2.8rem; /* room for the toggle button */
+}
+
+.nxl-password-toggle {
+  position: absolute;
+  right: 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+  color: #9e7060;
+  transition: color 0.15s;
+  /* Don't show a focus ring that overlaps the input */
+  outline: none;
+}
+
+.nxl-password-toggle:hover {
+  color: #3d1f15;
+}
+
+/* ── Password strength rules list ─────────────────────────────────────────── */
+.nxl-password-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.55rem;
+  padding: 0.6rem 0.75rem;
+  background: #fdf8f5;
+  border: 1px solid #e0ccc4;
+  border-radius: 8px;
+}
+
+.nxl-password-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.nxl-password-rule.pass {
+  color: #276749;
+}
+
+.nxl-password-rule.fail {
+  color: #9e7060;
+}
+
+.nxl-password-rule span {
+  font-size: 0.8rem;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
