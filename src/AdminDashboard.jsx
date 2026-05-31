@@ -938,6 +938,36 @@ function AdminDashboard() {
       finally { setShopLoading(false); }
     };
 
+    const exportOrdersCSV = async () => {
+  try {
+    const allData = await apiRequest(`${API_ENDPOINTS.shopOrders}?limit=1000`);
+    const orders  = allData.data || [];
+    const rows = [
+      ['Order ID','Date','Customer','Email','Items','Subtotal (R)','Shipping (R)','Total (R)','Status','Payment','Tracking'],
+      ...orders.map(o => [
+        o._id?.slice(-6).toUpperCase(),
+        new Date(o.createdAt).toLocaleDateString('en-ZA'),
+        `${o.customer?.firstName||''} ${o.customer?.lastName||''}`.trim() || '—',
+        o.customer?.email || '—',
+        (o.items||[]).map(i => `${i.productName} x${i.quantity}`).join('; '),
+        parseFloat(o.subtotal    ||0).toFixed(2),
+        parseFloat(o.shippingFee ||0).toFixed(2),
+        parseFloat(o.totalAmount ||0).toFixed(2),
+        o.status, o.paymentStatus,
+        o.trackingNumber || '—',
+      ]),
+    ];
+    const csv  = rows.map(r => r.map(f => `"${String(f??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href     = URL.createObjectURL(blob);
+    link.download = `nxl-shop-orders-${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    showToast('Orders exported.');
+  } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+};
+
     if (shopOrders.length === 0 && !shopLoading) loadOrders();
 
     const STATUS_COLORS = {
@@ -1017,6 +1047,7 @@ function AdminDashboard() {
                   <th>Items</th>
                   <th>Total</th>
                   <th>Status</th>
+                   <th>Fulfillment</th>
                   <th>Payment</th>
                   <th>Date</th>
                   <th>Actions</th>
@@ -1092,6 +1123,21 @@ function AdminDashboard() {
                             📦 Track
                           </button>
                         )}
+                      </td>
+
+                      <td>
+                       <span style={{ 
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '50px',
+      fontSize: '0.72rem',
+      fontWeight: 700,
+       background: order.fulfillmentType === 'pickup' ? '#f0fdf4' : '#eff6ff',
+       color:      order.fulfillmentType === 'pickup' ? '#15803d' : '#1d4ed8',
+       border:     order.fulfillmentType === 'pickup' ? '1px solid #bbf7d0' : '1px solid #bfdbfe',
+       whiteSpace: 'nowrap',
+     }}>
+      {order.fulfillmentType === 'pickup' ? '🏪 Pickup' : '🚚 Delivery'}
+    </span>
                       </td>
                     </tr>
                   );

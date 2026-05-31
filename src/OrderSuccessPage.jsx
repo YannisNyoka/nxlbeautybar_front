@@ -144,10 +144,10 @@ export default function OrderSuccessPage() {
                 <span>R{parseFloat(order.subtotal    || 0).toFixed(2)}</span>
               </div>
               <div className="osp-total-row">
-                <span>Shipping</span>
+                <span>{order.fulfillmentType === 'pickup' ? 'Pickup' : 'Shipping'}</span>
                 <span className={parseFloat(order.shippingFee || 0) === 0 ? 'osp-free' : ''}>
                   {parseFloat(order.shippingFee || 0) === 0
-                    ? 'FREE'
+                    ? order.fulfillmentType === 'pickup' ? '🏪 Free Pickup' : 'FREE'
                     : `R${parseFloat(order.shippingFee).toFixed(2)}`
                   }
                 </span>
@@ -159,18 +159,35 @@ export default function OrderSuccessPage() {
             </div>
           </div>
 
-          {/* Shipping Info */}
+          {/* Shipping / Pickup Info */}
           <div className="osp-side">
             <div className="osp-card">
-              <h2 className="osp-card-title">Delivery Address</h2>
-              {order.shippingAddress && (
-                <address className="osp-address">
-                  <strong>{order.shippingAddress.fullName}</strong>
-                  <span>{order.shippingAddress.address}</span>
-                  <span>{order.shippingAddress.city}, {order.shippingAddress.province}</span>
-                  <span>{order.shippingAddress.postalCode}</span>
-                  <span>{order.shippingAddress.phone}</span>
-                </address>
+              {order.fulfillmentType === 'pickup' ? (
+                <>
+                  <h2 className="osp-card-title">📍 Salon Pickup</h2>
+                  <div className="osp-pickup-info">
+                    <p className="osp-pickup-name">NXL Beauty Bar</p>
+                    <p>1948 Mahalefele Rd, Dube, Soweto, 1800</p>
+                    <p>📞 068 511 3394</p>
+                    <p>🕐 Mon–Sat 9AM–5PM</p>
+                    <div className="osp-pickup-note">
+                      We'll send you a WhatsApp when your order is ready to collect. Please bring your order number <strong>#{shortId}</strong>.
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2 className="osp-card-title">Delivery Address</h2>
+                  {order.shippingAddress && (
+                    <address className="osp-address">
+                      <strong>{order.shippingAddress.fullName}</strong>
+                      <span>{order.shippingAddress.address}</span>
+                      <span>{order.shippingAddress.city}, {order.shippingAddress.province}</span>
+                      <span>{order.shippingAddress.postalCode}</span>
+                      <span>{order.shippingAddress.phone}</span>
+                    </address>
+                  )}
+                </>
               )}
             </div>
 

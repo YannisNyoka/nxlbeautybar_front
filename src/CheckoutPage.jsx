@@ -30,15 +30,20 @@ export default function CheckoutPage() {
   const [loading,       setLoading]       = useState(false);
   const [apiError,      setApiError]      = useState('');
 
+  // ── Fulfillment type ───────────────────────────────────────────────────
+  const [fulfillmentType, setFulfillmentType] = useState('delivery'); // 'delivery' | 'pickup'
+  const isPickup = fulfillmentType === 'pickup';
+  // ──────────────────────────────────────────────────────────────────────
+
   // ── Discount code state ────────────────────────────────────────────────
   const [discountInput,  setDiscountInput]  = useState('');
-  const [discountResult, setDiscountResult] = useState(null); // { code, type, value, discountAmount }
+  const [discountResult, setDiscountResult] = useState(null);
   const [discountError,  setDiscountError]  = useState('');
   const [discountLoading,setDiscountLoading]= useState(false);
 
-  const discountAmount = discountResult?.discountAmount || 0;
+  const discountAmount     = discountResult?.discountAmount || 0;
   const discountedSubtotal = subtotal - discountAmount;
-  const effectiveShipping  = discountedSubtotal >= 500 ? 0 : shippingFee;
+  const effectiveShipping  = isPickup ? 0 : (discountedSubtotal >= 500 ? 0 : shippingFee);
   const effectiveTotal     = discountedSubtotal + effectiveShipping;
   // ─────────────────────────────────────────────────────────────────────
 
@@ -63,13 +68,16 @@ export default function CheckoutPage() {
 
   const validate = () => {
     const errs = {};
-    if (!form.fullName.trim())   errs.fullName   = 'Full name is required';
-    if (!form.phone.trim())      errs.phone      = 'Phone number is required';
-    if (!form.email.trim())      errs.email      = 'Email is required';
+    if (!form.fullName.trim())   errs.fullName = 'Full name is required';
+    if (!form.phone.trim())      errs.phone    = 'Phone number is required';
+    if (!form.email.trim())      errs.email    = 'Email is required';
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Invalid email';
-    if (!form.address.trim())    errs.address    = 'Street address is required';
-    if (!form.city.trim())       errs.city       = 'City is required';
-    if (!form.postalCode.trim()) errs.postalCode = 'Postal code is required';
+    // Address fields only required for delivery
+    if (!isPickup) {
+      if (!form.address.trim())    errs.address    = 'Street address is required';
+      if (!form.city.trim())       errs.city       = 'City is required';
+      if (!form.postalCode.trim()) errs.postalCode = 'Postal code is required';
+    }
     return errs;
   };
 
@@ -115,7 +123,16 @@ export default function CheckoutPage() {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
-          shippingAddress: {
+          fulfillmentType,
+          shippingAddress: isPickup ? {
+            fullName:   form.fullName.trim(),
+            phone:      form.phone.trim(),
+            email:      form.email.trim(),
+            address:    '1948 Mahalefele Rd, Dube, Soweto, 1800',
+            city:       'Soweto',
+            province:   'Gauteng',
+            postalCode: '1800',
+          } : {
             fullName:   form.fullName.trim(),
             phone:      form.phone.trim(),
             email:      form.email.trim(),
@@ -165,15 +182,61 @@ export default function CheckoutPage() {
 
         {/* ── Left: Shipping Form ────────────────────────── */}
         <div className="chk-form-col">
-          <h1 className="chk-title">Shipping Details</h1>
+          <h1 className="chk-title">Order Details</h1>
 
-          {apiError && (
-            <div className="chk-api-error">{apiError}</div>
-          )}
+          {apiError && <div className="chk-api-error">{apiError}</div>}
 
           <form onSubmit={handleSubmit} noValidate className="chk-form">
 
-            {/* Contact */}
+            {/* ── Fulfillment Type ── */}
+            <fieldset className="chk-fieldset">
+              <legend>How would you like to receive your order?</legend>
+              <div className="chk-fulfil-options">
+
+                <label className={`chk-fulfil-card ${!isPickup ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="fulfillmentType"
+                    value="delivery"
+                    checked={!isPickup}
+                    onChange={() => setFulfillmentType('delivery')}
+                  />
+                  <span className="chk-fulfil-icon">🚚</span>
+                  <div className="chk-fulfil-text">
+                    <strong>Home Delivery</strong>
+                    <span>We deliver to your door{discountedSubtotal >= 500 ? ' — FREE on this order!' : ' · R80'}</span>
+                  </div>
+                  <span className="chk-fulfil-price">
+                    {discountedSubtotal >= 500 ? 'FREE' : 'R80'}
+                  </span>
+                </label>
+
+                <label className={`chk-fulfil-card ${isPickup ? 'selected' : ''}`}>
+                  <input
+                    type="radio"
+                    name="fulfillmentType"
+                    value="pickup"
+                    checked={isPickup}
+                    onChange={() => setFulfillmentType('pickup')}
+                  />
+                  <span className="chk-fulfil-icon">🏪</span>
+                  <div className="chk-fulfil-text">
+                    <strong>Salon Pickup</strong>
+                    <span>Collect at 1948 Mahalefele Rd, Dube, Soweto</span>
+                  </div>
+                  <span className="chk-fulfil-price free">FREE</span>
+                </label>
+
+              </div>
+
+              {isPickup && (
+                <div className="chk-pickup-info">
+                  <p>📍 <strong>NXL Beauty Bar</strong> — 1948 Mahalefele Rd, Dube, Soweto, 1800</p>
+                  <p>🕐 Mon–Sat 9AM–5PM &nbsp;|&nbsp; 📞 068 511 3394</p>
+                  <p>We'll send you a WhatsApp when your order is ready to collect.</p>
+                </div>
+              )}
+            </fieldset>
             <fieldset className="chk-fieldset">
               <legend>Contact Information</legend>
               <div className="chk-field-grid">
@@ -215,7 +278,8 @@ export default function CheckoutPage() {
               </div>
             </fieldset>
 
-            {/* Delivery Address */}
+            {/* Delivery Address — only shown for home delivery */}
+            {!isPickup && (
             <fieldset className="chk-fieldset">
               <legend>Delivery Address</legend>
               <div className="chk-field-grid">
@@ -268,6 +332,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
             </fieldset>
+            )} {/* end !isPickup */}
 
             {/* Notes */}
             <fieldset className="chk-fieldset">
@@ -280,14 +345,10 @@ export default function CheckoutPage() {
               />
             </fieldset>
 
-            <button
-              type="submit"
-              className="chk-btn-pay"
-              disabled={loading}
-            >
+            <button type="submit" className="chk-btn-pay" disabled={loading}>
               {loading
                 ? <><span className="chk-spinner" /> Processing…</>
-                : <>🔒 Pay R{total.toFixed(2)} with Yoco</>
+                : <>🔒 Pay R{effectiveTotal.toFixed(2)} with Yoco</>
               }
             </button>
 
@@ -392,7 +453,11 @@ export default function CheckoutPage() {
           {/* Trust badges */}
           <div className="chk-trust">
             <div className="chk-trust-item">🔒 Secure payment via Yoco</div>
-            <div className="chk-trust-item">🚚 {effectiveShipping === 0 ? 'Free shipping on this order' : 'Standard delivery R80'}</div>
+            <div className="chk-trust-item">
+              {isPickup
+                ? '🏪 Collect at NXL Beauty Bar, Soweto — FREE'
+                : effectiveShipping === 0 ? '🚚 Free shipping on this order' : '🚚 Standard delivery R80'}
+            </div>
             <div className="chk-trust-item">✅ Authentic products guaranteed</div>
           </div>
 

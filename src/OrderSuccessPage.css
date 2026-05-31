@@ -540,3 +540,31 @@
 .osp-logo { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; }
 .osp-logo-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(201,169,110,0.45); flex-shrink: 0; }
 .osp-logo span { font-family: 'Cormorant Garamond', serif; font-size: 1rem; font-weight: 700; letter-spacing: 0.1em; color: var(--osp-cream, #ffe8d6); white-space: nowrap; }
+
+/* ── Pickup info block ────────────────────────────────────────────────────── */
+.osp-pickup-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--osp-muted, #9e7060);
+  line-height: 1.6;
+}
+
+.osp-pickup-name {
+  font-weight: 700;
+  color: var(--osp-text, #3d1f15);
+  font-size: 0.92rem;
+  margin-bottom: 0.1rem;
+}
+
+.osp-pickup-note {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgba(134,239,172,0.1);
+  border: 1px solid rgba(134,239,172,0.25);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  color: var(--osp-text, #3d1f15);
+  line-height: 1.55;
+}
