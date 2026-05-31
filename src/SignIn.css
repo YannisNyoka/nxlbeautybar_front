@@ -1,32 +1,31 @@
 /* =============================================
    NXL Beauty Bar — SignIn.css
-   Luxury theme consistent with ConfirmationPopup
    ============================================= */
 
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
 
-/* ---- Page Background ---- */
+/* ── Page Background ──────────────────────────────────────────────────────── */
 .nxl-signin-bg {
+  width: 100%;
+  max-width: 100vw;
   min-height: 100vh;
   background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2rem 30rem 5rem;
+  padding: 2rem 1.25rem 5rem;
   font-family: 'DM Sans', sans-serif;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
   box-sizing: border-box;
 }
 
 .nxl-signin-bg::before {
   content: '';
   position: fixed;
-  top: -120px;
-  right: -120px;
-  width: 480px;
-  height: 480px;
-  background: radial-gradient(circle, rgba(255, 182, 153, 0.35) 0%, transparent 70%);
+  top: -120px; right: -120px;
+  width: 480px; height: 480px;
+  background: radial-gradient(circle, rgba(255,182,153,0.35) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
@@ -35,17 +34,15 @@
 .nxl-signin-bg::after {
   content: '';
   position: fixed;
-  bottom: -80px;
-  left: -80px;
-  width: 360px;
-  height: 360px;
-  background: radial-gradient(circle, rgba(255, 210, 185, 0.4) 0%, transparent 70%);
+  bottom: -80px; left: -80px;
+  width: 360px; height: 360px;
+  background: radial-gradient(circle, rgba(255,210,185,0.4) 0%, transparent 70%);
   border-radius: 50%;
   pointer-events: none;
   z-index: 0;
 }
 
-/* ---- Card ---- */
+/* ── Card ─────────────────────────────────────────────────────────────────── */
 .nxl-signin-card {
   width: 100%;
   max-width: 440px;
@@ -59,366 +56,220 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ---- Brand Mark ---- */
+/* ── Brand Mark ───────────────────────────────────────────────────────────── */
 .nxl-signin-brand {
   text-align: center;
   margin-bottom: 1.8rem;
 }
 
 .nxl-signin-dot-ring {
-  width: 64px;
-  height: 64px;
+  width: 64px; height: 64px;
   border-radius: 50%;
   background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   margin: 0 auto 1rem;
   box-shadow:
-    0 0 0 8px rgba(138, 74, 48, 0.12),
-    0 0 0 16px rgba(138, 74, 48, 0.06);
+    0 0 0 8px rgba(138,74,48,0.12),
+    0 0 0 16px rgba(138,74,48,0.06);
   font-size: 1.5rem;
 }
 
 .nxl-signin-brand h1 {
   font-family: 'Cormorant Garamond', serif;
-  font-size: 2rem;
-  font-weight: 700;
+  font-size: 2rem; font-weight: 700;
   color: #3d1f15;
   margin: 0 0 0.3rem;
   letter-spacing: 0.02em;
 }
 
 .nxl-signin-brand p {
-  font-size: 0.85rem;
-  color: #9e7060;
-  margin: 0;
-  line-height: 1.5;
+  font-size: 0.85rem; color: #9e7060;
+  margin: 0; line-height: 1.5;
 }
 
-/* ---- Form Panel ---- */
+/* ── Form Panel ───────────────────────────────────────────────────────────── */
 .nxl-signin-panel {
   background: linear-gradient(160deg, #3d1f15 0%, #6b3528 100%);
   border-radius: 20px;
   padding: 2.2rem 2rem;
-  box-shadow: 0 20px 60px rgba(93, 45, 25, 0.35);
+  box-shadow: 0 20px 60px rgba(93,45,25,0.35);
   box-sizing: border-box;
 }
 
-/* ---- Field Groups ---- */
-.nxl-signin-field {
-  margin-bottom: 1.2rem;
-}
+/* ── Field Groups ─────────────────────────────────────────────────────────── */
+.nxl-signin-field { margin-bottom: 1.2rem; }
 
 .nxl-signin-field label {
   display: block;
-  font-size: 0.68rem;
-  text-transform: uppercase;
+  font-size: 0.68rem; text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: rgba(255, 232, 214, 0.65);
-  margin-bottom: 0.4rem;
-  font-weight: 500;
+  color: rgba(255,232,214,0.65);
+  margin-bottom: 0.4rem; font-weight: 500;
 }
 
 .nxl-signin-field input {
   width: 100%;
   padding: 0.75rem 1rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1.5px solid rgba(255, 232, 214, 0.2);
+  background: rgba(255,255,255,0.08);
+  border: 1.5px solid rgba(255,232,214,0.2);
   border-radius: 10px;
   color: #ffe8d6;
   font-family: 'DM Sans', sans-serif;
   font-size: 0.9rem;
   outline: none;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition: border-color 0.2s, background 0.2s;
   box-sizing: border-box;
 }
 
-.nxl-signin-field input::placeholder {
-  color: rgba(255, 232, 214, 0.35);
-  font-style: italic;
-}
+.nxl-signin-field input::placeholder { color: rgba(255,232,214,0.35); font-style: italic; }
+.nxl-signin-field input:focus { border-color: #ffb380; background: rgba(255,255,255,0.13); }
+.nxl-signin-field input:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.nxl-signin-field input:focus {
-  border-color: #ffb380;
-  background: rgba(255, 255, 255, 0.13);
-}
-
-.nxl-signin-field input:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* ---- Inline Error ---- */
+/* ── Inline Error ─────────────────────────────────────────────────────────── */
 .nxl-signin-error-inline {
-  display: block;
-  margin-top: 0.35rem;
-  font-size: 0.75rem;
-  color: #ffb3a0;
-  font-style: italic;
+  display: block; margin-top: 0.35rem;
+  font-size: 0.75rem; color: #ffb3a0; font-style: italic;
 }
 
-/* ---- Submit Button ---- */
+/* ── Submit Button ────────────────────────────────────────────────────────── */
 .nxl-signin-submit {
-  width: 100%;
-  padding: 0.9rem;
-  margin-top: 0.5rem;
+  width: 100%; padding: 0.9rem; margin-top: 0.5rem;
   background: linear-gradient(135deg, #ffb380 0%, #e8925a 100%);
-  color: #3d1f15;
-  border: none;
-  border-radius: 12px;
+  color: #3d1f15; border: none; border-radius: 12px;
   font-family: 'DM Sans', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  cursor: pointer;
-  transition: all 0.25s ease;
-  box-shadow: 0 4px 16px rgba(255, 140, 80, 0.35);
+  font-size: 0.95rem; font-weight: 700; letter-spacing: 0.06em;
+  cursor: pointer; transition: all 0.25s;
+  box-shadow: 0 4px 16px rgba(255,140,80,0.35);
 }
 
 .nxl-signin-submit:hover:not(:disabled) {
   background: linear-gradient(135deg, #ffc49a 0%, #f0a070 100%);
   transform: translateY(-1px);
-  box-shadow: 0 6px 22px rgba(255, 140, 80, 0.45);
+  box-shadow: 0 6px 22px rgba(255,140,80,0.45);
 }
 
-.nxl-signin-submit:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
-}
+.nxl-signin-submit:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 
-/* ---- Status Messages ---- */
+/* ── Status Messages ──────────────────────────────────────────────────────── */
 .nxl-signin-success-msg {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  background: rgba(125, 202, 158, 0.18);
-  border: 1px solid rgba(125, 202, 158, 0.4);
-  border-radius: 8px;
-  color: #7dca9e;
-  font-size: 0.82rem;
-  text-align: center;
+  margin-top: 1rem; padding: 0.75rem 1rem;
+  background: rgba(125,202,158,0.18); border: 1px solid rgba(125,202,158,0.4);
+  border-radius: 8px; color: #7dca9e; font-size: 0.82rem; text-align: center;
 }
 
 .nxl-signin-error-msg {
-  margin-top: 1rem;
-  padding: 0.75rem 1rem;
-  background: rgba(255, 120, 100, 0.12);
-  border: 1px solid rgba(255, 120, 100, 0.3);
-  border-radius: 8px;
-  color: #ffb3a0;
-  font-size: 0.82rem;
-  text-align: center;
+  margin-top: 1rem; padding: 0.75rem 1rem;
+  background: rgba(255,120,100,0.12); border: 1px solid rgba(255,120,100,0.3);
+  border-radius: 8px; color: #ffb3a0; font-size: 0.82rem; text-align: center;
 }
 
-/* ---- Footer Links ---- */
-.nxl-signin-footer {
-  margin-top: 1.5rem;
-  text-align: center;
-}
+/* ── Footer Links ─────────────────────────────────────────────────────────── */
+.nxl-signin-footer { margin-top: 1.5rem; text-align: center; }
 
 .nxl-signin-footer p {
-  font-size: 0.83rem;
-  color: rgba(255, 232, 214, 0.65);
+  font-size: 0.83rem; color: rgba(255,232,214,0.65);
   margin: 0 0 0.6rem;
 }
 
 .nxl-signin-footer a {
-  color: #ffb380;
-  text-decoration: none;
-  font-weight: 600;
-  transition: color 0.2s;
+  color: #ffb380; text-decoration: none; font-weight: 600; transition: color 0.2s;
 }
-
-.nxl-signin-footer a:hover {
-  color: #ffd4b3;
-  text-decoration: underline;
-}
+.nxl-signin-footer a:hover { color: #ffd4b3; text-decoration: underline; }
 
 .nxl-signin-back {
-  display: inline-block;
-  margin-top: 0.4rem;
-  font-size: 0.8rem;
-  color: rgba(255, 232, 214, 0.5);
-  text-decoration: none;
-  transition: color 0.2s;
+  display: inline-block; margin-top: 0.4rem;
+  font-size: 0.8rem; color: rgba(255,232,214,0.5);
+  text-decoration: none; transition: color 0.2s;
+}
+.nxl-signin-back:hover { color: rgba(255,232,214,0.85); }
+
+/* ── Forgot password ──────────────────────────────────────────────────────── */
+.nxl-forgot-link-row { display: flex; justify-content: flex-end; margin: -0.25rem 0 0.75rem; }
+
+.nxl-forgot-link {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 0.8rem; font-weight: 600;
+  color: #a0502e; text-decoration: underline; text-underline-offset: 2px;
+  transition: color 0.15s;
+}
+.nxl-forgot-link:hover { color: #6b3528; }
+
+.nxl-forgot-header { margin-bottom: 1.25rem; text-align: center; }
+.nxl-forgot-header h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem; font-weight: 700;
+  color: #ffe8d6; margin-bottom: 0.35rem;
+}
+.nxl-forgot-header p { font-size: 0.82rem; color: rgba(255,232,214,0.65); line-height: 1.55; }
+
+.nxl-forgot-back-btn {
+  background: none; border: none; padding: 0; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 600;
+  color: #ffb380; text-decoration: underline; text-underline-offset: 2px;
+  transition: color 0.15s; display: inline-block; margin-top: 0.5rem;
+}
+.nxl-forgot-back-btn:hover { color: #ffd4b3; }
+
+/* Forgot sent state */
+.nxl-forgot-sent { text-align: center; padding: 0.5rem 0; }
+.nxl-forgot-sent-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+.nxl-forgot-sent h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.4rem; font-weight: 700; color: #ffe8d6; margin-bottom: 0.75rem;
+}
+.nxl-forgot-sent p { font-size: 0.82rem; color: rgba(255,232,214,0.7); line-height: 1.65; margin-bottom: 0.75rem; }
+.nxl-forgot-dev-note {
+  font-size: 0.75rem; color: rgba(255,232,214,0.45); line-height: 1.55;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,232,214,0.1);
+  border-radius: 8px; padding: 0.6rem 0.875rem; margin-bottom: 1rem;
 }
 
-.nxl-signin-back:hover {
-  color: rgba(255, 232, 214, 0.85);
+/* ── Password toggle + strength ───────────────────────────────────────────── */
+.nxl-password-wrap { position: relative; display: flex; align-items: center; }
+.nxl-password-wrap input { flex: 1; padding-right: 2.8rem; }
+.nxl-password-toggle {
+  position: absolute; right: 0.75rem;
+  background: none; border: none; cursor: pointer;
+  font-size: 1rem; line-height: 1; padding: 0;
+  color: #9e7060; transition: color 0.15s; outline: none;
 }
+.nxl-password-toggle:hover { color: #ffe8d6; }
 
-/* ---- Fixed Footer Bar ---- */
+.nxl-password-rules {
+  display: flex; flex-direction: column; gap: 0.2rem;
+  margin-top: 0.55rem; padding: 0.6rem 0.75rem;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,232,214,0.15);
+  border-radius: 8px;
+}
+.nxl-password-rule {
+  display: flex; align-items: center; gap: 0.45rem;
+  font-family: 'DM Sans', sans-serif; font-size: 0.75rem; font-weight: 500;
+  color: rgba(255,232,214,0.45); transition: color 0.15s;
+}
+.nxl-password-rule.pass { color: #7dca9e; }
+.nxl-password-rule span { font-size: 0.8rem; width: 14px; text-align: center; flex-shrink: 0; }
+
+/* ── Fixed Footer Bar ─────────────────────────────────────────────────────── */
 .nxl-signin-footer-bar {
-  position: fixed;
-  left: 0;
-  bottom: 0;
-  width: 100vw;
+  position: fixed; left: 0; bottom: 0; width: 100vw;
   background: linear-gradient(135deg, #6b3528 0%, #a0502e 100%);
   color: #ffe8d6;
   font-family: 'Cormorant Garamond', serif;
-  font-size: 1.3rem;
-  font-weight: 700;
-  letter-spacing: 0.15em;
-  text-align: center;
-  padding: 0.7rem 0;
-  z-index: 100;
-  box-shadow: 0 -4px 24px rgba(93, 45, 25, 0.2);
+  font-size: 1.3rem; font-weight: 700; letter-spacing: 0.15em;
+  text-align: center; padding: 0.7rem 0; z-index: 100;
+  box-shadow: 0 -4px 24px rgba(93,45,25,0.2);
 }
 
-/* ---- Mobile ---- */
+/* ── Responsive ───────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
- .nxl-signin-bg {
-  min-height: 100vh;
-  background: linear-gradient(135deg, #fdf6f0 0%, #fce8db 50%, #f9d9c8 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 5rem 5rem;
-  font-family: 'DM Sans', sans-serif;
-  position: relative;
-  overflow: hidden;
-  box-sizing: border-box;
-}
+  .nxl-signin-bg { padding: 1.5rem 1rem 5rem; align-items: flex-start; padding-top: 3rem; }
+  .nxl-signin-brand h1 { font-size: 1.7rem; }
+  .nxl-signin-panel { padding: 1.75rem 1.25rem; border-radius: 16px; }
+  .nxl-signin-dot-ring { width: 54px; height: 54px; font-size: 1.3rem; }
 }
 
-/*-----Mobile Deskop View*/
-@media (min-width: 481px) and (max-width: 1024px) {
-  .nxl-signin-bg {
-    padding: 2rem 24rem 5rem;
-  }
-}
-
-
-.nxl-forgot-link-row {
-  display: flex;
-  justify-content: flex-end;
-  margin: -0.25rem 0 0.75rem;
-}
-
-.nxl-forgot-link {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #a0502e;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: color 0.15s;
-}
-
-.nxl-forgot-link:hover {
-  color: #6b3528;
-}
-
-/* ── Forgot password panel header ─────────────────────────────────────────── */
-.nxl-forgot-header {
-  margin-bottom: 1.25rem;
-  text-align: center;
-}
-
-.nxl-forgot-header h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #3d1f15;
-  margin-bottom: 0.35rem;
-}
-
-.nxl-forgot-header p {
-  font-size: 0.82rem;
-  color: #9e7060;
-  line-height: 1.55;
-}
-
-/* ── Back to Sign In button inside forgot panel ───────────────────────────── */
-.nxl-forgot-back-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: #a0502e;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  transition: color 0.15s;
-  display: inline-block;
-  margin-top: 0.5rem;
-}
-
-.nxl-forgot-back-btn:hover {
-  color: #6b3528;
-}
-
-/* ── Password field with show/hide toggle (used on ResetPassword page) ────── */
-.nxl-password-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.nxl-password-wrap input {
-  flex: 1;
-  padding-right: 2.8rem; /* room for the toggle button */
-}
-
-.nxl-password-toggle {
-  position: absolute;
-  right: 0.75rem;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0;
-  color: #9e7060;
-  transition: color 0.15s;
-  /* Don't show a focus ring that overlaps the input */
-  outline: none;
-}
-
-.nxl-password-toggle:hover {
-  color: #3d1f15;
-}
-
-/* ── Password strength rules list ─────────────────────────────────────────── */
-.nxl-password-rules {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  margin-top: 0.55rem;
-  padding: 0.6rem 0.75rem;
-  background: #fdf8f5;
-  border: 1px solid #e0ccc4;
-  border-radius: 8px;
-}
-
-.nxl-password-rule {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 500;
-  transition: color 0.15s;
-}
-
-.nxl-password-rule.pass {
-  color: #276749;
-}
-
-.nxl-password-rule.fail {
-  color: #9e7060;
-}
-
-.nxl-password-rule span {
-  font-size: 0.8rem;
-  width: 14px;
-  text-align: center;
-  flex-shrink: 0;
+@media (max-width: 360px) {
+  .nxl-signin-bg { padding: 1.25rem 0.75rem 5rem; }
+  .nxl-signin-panel { padding: 1.5rem 1rem; }
+  .nxl-signin-brand h1 { font-size: 1.5rem; }
 }

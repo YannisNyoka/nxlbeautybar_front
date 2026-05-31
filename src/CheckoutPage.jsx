@@ -1,0 +1,411 @@
+import nxlLogo from './assets/images/Logo.jpeg';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useCart } from './hooks/useCart';
+import './CheckoutPage.css';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+const PROVINCES = [
+  'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal',
+  'Limpopo', 'Mpumalanga', 'Northern Cape', 'North West', 'Western Cape',
+];
+
+export default function CheckoutPage() {
+  const { items, subtotal, shippingFee, total, clearCart } = useCart();
+  const navigate = useNavigate();
+
+  const [form, setForm] = useState({
+    fullName:  '',
+    phone:     '',
+    email:     '',
+    address:   '',
+    city:      '',
+    province:  'Gauteng',
+    postalCode:'',
+    notes:     '',
+  });
+
+  const [errors,        setErrors]        = useState({});
+  const [loading,       setLoading]       = useState(false);
+  const [apiError,      setApiError]      = useState('');
+
+  // ── Discount code state ────────────────────────────────────────────────
+  const [discountInput,  setDiscountInput]  = useState('');
+  const [discountResult, setDiscountResult] = useState(null); // { code, type, value, discountAmount }
+  const [discountError,  setDiscountError]  = useState('');
+  const [discountLoading,setDiscountLoading]= useState(false);
+
+  const discountAmount = discountResult?.discountAmount || 0;
+  const discountedSubtotal = subtotal - discountAmount;
+  const effectiveShipping  = discountedSubtotal >= 500 ? 0 : shippingFee;
+  const effectiveTotal     = discountedSubtotal + effectiveShipping;
+  // ─────────────────────────────────────────────────────────────────────
+
+  // Redirect if cart is empty
+  if (items.length === 0) {
+    return (
+      <div className="chk-root">
+        <div className="chk-empty">
+          <span>🛒</span>
+          <h2>Your cart is empty</h2>
+          <Link to="/shop" className="chk-btn-gold">Browse Products</Link>
+        </div>
+      </div>
+    );
+  }
+
+  const setField = (key, val) => {
+    setForm(f => ({ ...f, [key]: val }));
+    setErrors(e => ({ ...e, [key]: '' }));
+    setApiError('');
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!form.fullName.trim())   errs.fullName   = 'Full name is required';
+    if (!form.phone.trim())      errs.phone      = 'Phone number is required';
+    if (!form.email.trim())      errs.email      = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) errs.email = 'Invalid email';
+    if (!form.address.trim())    errs.address    = 'Street address is required';
+    if (!form.city.trim())       errs.city       = 'City is required';
+    if (!form.postalCode.trim()) errs.postalCode = 'Postal code is required';
+    return errs;
+  };
+
+  const validateDiscount = async () => {
+    if (!discountInput.trim()) return;
+    setDiscountLoading(true);
+    setDiscountError('');
+    setDiscountResult(null);
+    const token = localStorage.getItem('token');
+    try {
+      const res  = await fetch(`${API_BASE_URL}/discount-codes/validate`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: discountInput.trim().toUpperCase(), subtotal }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDiscountResult(data.data);
+      } else {
+        setDiscountError(data.error || 'Invalid code.');
+      }
+    } catch {
+      setDiscountError('Could not validate code. Please try again.');
+    } finally {
+      setDiscountLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setApiError('');
+
+    const errs = validate();
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+
+    const token = localStorage.getItem('token');
+    if (!token) { navigate('/login', { state: { from: '/checkout' } }); return; }
+
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API_BASE_URL}/shop/orders`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
+          shippingAddress: {
+            fullName:   form.fullName.trim(),
+            phone:      form.phone.trim(),
+            email:      form.email.trim(),
+            address:    form.address.trim(),
+            city:       form.city.trim(),
+            province:   form.province,
+            postalCode: form.postalCode.trim(),
+          },
+          notes:        form.notes.trim(),
+          discountCode: discountResult?.code || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.success && data.checkoutUrl) {
+        // Clear cart then redirect to Yoco
+        clearCart();
+        window.location.href = data.checkoutUrl;
+      } else {
+        setApiError(data.error || 'Something went wrong. Please try again.');
+      }
+    } catch {
+      setApiError('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="chk-root">
+
+      {/* Top Bar */}
+      <header className="chk-topbar">
+        <Link to="/shop" className="chk-topbar-logo"><img src={nxlLogo} alt="" className="chk-topbar-logo-img" /><span>NXL Beauty Bar</span></Link>
+        <div className="chk-steps">
+          <span className="chk-step done">1. Cart</span>
+          <span className="chk-step-arrow">›</span>
+          <span className="chk-step active">2. Checkout</span>
+          <span className="chk-step-arrow">›</span>
+          <span className="chk-step">3. Confirmation</span>
+        </div>
+        <Link to="/cart" className="chk-topbar-back">← Back to Cart</Link>
+      </header>
+
+      <div className="chk-layout">
+
+        {/* ── Left: Shipping Form ────────────────────────── */}
+        <div className="chk-form-col">
+          <h1 className="chk-title">Shipping Details</h1>
+
+          {apiError && (
+            <div className="chk-api-error">{apiError}</div>
+          )}
+
+          <form onSubmit={handleSubmit} noValidate className="chk-form">
+
+            {/* Contact */}
+            <fieldset className="chk-fieldset">
+              <legend>Contact Information</legend>
+              <div className="chk-field-grid">
+                <div className="chk-field">
+                  <label>Full Name *</label>
+                  <input
+                    type="text"
+                    value={form.fullName}
+                    onChange={e => setField('fullName', e.target.value)}
+                    placeholder="e.g. Ayanda Dlamini"
+                    className={errors.fullName ? 'error' : ''}
+                  />
+                  {errors.fullName && <span className="chk-err">{errors.fullName}</span>}
+                </div>
+
+                <div className="chk-field">
+                  <label>Phone Number *</label>
+                  <input
+                    type="tel"
+                    value={form.phone}
+                    onChange={e => setField('phone', e.target.value)}
+                    placeholder="e.g. 071 234 5678"
+                    className={errors.phone ? 'error' : ''}
+                  />
+                  {errors.phone && <span className="chk-err">{errors.phone}</span>}
+                </div>
+
+                <div className="chk-field chk-field--full">
+                  <label>Email Address *</label>
+                  <input
+                    type="email"
+                    value={form.email}
+                    onChange={e => setField('email', e.target.value)}
+                    placeholder="e.g. ayanda@email.com"
+                    className={errors.email ? 'error' : ''}
+                  />
+                  {errors.email && <span className="chk-err">{errors.email}</span>}
+                </div>
+              </div>
+            </fieldset>
+
+            {/* Delivery Address */}
+            <fieldset className="chk-fieldset">
+              <legend>Delivery Address</legend>
+              <div className="chk-field-grid">
+                <div className="chk-field chk-field--full">
+                  <label>Street Address *</label>
+                  <input
+                    type="text"
+                    value={form.address}
+                    onChange={e => setField('address', e.target.value)}
+                    placeholder="e.g. 12 Main Street, Apt 3"
+                    className={errors.address ? 'error' : ''}
+                  />
+                  {errors.address && <span className="chk-err">{errors.address}</span>}
+                </div>
+
+                <div className="chk-field">
+                  <label>City / Town *</label>
+                  <input
+                    type="text"
+                    value={form.city}
+                    onChange={e => setField('city', e.target.value)}
+                    placeholder="e.g. Soweto"
+                    className={errors.city ? 'error' : ''}
+                  />
+                  {errors.city && <span className="chk-err">{errors.city}</span>}
+                </div>
+
+                <div className="chk-field">
+                  <label>Postal Code *</label>
+                  <input
+                    type="text"
+                    value={form.postalCode}
+                    onChange={e => setField('postalCode', e.target.value)}
+                    placeholder="e.g. 1800"
+                    className={errors.postalCode ? 'error' : ''}
+                  />
+                  {errors.postalCode && <span className="chk-err">{errors.postalCode}</span>}
+                </div>
+
+                <div className="chk-field chk-field--full">
+                  <label>Province</label>
+                  <select
+                    value={form.province}
+                    onChange={e => setField('province', e.target.value)}
+                  >
+                    {PROVINCES.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </fieldset>
+
+            {/* Notes */}
+            <fieldset className="chk-fieldset">
+              <legend>Order Notes (optional)</legend>
+              <textarea
+                value={form.notes}
+                onChange={e => setField('notes', e.target.value)}
+                placeholder="Special instructions, gate code, or anything else we should know…"
+                rows={3}
+              />
+            </fieldset>
+
+            <button
+              type="submit"
+              className="chk-btn-pay"
+              disabled={loading}
+            >
+              {loading
+                ? <><span className="chk-spinner" /> Processing…</>
+                : <>🔒 Pay R{total.toFixed(2)} with Yoco</>
+              }
+            </button>
+
+            <p className="chk-secure-note">
+              Your payment is processed securely by Yoco. NXL Beauty Bar never stores your card details.
+            </p>
+
+          </form>
+        </div>
+
+        {/* ── Right: Order Summary ───────────────────────── */}
+        <div className="chk-summary">
+          <h2 className="chk-summary-title">Order Summary</h2>
+
+          <div className="chk-summary-items">
+            {items.map(item => (
+              <div key={item.productId} className="chk-summary-item">
+                <div className="chk-summary-img-wrap">
+                  {item.image
+                    ? <img src={item.image} alt={item.name} />
+                    : <span>💅</span>
+                  }
+                  <span className="chk-qty-badge">{item.quantity}</span>
+                </div>
+                <div className="chk-summary-item-info">
+                  <p className="chk-summary-item-name">{item.name}</p>
+                  <p className="chk-summary-item-price">R{item.price.toFixed(2)} each</p>
+                </div>
+                <span className="chk-summary-item-total">
+                  R{(item.price * item.quantity).toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="chk-summary-divider" />
+
+          <div className="chk-summary-lines">
+            <div className="chk-summary-row">
+              <span>Subtotal</span>
+              <span>R{subtotal.toFixed(2)}</span>
+            </div>
+            {discountAmount > 0 && (
+              <div className="chk-summary-row chk-discount-row">
+                <span>Discount ({discountResult.code})</span>
+                <span className="chk-discount-value">−R{discountAmount.toFixed(2)}</span>
+              </div>
+            )}
+            <div className="chk-summary-row">
+              <span>Shipping</span>
+              <span className={effectiveShipping === 0 ? 'chk-free' : ''}>
+                {effectiveShipping === 0 ? 'FREE' : `R${effectiveShipping.toFixed(2)}`}
+              </span>
+            </div>
+          </div>
+
+          <div className="chk-summary-divider" />
+
+          <div className="chk-summary-total">
+            <span>Total</span>
+            <span>R{effectiveTotal.toFixed(2)}</span>
+          </div>
+
+          {/* ── Discount code input ── */}
+          <div className="chk-discount-section">
+            {discountResult ? (
+              <div className="chk-discount-applied">
+                <span className="chk-discount-badge">
+                  🎉 <strong>{discountResult.code}</strong> applied —
+                  {discountResult.type === 'percentage'
+                    ? ` ${discountResult.value}% off`
+                    : ` R${discountResult.value} off`}
+                </span>
+                <button className="chk-discount-remove" onClick={() => { setDiscountResult(null); setDiscountInput(''); setDiscountError(''); }}>
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <div className="chk-discount-input-row">
+                <input
+                  type="text"
+                  placeholder="Discount code"
+                  value={discountInput}
+                  onChange={e => { setDiscountInput(e.target.value.toUpperCase()); setDiscountError(''); }}
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), validateDiscount())}
+                  className="chk-discount-input"
+                  maxLength={30}
+                />
+                <button
+                  type="button"
+                  onClick={validateDiscount}
+                  disabled={discountLoading || !discountInput.trim()}
+                  className="chk-discount-apply-btn"
+                >
+                  {discountLoading ? '…' : 'Apply'}
+                </button>
+              </div>
+            )}
+            {discountError && <p className="chk-discount-error">{discountError}</p>}
+          </div>
+
+          {/* Trust badges */}
+          <div className="chk-trust">
+            <div className="chk-trust-item">🔒 Secure payment via Yoco</div>
+            <div className="chk-trust-item">🚚 {effectiveShipping === 0 ? 'Free shipping on this order' : 'Standard delivery R80'}</div>
+            <div className="chk-trust-item">✅ Authentic products guaranteed</div>
+          </div>
+
+          <Link to="/cart" className="chk-edit-cart">✏️ Edit cart</Link>
+        </div>
+
+      </div>
+
+      {/* Footer */}
+      <footer className="chk-footer">
+        <p>© {new Date().getFullYear()} NXL Beauty Bar · 1948 Mahalefele Rd, Dube, Soweto</p>
+      </footer>
+
+    </div>
+  );
+}

@@ -1,602 +1,692 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './UserProfile.css';
 
-function UserProfile() {
-  const { user, logout, triggerAppointmentRefresh } = useAuth();
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
+function authHeaders() {
+  const token = localStorage.getItem('token');
+  return token
+    ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    : { 'Content-Type': 'application/json' };
+}
+
+async function apiFetch(path, options = {}) {
+  const res  = await fetch(`${API_BASE}${path}`, {
+    headers: { ...authHeaders(), ...(options.headers || {}) },
+    ...options,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+function normalizePrice(val) {
+  if (val && typeof val === 'object' && '$numberDecimal' in val)
+    return Number(val.$numberDecimal || 0).toFixed(2);
+  const n = Number(val);
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
+function getApptDateTime(appt) {
+  if (!appt?.date) return null;
+  const [yr, mo, dy] = appt.date.split('-').map(Number);
+  if (!yr || !mo || !dy) return null;
+  let hh = 0, mm = 0;
+  if (appt.time) {
+    const m = appt.time.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
+    if (m) {
+      hh = parseInt(m[1], 10); mm = parseInt(m[2], 10);
+      const ap = m[3]?.toLowerCase();
+      if (ap === 'pm' && hh !== 12) hh += 12;
+      if (ap === 'am' && hh === 12) hh = 0;
+    }
+  }
+  return new Date(yr, mo - 1, dy, hh, mm);
+}
+
+function formatDate(ds) {
+  try {
+    const [y, m, d] = ds.split('-').map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString('en-ZA', {
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+    });
+  } catch { return ds; }
+}
+
+function toDateInput(v) {
+  if (!v) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return String(v);
+  const d = new Date(v);
+  return isNaN(d) ? '' : d.toISOString().slice(0, 10);
+}
+
+function todayISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+const PRESET_TIMES = [
+  '07:00','07:30','08:00','08:30','09:00','09:30','10:00','10:30',
+  '11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30',
+  '15:00','15:30','16:00','16:30','17:00',
+];
+
+const BOOKING_FEE = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
+
+// ─────────────────────────────────────────────────────────────────────────────
+export default function UserProfile() {
+  const { user, login, logout } = useAuth();
   const navigate = useNavigate();
-  const [appointments, setAppointments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [cancellingId, setCancellingId] = useState(null);
-  const [payingId, setPayingId] = useState(null);
-  const [slotTakenId, setSlotTakenId] = useState(null);
-  const [rescheduleId, setRescheduleId] = useState(null);
-  const [showReschedule, setShowReschedule] = useState(false);
+
+  // ── Appointments state ──────────────────────────────────────────────────
+  const [appointments,   setAppointments]   = useState([]);
+  const [apptLoading,    setApptLoading]    = useState(true);
+  const [apptError,      setApptError]      = useState('');
+  const [cancellingId,   setCancellingId]   = useState(null);
+  const [confirmCancel,  setConfirmCancel]  = useState(null); // appt to confirm cancel
+  const [payingId,       setPayingId]       = useState(null);
+  const [slotTakenId,    setSlotTakenId]    = useState(null);
+
+  // ── Reschedule state ────────────────────────────────────────────────────
+  const [rescheduleAppt, setRescheduleAppt] = useState(null);
   const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' });
   const [savingReschedule, setSavingReschedule] = useState(false);
+  const [rescheduleError,  setRescheduleError]  = useState('');
 
-  const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-  const API_ROOT = RAW_API_BASE ? `${RAW_API_BASE.replace(/\/api$/, '')}/api` : '/api';
-  const APPOINTMENTS_URL = `${API_ROOT}/appointments`;
-  const BOOKING_FEE = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
+  // ── Edit profile state ──────────────────────────────────────────────────
+  const [activeTab,      setActiveTab]      = useState('appointments'); // 'appointments' | 'profile' | 'password'
+  const [profileForm,    setProfileForm]    = useState({ firstName: '', lastName: '', email: '' });
+  const [profileSaving,  setProfileSaving]  = useState(false);
+  const [profileMsg,     setProfileMsg]     = useState({ type: '', text: '' });
+  const [pwForm,         setPwForm]         = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+  const [pwSaving,       setPwSaving]       = useState(false);
+  const [pwMsg,          setPwMsg]          = useState({ type: '', text: '' });
+  const [showPw,         setShowPw]         = useState({ old: false, new: false, confirm: false });
 
-  const normalizePrice = (val) => {
-    if (val && typeof val === 'object' && '$numberDecimal' in val) {
-      return Number(val.$numberDecimal || 0).toFixed(2);
-    }
-    const n = Number(val);
-    return Number.isFinite(n) ? n.toFixed(2) : '0.00';
-  };
-
-  const getAppointmentDateTime = (appt) => {
-    if (!appt?.date) return null;
-    const [year, month, day] = appt.date.split('-').map(Number);
-    if (!year || !month || !day) return null;
-    let hours = 0, minutes = 0;
-    if (appt.time) {
-      const m = appt.time.match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
-      if (m) {
-        hours = parseInt(m[1], 10);
-        minutes = parseInt(m[2], 10);
-        const ampm = m[3]?.toLowerCase();
-        if (ampm === 'pm' && hours !== 12) hours += 12;
-        if (ampm === 'am' && hours === 12) hours = 0;
-      }
-    }
-    return new Date(year, month - 1, day, hours, minutes, 0, 0);
-  };
-
-  useEffect(() => { fetchUserAppointments(); }, []);
-
-  const fetchUserAppointments = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) { setError('You must be logged in.'); return; }
-      const res = await fetch(APPOINTMENTS_URL, { headers: { Authorization: `Bearer ${token}` } });
-      const result = await res.json();
-      if (res.ok && result.success) {
-        const allAppointments = result.data || [];
-        const userAppointments = allAppointments.filter(appt => {
-          const apptUserId = typeof appt.userId === 'object' ? appt.userId._id || appt.userId.$oid : appt.userId;
-          const currentUserId = user?._id || user?.userId || user?.id;
-          return String(apptUserId) === String(currentUserId);
-        });
-        const merged = userAppointments.map(a => ({ ...a, totalPrice: normalizePrice(a.totalPrice) }));
-        setAppointments(merged);
-        setError('');
-      } else {
-        setError(result.error || 'Failed to fetch appointments');
-      }
-    } catch (err) {
-      setError('Error loading appointments');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Pay Now — redirect to Yoco checkout ──────────────────────────────────
-
-         const handlePayNow = async (appointment) => {
-  setPayingId(appointment._id);
-  setError('');
-  setSlotTakenId(null);
-
-  try {
-    const token = localStorage.getItem('token');
-
-    // 1. Check for overlap with confirmed bookings
-    const checkRes = await fetch(`${API_ROOT}/appointments/check-availability`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        date: appointment.date,
-        time: appointment.time,
-        employeeId: appointment.employeeId?._id || appointment.employeeId,
-        appointmentId: appointment._id,
-      }),
-    });
-
-    const checkResult = await checkRes.json();
-
-    if (!checkResult.available) {
-      setSlotTakenId(appointment._id);
-      setPayingId(null);
-      return;
-    }
-
-    // 2. No conflict → proceed to payment
-    localStorage.setItem('pendingBooking', JSON.stringify({
-      name: appointment.userName || `${user?.firstName} ${user?.lastName}`,
-      email: user?.email || '',
-      appointmentDate: appointment.date,
-      appointmentTime: appointment.time,
-      selectedServices: appointment.services?.map(s => s.name) || [],
-      selectedEmployee: appointment.employee?.name || '',
-      totalPrice: Number(appointment.totalPrice) || 0,
-      totalDuration: appointment.totalDuration || 0,
-      contactNumber: '',
-    }));
-
-    const res = await fetch(`${API_ROOT}/payments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ appointmentId: appointment._id }),
-    });
-
-    const result = await res.json();
-
-    if (result.success && result.checkoutUrl) {
-      window.location.href = result.checkoutUrl;
-    } else {
-      setError(result.error || 'Could not initiate payment.');
-      setPayingId(null);
-    }
-
-  } catch (err) {
-    console.error(err);
-    setError('Something went wrong. Please try again.');
-    setPayingId(null);
-  }
-};
-
-  const normalizeDateForApi = (dateStr) => {
-    if (!dateStr) return null;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr).trim())) return String(dateStr).trim();
-    const d = new Date(dateStr);
-    if (Number.isNaN(d.getTime())) return null;
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  const normalizeTimeForApi = (timeStr) => {
-    if (!timeStr) return null;
-    const m = String(timeStr).trim().match(/^(\d{1,2}):(\d{2})\s*(am|pm)?$/i);
-    if (!m) return null;
-    let hh = parseInt(m[1], 10);
-    const mm = m[2];
-    const ampm = m[3]?.toLowerCase();
-    if (ampm === 'pm' && hh !== 12) hh += 12;
-    if (ampm === 'am' && hh === 12) hh = 0;
-    return `${String(hh).padStart(2, '0')}:${mm}`;
-  };
-
-  const toId = (val) => {
-    if (!val) return null;
-    if (typeof val === 'object') { if (val.$oid) return val.$oid; if (val._id) return val._id; }
-    return String(val);
-  };
-
-  const buildUpdatePayload = (appointment, extra = {}) => {
-    if (!appointment) return null;
-    const date = normalizeDateForApi(extra.date ?? appointment.date);
-    const time = normalizeTimeForApi(extra.time ?? appointment.time);
-    const employeeId = toId(appointment.employeeId);
-    const serviceIds = (appointment.serviceIds || []).map(toId).filter(Boolean);
-    if (!date || !time || !employeeId || !serviceIds.length) return null;
-    return { date, time, employeeId, serviceIds, ...extra };
-  };
-
-  const handleCancelAppointment = async (appointmentId) => {
-    setCancellingId(appointmentId);
-    try {
-      const token = localStorage.getItem('token');
-      const appt = appointments.find(a => a._id === appointmentId);
-      const payload = buildUpdatePayload(appt, { status: 'cancelled' });
-      if (!payload) throw new Error('Missing appointment data');
-      const res = await fetch(`${APPOINTMENTS_URL}/${appointmentId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload)
+  // ── Load user profile form when tab opens ───────────────────────────────
+  useEffect(() => {
+    if (activeTab === 'profile' && user) {
+      setProfileForm({
+        firstName: user.firstName || '',
+        lastName:  user.lastName  || '',
+        email:     user.email     || '',
       });
-      const result = await res.json();
-      if (!res.ok || !result.success) { await fetchUserAppointments(); throw new Error(result.error || 'Cancel failed'); }
-      await fetchUserAppointments();
-      triggerAppointmentRefresh();
-    } catch (err) {
-      setError(err.message || 'Failed to cancel appointment');
+      setProfileMsg({ type: '', text: '' });
+    }
+    if (activeTab === 'password') {
+      setPwForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+      setPwMsg({ type: '', text: '' });
+    }
+  }, [activeTab, user]);
+
+  // ── Fetch appointments ──────────────────────────────────────────────────
+  const fetchAppointments = useCallback(async () => {
+    setApptLoading(true);
+    setApptError('');
+    try {
+      const data = await apiFetch('/appointments');
+      const all  = data.data || [];
+      const mine = all.filter(a => {
+        const apptUid = typeof a.userId === 'object'
+          ? (a.userId._id || a.userId.$oid)
+          : a.userId;
+        const myId = user?._id || user?.userId || user?.id;
+        return String(apptUid) === String(myId);
+      });
+      setAppointments(mine.map(a => ({ ...a, totalPrice: normalizePrice(a.totalPrice) })));
+    } catch (e) {
+      setApptError(e.message || 'Failed to load appointments.');
+    } finally {
+      setApptLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => { fetchAppointments(); }, [fetchAppointments]);
+
+  // ── Derived lists ───────────────────────────────────────────────────────
+  const now = new Date();
+
+  const unpaid = appointments
+    .filter(a => a.paymentStatus === 'unpaid' && a.status !== 'cancelled')
+    .sort((a, b) => getApptDateTime(a) - getApptDateTime(b));
+
+  const upcoming = appointments
+    .filter(a => {
+      const dt = getApptDateTime(a);
+      return dt && dt > now && a.status !== 'cancelled' && a.paymentStatus !== 'unpaid';
+    })
+    .sort((a, b) => getApptDateTime(a) - getApptDateTime(b));
+
+  const past = appointments
+    .filter(a => {
+      const dt = getApptDateTime(a);
+      return !dt || dt <= now || a.status === 'completed' || a.status === 'cancelled';
+    })
+    .sort((a, b) => getApptDateTime(b) - getApptDateTime(a));
+
+  // ── Pay Now ─────────────────────────────────────────────────────────────
+  const handlePayNow = async (appt) => {
+    setPayingId(appt._id);
+    setSlotTakenId(null);
+    try {
+      const checkData = await apiFetch('/appointments/check-availability', {
+        method: 'POST',
+        body: JSON.stringify({
+          date: appt.date, time: appt.time,
+          employeeId:    appt.employeeId?._id || appt.employeeId,
+          appointmentId: appt._id,
+        }),
+      });
+      if (!checkData.available) { setSlotTakenId(appt._id); return; }
+
+      const payData = await apiFetch('/payments', {
+        method: 'POST',
+        body: JSON.stringify({ appointmentId: appt._id }),
+      });
+      if (payData.checkoutUrl) window.location.href = payData.checkoutUrl;
+    } catch (e) {
+      setApptError(e.message || 'Payment failed. Please try again.');
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  // ── Cancel (with confirmation) ───────────────────────────────────────────
+  const handleCancelConfirmed = async () => {
+    const appt = confirmCancel;
+    setConfirmCancel(null);
+    setCancellingId(appt._id);
+    try {
+      const serviceIds = (appt.serviceIds || []).map(s =>
+        typeof s === 'object' ? (s._id || s.$oid) : s
+      ).filter(Boolean);
+      const empId = typeof appt.employeeId === 'object'
+        ? (appt.employeeId._id || appt.employeeId.$oid)
+        : appt.employeeId;
+
+      await apiFetch(`/appointments/${appt._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          date: appt.date, time: appt.time,
+          employeeId: empId, serviceIds,
+          status: 'cancelled',
+        }),
+      });
+      await fetchAppointments();
+    } catch (e) {
+      setApptError(e.message || 'Failed to cancel appointment.');
     } finally {
       setCancellingId(null);
     }
   };
 
-  const toDateInputValue = (value) => {
-    try {
-      if (!value) return '';
-      if (/^\d{4}-\d{2}-\d{2}$/.test(String(value).trim())) return String(value).trim();
-      const d = new Date(value);
-      if (isNaN(d.getTime())) return '';
-      return d.toISOString().slice(0, 10);
-    } catch { return ''; }
+  // ── Reschedule ───────────────────────────────────────────────────────────
+  const openReschedule = (appt) => {
+    setRescheduleAppt(appt);
+    setRescheduleForm({ date: toDateInput(appt.date), time: appt.time || '' });
+    setRescheduleError('');
   };
-
-  const handleReschedule = (appointmentId) => {
-    const appt = appointments.find(a => a._id === appointmentId);
-    setRescheduleId(appointmentId);
-    setRescheduleForm({ date: appt?.date ? toDateInputValue(appt.date) : '', time: appt?.time || '' });
-    setShowReschedule(true);
-  };
-
-  const presetTimes = ['07:00 am','07:30 am','08:00 am','08:30 am','09:00 am', '9:30 am','10:00 am','10:30 am','11:00 am',
-    '11:30 am', '12:00 pm','12:30 pm','01:00 pm','01:30 pm','02:00 pm','02:30 pm','03:00 pm','03:30 pm','04:00 pm', '04:30 pm','05:00 pm','05:30 pm','06:00 pm','06:30 pm','07:00 pm'];
 
   const saveReschedule = async () => {
-    if (!rescheduleForm.date || !rescheduleForm.time) { setError('Please select both a date and a time.'); return; }
+    if (!rescheduleForm.date || !rescheduleForm.time) {
+      setRescheduleError('Please select both a date and time.'); return;
+    }
+    if (rescheduleForm.date < todayISO()) {
+      setRescheduleError('Please choose a future date.'); return;
+    }
     setSavingReschedule(true);
+    setRescheduleError('');
     try {
-      const token = localStorage.getItem('token');
-      const appt = appointments.find(a => a._id === rescheduleId);
-      const payload = buildUpdatePayload(appt, { date: rescheduleForm.date, time: rescheduleForm.time });
-      if (!payload) throw new Error('Missing appointment data');
-      const res = await fetch(`${APPOINTMENTS_URL}/${rescheduleId}`, {
+      const appt = rescheduleAppt;
+      const serviceIds = (appt.serviceIds || []).map(s =>
+        typeof s === 'object' ? (s._id || s.$oid) : s
+      ).filter(Boolean);
+      const empId = typeof appt.employeeId === 'object'
+        ? (appt.employeeId._id || appt.employeeId.$oid)
+        : appt.employeeId;
+
+      await apiFetch(`/appointments/${appt._id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          date: rescheduleForm.date,
+          time: rescheduleForm.time,
+          employeeId: empId,
+          serviceIds,
+        }),
       });
-      const result = await res.json();
-      if (res.ok && result.success) {
-        const updated = result.data;
-        setAppointments(prev => prev.map(a => a._id === rescheduleId ? { ...a, ...updated, totalPrice: normalizePrice(updated.totalPrice ?? a.totalPrice) } : a));
-        setShowReschedule(false);
-        setRescheduleId(null);
-        setRescheduleForm({ date: '', time: '' });
-        setError('');
-        triggerAppointmentRefresh();
-      } else {
-        await fetchUserAppointments();
-        setError(result.error || 'Failed to reschedule appointment');
-      }
+      setRescheduleAppt(null);
+      await fetchAppointments();
     } catch (e) {
-      setError(e.message || 'Failed to reschedule appointment');
+      setRescheduleError(e.message || 'Failed to reschedule.');
     } finally {
       setSavingReschedule(false);
     }
   };
 
-  const formatDate = (dateString) => {
+  // ── Update profile ───────────────────────────────────────────────────────
+  const handleProfileSave = async (e) => {
+    e.preventDefault();
+    setProfileSaving(true);
+    setProfileMsg({ type: '', text: '' });
     try {
-      const [year, month, day] = dateString.split('-').map(Number);
-      return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+      const payload = {};
+      if (profileForm.firstName.trim() !== (user?.firstName || ''))
+        payload.firstName = profileForm.firstName.trim();
+      if (profileForm.lastName.trim()  !== (user?.lastName  || ''))
+        payload.lastName  = profileForm.lastName.trim();
+      if (profileForm.email.trim()     !== (user?.email     || ''))
+        payload.email     = profileForm.email.trim();
+
+      if (!Object.keys(payload).length) {
+        setProfileMsg({ type: 'info', text: 'No changes to save.' });
+        return;
+      }
+
+      const data = await apiFetch('/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(payload),
       });
-    } catch { return dateString; }
+
+      // Update auth context with new info
+      const updated = data.data;
+      const stored  = JSON.parse(localStorage.getItem('userInfo') || '{}');
+      const merged  = { ...stored, firstName: updated.firstName, lastName: updated.lastName, email: updated.email };
+      localStorage.setItem('userInfo', JSON.stringify(merged));
+      login(merged);
+
+      setProfileMsg({ type: 'success', text: 'Profile updated successfully!' });
+    } catch (e) {
+      setProfileMsg({ type: 'error', text: e.message || 'Failed to update profile.' });
+    } finally {
+      setProfileSaving(false);
+    }
   };
 
-  const now = new Date();
-
-  // Unpaid/pending — needs payment to confirm
-  const unpaidAppointments = appointments
-    .filter(appt => appt.paymentStatus === 'unpaid' && appt.status !== 'cancelled')
-    .sort((a, b) => getAppointmentDateTime(a) - getAppointmentDateTime(b));
-
-  // Upcoming — paid/confirmed, future date
-  const upcomingAppointments = appointments
-    .filter(appt => {
-      const dt = getAppointmentDateTime(appt);
-      return dt && dt > now && appt.status !== 'cancelled' && appt.paymentStatus !== 'unpaid';
-    })
-    .sort((a, b) => getAppointmentDateTime(a) - getAppointmentDateTime(b));
-
-  // Past — completed, cancelled, or past date
-  const pastAppointments = appointments
-    .filter(appt => {
-      const dt = getAppointmentDateTime(appt);
-      return !dt || dt <= now || appt.status === 'completed' || appt.status === 'cancelled';
-    })
-    .sort((a, b) => getAppointmentDateTime(b) - getAppointmentDateTime(a));
+  // ── Change password ──────────────────────────────────────────────────────
+  const handlePasswordSave = async (e) => {
+    e.preventDefault();
+    setPwMsg({ type: '', text: '' });
+    if (pwForm.newPassword !== pwForm.confirmPassword) {
+      setPwMsg({ type: 'error', text: 'New passwords do not match.' }); return;
+    }
+    if (pwForm.newPassword.length < 8 || !/[A-Z]/.test(pwForm.newPassword) ||
+        !/[a-z]/.test(pwForm.newPassword) || !/[0-9]/.test(pwForm.newPassword) ||
+        !/[^A-Za-z0-9]/.test(pwForm.newPassword)) {
+      setPwMsg({ type: 'error', text: 'Password must be 8+ chars with uppercase, lowercase, number and special character.' });
+      return;
+    }
+    setPwSaving(true);
+    try {
+      await apiFetch('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ oldPassword: pwForm.oldPassword, newPassword: pwForm.newPassword }),
+      });
+      setPwMsg({ type: 'success', text: 'Password changed successfully!' });
+      setPwForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (e) {
+      setPwMsg({ type: 'error', text: e.message || 'Failed to change password.' });
+    } finally {
+      setPwSaving(false);
+    }
+  };
 
   const handleLogout = () => {
-    try { localStorage.removeItem('token'); localStorage.removeItem('refreshToken'); } catch {}
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
     logout();
     navigate('/login');
   };
 
-  if (loading) {
-    return <div className="nxl-profile-loading">Loading your profile…</div>;
-  }
+  // ── Render helpers ───────────────────────────────────────────────────────
+  const StatusBadge = ({ appt }) => {
+    const map = {
+      deposit_paid: { label: '✅ Deposit Paid', cls: 'completed' },
+      paid:         { label: '✅ Paid',         cls: 'completed' },
+      unpaid:       { label: '⏳ Unpaid',        cls: 'pending'   },
+    };
+    const cfg = map[appt.paymentStatus] || { label: appt.status, cls: appt.status };
+    return <span className={`nxl-status-badge ${cfg.cls}`}>{cfg.label}</span>;
+  };
 
-  return (
-    <div className="nxl-profile-bg">
-      <div className="nxl-profile-inner">
+  const ApptCard = ({ appt, variant = 'upcoming' }) => {
+    const isPast   = variant === 'past';
+    const isUnpaid = variant === 'unpaid';
+    const isTaken  = slotTakenId === appt._id;
 
-        {/* ── Header ── */}
-        <div className="nxl-profile-header">
-          <div className="nxl-profile-greeting">
-            <div className="nxl-profile-avatar">👤</div>
-            <div className="nxl-profile-greeting-text">
-              <h1>Welcome, {user?.lastName}!</h1>
-              <p>NXL Beauty Bar Member</p>
-            </div>
+    return (
+      <div className={`nxl-appt-card ${isPast ? 'past' : ''} ${isUnpaid ? 'unpaid' : ''}`}>
+        <div className="nxl-appt-body">
+          <h3 className="nxl-appt-service">
+            💄 {appt.services?.map(s => s.name).join(', ') || 'Appointment'}
+          </h3>
+
+          <div className="nxl-appt-rows">
+            <div className="nxl-appt-row"><span>Date</span><span>{formatDate(appt.date)}</span></div>
+            {appt.time    && <div className="nxl-appt-row"><span>Time</span><span>{appt.time}</span></div>}
+            {appt.employee?.name && <div className="nxl-appt-row"><span>Stylist</span><span>{appt.employee.name}</span></div>}
+            <div className="nxl-appt-row"><span>Total</span><span>R{normalizePrice(appt.totalPrice)}</span></div>
+            {appt.totalDuration > 0 && <div className="nxl-appt-row"><span>Duration</span><span>{appt.totalDuration} min</span></div>}
+            <div className="nxl-appt-row"><span>Status</span><span><StatusBadge appt={appt} /></span></div>
           </div>
-          <div className="nxl-profile-header-btns">
-            <button className="nxl-profile-btn-primary" onClick={() => navigate('/dashboard')}>
-              Book Appointment
-            </button>
-            <button className="nxl-profile-btn-danger" onClick={handleLogout}>
-              Sign Out
-            </button>
-          </div>
-        </div>
 
-        {/* ── Error Banner ── */}
-        {error && <div className="nxl-profile-error-banner">{error}</div>}
-
-        {/* ── Unpaid Appointments ── */}
-        {unpaidAppointments.length > 0 && (
-          <div className="nxl-profile-section nxl-unpaid-section">
-            <h2 className="nxl-profile-section-title">
-              <span>⚠️</span> Awaiting Payment
-              <span className="nxl-profile-section-count">{unpaidAppointments.length}</span>
-            </h2>
-            <p style={{ fontSize: '0.82rem', color: '#c07a3a', marginBottom: '1rem', marginTop: '-0.5rem' }}>
-              Complete your booking fee to secure these appointments.
-            </p>
-            <div className="nxl-profile-appts-grid">
-              {unpaidAppointments.map((appointment) => (
-                <div key={appointment._id} className="nxl-profile-appt-card nxl-unpaid-card">
-                  <div className="nxl-profile-appt-details">
-                    <h3 style={{ color: '#ffcc80' }}>
-                      💄 {appointment.services?.map(s => s.name).join(', ') || 'Service Appointment'}
-                    </h3>
-
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Date</span>
-                      <span className="nxl-val">{formatDate(appointment.date)}</span>
-                    </div>
-                    {appointment.time && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Time</span>
-                        <span className="nxl-val">{appointment.time}</span>
-                      </div>
-                    )}
-                    {appointment.employee?.name && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Stylist</span>
-                        <span className="nxl-val">{appointment.employee.name}</span>
-                      </div>
-                    )}
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Total</span>
-                      <span className="nxl-val">R{normalizePrice(appointment.totalPrice)}</span>
-                    </div>
-
-                    {/* Pay notice */}
-                    {/* Pay notice — slot taken warning OR normal notice */}
-{slotTakenId === appointment._id ? (
-  <div style={{
-    marginTop: '0.75rem',
-    padding: '0.75rem 0.9rem',
-    background: 'rgba(220, 50, 50, 0.15)',
-    border: '1px solid rgba(220, 50, 50, 0.45)',
-    borderRadius: '8px',
-    fontSize: '0.78rem',
-    color: '#ffb3a0',
-    lineHeight: 1.6,
-  }}>
-    ⚠️ <strong>This time slot has been taken by another client.</strong><br />
-    Please choose a different date and time to complete your booking.
-  </div>
-) : (
-  <div style={{
-    marginTop: '0.75rem',
-    padding: '0.6rem 0.8rem',
-    background: 'rgba(255, 180, 0, 0.12)',
-    border: '1px solid rgba(255, 180, 0, 0.3)',
-    borderRadius: '8px',
-    fontSize: '0.78rem',
-    color: '#ffcc80',
-    lineHeight: 1.5,
-  }}>
-    🔒 Pay the <strong>R{BOOKING_FEE} booking fee</strong> to confirm this appointment.
-  </div>
-)}
-                  </div>
-<div className="nxl-profile-appt-actions">
-  {slotTakenId === appointment._id ? (
-    <button
-      className="nxl-profile-btn-reschedule"
-      onClick={() => {
-        setSlotTakenId(null);
-        handleReschedule(appointment._id);
-      }}
-    >
-      📅 Choose New Time
-    </button>
-  ) : (
-    <button
-      className="nxl-profile-btn-paynow"
-      onClick={() => handlePayNow(appointment)}
-      disabled={payingId === appointment._id}
-    >
-      {payingId === appointment._id ? 'Checking…' : '💳 Pay Now'}
-    </button>
-  )}
-  <button
-    className="nxl-profile-btn-cancel"
-    onClick={() => handleCancelAppointment(appointment._id)}
-    disabled={cancellingId === appointment._id}
-  >
-    {cancellingId === appointment._id ? 'Cancelling…' : 'Cancel'}
-  </button>
-</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Upcoming Appointments ── */}
-        <div className="nxl-profile-section">
-          <h2 className="nxl-profile-section-title">
-            <span>📅</span> Upcoming Appointments
-            <span className="nxl-profile-section-count">{upcomingAppointments.length}</span>
-          </h2>
-
-          {upcomingAppointments.length === 0 ? (
-            <div className="nxl-profile-empty">
-              <p>No upcoming appointments scheduled.</p>
-              <button className="nxl-profile-btn-primary" onClick={() => navigate('/dashboard')}>
-                Book Your First Appointment
-              </button>
-            </div>
-          ) : (
-            <div className="nxl-profile-appts-grid">
-              {upcomingAppointments.map((appointment) => (
-                <div key={appointment._id} className="nxl-profile-appt-card">
-                  <div className="nxl-profile-appt-details">
-                    <h3>💄 {appointment.services?.map(s => s.name).join(', ') || 'Service Appointment'}</h3>
-
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Date</span>
-                      <span className="nxl-val">{formatDate(appointment.date)}</span>
-                    </div>
-                    {appointment.time && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Time</span>
-                        <span className="nxl-val">{appointment.time}</span>
-                      </div>
-                    )}
-                    {appointment.employee?.name && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Stylist</span>
-                        <span className="nxl-val">{appointment.employee.name}</span>
-                      </div>
-                    )}
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Total</span>
-                      <span className="nxl-val">R{normalizePrice(appointment.totalPrice)}</span>
-                    </div>
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Duration</span>
-                      <span className="nxl-val">{appointment.totalDuration} min</span>
-                    </div>
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Status</span>
-                      <span className="nxl-val">
-                        <span className={`nxl-status-badge ${appointment.paymentStatus === 'deposit_paid' ? 'completed' : 'pending'}`}>
-                          {appointment.paymentStatus === 'deposit_paid' ? '✅ Deposit Paid' : appointment.status}
-                        </span>
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="nxl-profile-appt-actions">
-                    <button className="nxl-profile-btn-reschedule" onClick={() => handleReschedule(appointment._id)}>
-                      Reschedule
-                    </button>
-                    <button
-                      className="nxl-profile-btn-cancel"
-                      onClick={() => handleCancelAppointment(appointment._id)}
-                      disabled={cancellingId === appointment._id}
-                    >
-                      {cancellingId === appointment._id ? 'Cancelling…' : 'Cancel'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+          {isUnpaid && (
+            isTaken ? (
+              <div className="nxl-appt-alert nxl-alert-danger">
+                ⚠️ <strong>This slot was taken.</strong> Please choose a new time.
+              </div>
+            ) : (
+              <div className="nxl-appt-alert nxl-alert-warn">
+                🔒 Pay <strong>R{BOOKING_FEE}</strong> booking fee to confirm this slot.
+              </div>
+            )
           )}
         </div>
 
-        {/* ── Reschedule Modal ── */}
-        {showReschedule && (
-          <div className="nxl-profile-modal-overlay">
-            <div className="nxl-profile-modal">
-              <h3>Reschedule Appointment</h3>
-              <div className="nxl-profile-modal-field">
-                <label>Select Date</label>
-                <input
-                  type="date"
-                  value={rescheduleForm.date}
-                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, date: e.target.value })}
-                />
-              </div>
-              <div className="nxl-profile-modal-field">
-                <label>Select Time</label>
-                <select
-                  value={rescheduleForm.time}
-                  onChange={(e) => setRescheduleForm({ ...rescheduleForm, time: e.target.value })}
-                >
-                  <option value="">Choose a time</option>
-                  {presetTimes.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <div className="nxl-profile-modal-actions">
-                <button className="nxl-profile-modal-cancel" onClick={() => setShowReschedule(false)}>Cancel</button>
-                <button className="nxl-profile-modal-save" onClick={saveReschedule} disabled={savingReschedule}>
-                  {savingReschedule ? 'Saving…' : 'Save Changes'}
+        {!isPast && (
+          <div className="nxl-appt-actions">
+            {isUnpaid && (
+              isTaken ? (
+                <button className="nxl-btn nxl-btn-reschedule"
+                  onClick={() => { setSlotTakenId(null); openReschedule(appt); }}>
+                  📅 New Time
                 </button>
-              </div>
-            </div>
+              ) : (
+                <button className="nxl-btn nxl-btn-pay"
+                  disabled={payingId === appt._id}
+                  onClick={() => handlePayNow(appt)}>
+                  {payingId === appt._id ? 'Checking…' : '💳 Pay Now'}
+                </button>
+              )
+            )}
+            {!isUnpaid && (
+              <button className="nxl-btn nxl-btn-reschedule"
+                onClick={() => openReschedule(appt)}>
+                📅 Reschedule
+              </button>
+            )}
+            <button className="nxl-btn nxl-btn-cancel"
+              disabled={cancellingId === appt._id}
+              onClick={() => setConfirmCancel(appt)}>
+              {cancellingId === appt._id ? 'Cancelling…' : 'Cancel'}
+            </button>
           </div>
         )}
+      </div>
+    );
+  };
 
-        {/* ── Past Appointments ── */}
-        <div className="nxl-profile-section">
-          <h2 className="nxl-profile-section-title">
-            <span>🕐</span> Appointment History
-            <span className="nxl-profile-section-count">{pastAppointments.length}</span>
-          </h2>
+  // ── Main render ──────────────────────────────────────────────────────────
+  return (
+    <div className="nxl-up-root">
 
-          {pastAppointments.length === 0 ? (
-            <div className="nxl-profile-empty">
-              <p>You have no past appointments.</p>
-            </div>
-          ) : (
-            <div className="nxl-profile-appts-grid">
-              {pastAppointments.map((appointment) => (
-                <div key={appointment._id} className="nxl-profile-appt-card past">
-                  <div className="nxl-profile-appt-details">
-                    <h3>{appointment.services?.map(s => s.name).join(', ') || 'Service Appointment'}</h3>
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Date</span>
-                      <span className="nxl-val">{formatDate(appointment.date)}</span>
-                    </div>
-                    {appointment.time && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Time</span>
-                        <span className="nxl-val">{appointment.time}</span>
-                      </div>
-                    )}
-                    {appointment.employee?.name && (
-                      <div className="nxl-profile-appt-row">
-                        <span className="nxl-lbl">Stylist</span>
-                        <span className="nxl-val">{appointment.employee.name}</span>
-                      </div>
-                    )}
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Total</span>
-                      <span className="nxl-val">R{normalizePrice(appointment.totalPrice)}</span>
-                    </div>
-                    <div className="nxl-profile-appt-row">
-                      <span className="nxl-lbl">Status</span>
-                      <span className="nxl-val">
-                        <span className={`nxl-status-badge ${appointment.status}`}>{appointment.status}</span>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Header */}
+      <div className="nxl-up-header">
+        <div className="nxl-up-header-left">
+          <div className="nxl-up-avatar">
+            {(user?.firstName?.[0] || '?').toUpperCase()}
+          </div>
+          <div>
+            <h1 className="nxl-up-name">{user?.firstName} {user?.lastName}</h1>
+            <p className="nxl-up-email">{user?.email}</p>
+          </div>
         </div>
-
+        <div className="nxl-up-header-actions">
+          <button className="nxl-btn nxl-btn-book" onClick={() => navigate('/dashboard')}>
+            ＋ Book Appointment
+          </button>
+          <button className="nxl-btn nxl-btn-logout" onClick={handleLogout}>
+            Sign Out
+          </button>
+        </div>
       </div>
 
-      {/* ── Fixed Footer Bar ── */}
-      <div className="nxl-profile-footer-bar">NXL Beauty Bar</div>
+      {/* Tabs */}
+      <div className="nxl-up-tabs">
+        {[
+          { key: 'appointments', label: '📅 My Bookings' },
+          { key: 'profile',      label: '👤 Edit Profile' },
+          { key: 'password',     label: '🔒 Password' },
+        ].map(t => (
+          <button key={t.key}
+            className={`nxl-up-tab ${activeTab === t.key ? 'active' : ''}`}
+            onClick={() => setActiveTab(t.key)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="nxl-up-body">
+
+        {/* ── APPOINTMENTS TAB ────────────────────────────────────────── */}
+        {activeTab === 'appointments' && (
+          <>
+            {apptError && <div className="nxl-up-alert nxl-alert-danger">{apptError}</div>}
+
+            {apptLoading ? (
+              <div className="nxl-up-skeleton">
+                {[1,2,3].map(i => <div key={i} className="nxl-skeleton-card" />)}
+              </div>
+            ) : (
+              <>
+                {/* Unpaid */}
+                {unpaid.length > 0 && (
+                  <div className="nxl-up-section">
+                    <h2 className="nxl-up-section-title warning">
+                      ⚠️ Awaiting Payment
+                      <span className="nxl-count">{unpaid.length}</span>
+                    </h2>
+                    <p className="nxl-up-section-sub">Complete payment to confirm your slot.</p>
+                    <div className="nxl-appt-list">
+                      {unpaid.map(a => <ApptCard key={a._id} appt={a} variant="unpaid" />)}
+                    </div>
+                  </div>
+                )}
+
+                {/* Upcoming */}
+                <div className="nxl-up-section">
+                  <h2 className="nxl-up-section-title">
+                    📅 Upcoming
+                    <span className="nxl-count">{upcoming.length}</span>
+                  </h2>
+                  {upcoming.length === 0 ? (
+                    <div className="nxl-up-empty">
+                      <span>🗓️</span>
+                      <p>No upcoming appointments.</p>
+                      <button className="nxl-btn nxl-btn-book"
+                        onClick={() => navigate('/dashboard')}>
+                        Book Now
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="nxl-appt-list">
+                      {upcoming.map(a => <ApptCard key={a._id} appt={a} variant="upcoming" />)}
+                    </div>
+                  )}
+                </div>
+
+                {/* Past */}
+                <div className="nxl-up-section">
+                  <h2 className="nxl-up-section-title muted">
+                    🕐 History
+                    <span className="nxl-count">{past.length}</span>
+                  </h2>
+                  {past.length === 0 ? (
+                    <div className="nxl-up-empty"><p>No past appointments.</p></div>
+                  ) : (
+                    <div className="nxl-appt-list">
+                      {past.map(a => <ApptCard key={a._id} appt={a} variant="past" />)}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── EDIT PROFILE TAB ────────────────────────────────────────── */}
+        {activeTab === 'profile' && (
+          <div className="nxl-up-section">
+            <h2 className="nxl-up-section-title">👤 Edit Profile</h2>
+            <form className="nxl-up-form" onSubmit={handleProfileSave}>
+              <div className="nxl-up-form-row">
+                <div className="nxl-up-field">
+                  <label>First Name</label>
+                  <input type="text" value={profileForm.firstName}
+                    onChange={e => setProfileForm(f => ({ ...f, firstName: e.target.value }))}
+                    placeholder="First name" maxLength={50} required />
+                </div>
+                <div className="nxl-up-field">
+                  <label>Last Name</label>
+                  <input type="text" value={profileForm.lastName}
+                    onChange={e => setProfileForm(f => ({ ...f, lastName: e.target.value }))}
+                    placeholder="Last name" maxLength={50} required />
+                </div>
+              </div>
+              <div className="nxl-up-field">
+                <label>Email Address</label>
+                <input type="email" value={profileForm.email}
+                  onChange={e => setProfileForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="your@email.com" required />
+              </div>
+              {profileMsg.text && (
+                <div className={`nxl-up-alert nxl-alert-${profileMsg.type}`}>{profileMsg.text}</div>
+              )}
+              <button type="submit" className="nxl-btn nxl-btn-save" disabled={profileSaving}>
+                {profileSaving ? 'Saving…' : 'Save Changes'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ── PASSWORD TAB ────────────────────────────────────────────── */}
+        {activeTab === 'password' && (
+          <div className="nxl-up-section">
+            <h2 className="nxl-up-section-title">🔒 Change Password</h2>
+            <form className="nxl-up-form" onSubmit={handlePasswordSave}>
+              {[
+                { key: 'oldPassword',     label: 'Current Password',  field: 'old'     },
+                { key: 'newPassword',     label: 'New Password',       field: 'new'     },
+                { key: 'confirmPassword', label: 'Confirm New Password', field: 'confirm' },
+              ].map(({ key, label, field }) => (
+                <div className="nxl-up-field" key={key}>
+                  <label>{label}</label>
+                  <div className="nxl-pw-wrap">
+                    <input
+                      type={showPw[field] ? 'text' : 'password'}
+                      value={pwForm[key]}
+                      onChange={e => setPwForm(f => ({ ...f, [key]: e.target.value }))}
+                      placeholder={label}
+                      required
+                    />
+                    <button type="button" className="nxl-pw-toggle"
+                      onClick={() => setShowPw(p => ({ ...p, [field]: !p[field] }))}>
+                      {showPw[field] ? '🙈' : '👁️'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Password rules */}
+              {pwForm.newPassword && (
+                <div className="nxl-pw-rules">
+                  {[
+                    { label: '8+ characters',     ok: pwForm.newPassword.length >= 8 },
+                    { label: 'Uppercase letter',  ok: /[A-Z]/.test(pwForm.newPassword) },
+                    { label: 'Lowercase letter',  ok: /[a-z]/.test(pwForm.newPassword) },
+                    { label: 'Number',            ok: /[0-9]/.test(pwForm.newPassword) },
+                    { label: 'Special character', ok: /[^A-Za-z0-9]/.test(pwForm.newPassword) },
+                  ].map(r => (
+                    <div key={r.label} className={`nxl-pw-rule ${r.ok ? 'ok' : ''}`}>
+                      <span>{r.ok ? '✓' : '○'}</span>{r.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {pwMsg.text && (
+                <div className={`nxl-up-alert nxl-alert-${pwMsg.type}`}>{pwMsg.text}</div>
+              )}
+              <button type="submit" className="nxl-btn nxl-btn-save" disabled={pwSaving}>
+                {pwSaving ? 'Saving…' : 'Change Password'}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
+
+      {/* ── Reschedule Modal ─────────────────────────────────────────────── */}
+      {rescheduleAppt && (
+        <div className="nxl-modal-overlay" onClick={e => e.target === e.currentTarget && setRescheduleAppt(null)}>
+          <div className="nxl-modal">
+            <div className="nxl-modal-header">
+              <h3>Reschedule Appointment</h3>
+              <button className="nxl-modal-close" onClick={() => setRescheduleAppt(null)}>✕</button>
+            </div>
+            <p className="nxl-modal-sub">
+              {rescheduleAppt.services?.map(s => s.name).join(', ')}
+            </p>
+            <div className="nxl-up-field">
+              <label>New Date</label>
+              <input type="date" min={todayISO()}
+                value={rescheduleForm.date}
+                onChange={e => setRescheduleForm(f => ({ ...f, date: e.target.value }))} />
+            </div>
+            <div className="nxl-up-field">
+              <label>New Time</label>
+              <select value={rescheduleForm.time}
+                onChange={e => setRescheduleForm(f => ({ ...f, time: e.target.value }))}>
+                <option value="">Choose a time</option>
+                {PRESET_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            {rescheduleError && (
+              <div className="nxl-up-alert nxl-alert-error">{rescheduleError}</div>
+            )}
+            <div className="nxl-modal-actions">
+              <button className="nxl-btn nxl-btn-outline"
+                onClick={() => setRescheduleAppt(null)}>
+                Cancel
+              </button>
+              <button className="nxl-btn nxl-btn-save"
+                onClick={saveReschedule} disabled={savingReschedule}>
+                {savingReschedule ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancel Confirmation Modal ─────────────────────────────────────── */}
+      {confirmCancel && (
+        <div className="nxl-modal-overlay" onClick={e => e.target === e.currentTarget && setConfirmCancel(null)}>
+          <div className="nxl-modal nxl-modal-sm">
+            <div className="nxl-modal-header">
+              <h3>Cancel Appointment?</h3>
+              <button className="nxl-modal-close" onClick={() => setConfirmCancel(null)}>✕</button>
+            </div>
+            <p className="nxl-modal-body-text">
+              Are you sure you want to cancel your <strong>{confirmCancel.services?.map(s => s.name).join(', ')}</strong> appointment on <strong>{formatDate(confirmCancel.date)}</strong> at <strong>{confirmCancel.time}</strong>?
+            </p>
+            {confirmCancel.paymentStatus !== 'unpaid' && (
+              <div className="nxl-up-alert nxl-alert-warn" style={{ marginBottom: '1rem' }}>
+                ⚠️ Your R{BOOKING_FEE} deposit is non-refundable. 48-hour notice required for cancellations.
+              </div>
+            )}
+            <div className="nxl-modal-actions">
+              <button className="nxl-btn nxl-btn-outline" onClick={() => setConfirmCancel(null)}>
+                Keep Appointment
+              </button>
+              <button className="nxl-btn nxl-btn-danger-solid" onClick={handleCancelConfirmed}>
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="nxl-up-footer">NXL Beauty Bar</div>
     </div>
   );
 }
-
-export default UserProfile;

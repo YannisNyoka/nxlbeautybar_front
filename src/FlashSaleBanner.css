@@ -1,0 +1,98 @@
+/* ── Flash Sale Banner ──────────────────────────────────────────────────── */
+.fsb-root {
+  width: 100%;
+  z-index: 998; /* just below navbar */
+  padding: 0.6rem 1.25rem;
+  animation: fsb-slide-down 0.35s ease;
+}
+
+@keyframes fsb-slide-down {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.fsb-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem;
+  max-width: 1100px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+}
+
+.fsb-icon { font-size: 1rem; flex-shrink: 0; }
+
+.fsb-message {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgba(255,232,214,0.9);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Clickable code chip */
+.fsb-code {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: 1.5px solid;
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  font-family: 'DM Sans', monospace;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+
+.fsb-code:hover { opacity: 0.85; transform: scale(1.03); }
+
+.fsb-copy-hint {
+  font-size: 0.65rem;
+  font-weight: 500;
+  opacity: 0.75;
+  letter-spacing: 0;
+}
+
+/* CTA */
+.fsb-cta {
+  display: inline-block;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.3rem 0.9rem;
+  border-radius: 50px;
+  text-decoration: none;
+  transition: opacity 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+
+.fsb-cta:hover { opacity: 0.88; transform: translateY(-1px); }
+
+/* Close */
+.fsb-close {
+  background: none;
+  border: none;
+  color: rgba(255,232,214,0.5);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  margin-left: auto;
+  transition: color 0.15s;
+  flex-shrink: 0;
+}
+
+.fsb-close:hover { color: rgba(255,232,214,0.9); }
+
+/* Mobile */
+@media (max-width: 600px) {
+  .fsb-inner { gap: 0.6rem; justify-content: flex-start; flex-wrap: nowrap; overflow: hidden; }
+  .fsb-message { font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .fsb-cta { display: none; }
+}

@@ -2,12 +2,69 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-<link rel="manifest" href="/site.webmanifest">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>nxlbeautybar</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- ── Primary Meta Tags ─────────────────────────────────── -->
+    <title>NXL Beauty Bar — Nails, Hair & Beauty in Soweto</title>
+    <meta name="title"       content="NXL Beauty Bar — Nails, Hair & Beauty in Soweto" />
+    <meta name="description" content="Book professional nail, hair and beauty services at NXL Beauty Bar in Dube, Soweto. Shop professional beauty products online with free delivery over R500." />
+    <meta name="keywords"    content="nail salon soweto, beauty bar johannesburg, nail technician dube, acrylic nails soweto, gel nails, beauty products south africa" />
+    <meta name="author"      content="NXL Beauty Bar" />
+    <meta name="robots"      content="index, follow" />
+
+    <!-- ── PWA ───────────────────────────────────────────────── -->
+    <link rel="manifest"      href="/manifest.json" />
+    <meta name="theme-color"  content="#3d1f15" />
+    <meta name="mobile-web-app-capable"               content="yes" />
+    <meta name="apple-mobile-web-app-capable"         content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title"           content="NXL Beauty" />
+
+    <!-- Apple touch icons (iOS home screen) -->
+    <link rel="apple-touch-icon"                      href="/Logo.jpeg" />
+    <link rel="apple-touch-icon" sizes="152x152"      href="/Logo.jpeg" />
+    <link rel="apple-touch-icon" sizes="180x180"      href="/Logo.jpeg" />
+    <link rel="apple-touch-icon" sizes="167x167"      href="/Logo.jpeg" />
+
+    <!-- Favicon -->
+    <link rel="icon"      type="image/jpeg" href="/Logo.jpeg" />
+    <link rel="shortcut icon"               href="/Logo.jpeg" />
+
+    <!-- ── Open Graph / WhatsApp share preview ───────────────── -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:url"         content="https://nxlbeautybar.co.za/" />
+    <meta property="og:title"       content="NXL Beauty Bar — Nails, Hair & Beauty in Soweto" />
+    <meta property="og:description" content="Book professional nail, hair and beauty services at NXL Beauty Bar in Dube, Soweto. Shop professional beauty products with free delivery over R500." />
+    <meta property="og:image"       content="https://nxlbeautybar.co.za/og-image.jpg" />
+    <meta property="og:site_name"   content="NXL Beauty Bar" />
+    <meta property="og:locale"      content="en_ZA" />
+
+    <!-- ── Twitter ───────────────────────────────────────────── -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:url"         content="https://nxlbeautybar.co.za/" />
+    <meta name="twitter:title"       content="NXL Beauty Bar — Nails, Hair & Beauty in Soweto" />
+    <meta name="twitter:description" content="Book professional nail, hair and beauty services at NXL Beauty Bar in Dube, Soweto." />
+    <meta name="twitter:image"       content="https://nxlbeautybar.co.za/og-image.jpg" />
+
+    <!-- ── Google Analytics 4 ────────────────────────────────── -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-3BKKGS0R98"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-3BKKGS0R98', { send_page_view: false });
+    </script>
+
+    <!-- ── Service Worker registration ──────────────────────── -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(reg => console.log('[SW] Registered:', reg.scope))
+            .catch(err => console.warn('[SW] Registration failed:', err));
+        });
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

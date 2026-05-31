@@ -5,124 +5,101 @@ import './Signup.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
-const api = {
-  async signup(form) {
-    try {
-      const res = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form)
-      });
-      let data = {};
-      const contentType = res.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        data = await res.json();
-      } else if (res.status === 404) {
-        throw new Error('API endpoint not found. Is your backend running on port 3000?');
-      } else {
-        throw new Error('Server returned non-JSON response');
-      }
-      if (!res.ok) throw new Error(data.error || 'Registration failed');
-      return { success: true, ...data };
-    } catch (error) {
-      return { success: false, error: error.message };
-    }
+async function signupApi(form) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    const contentType = res.headers.get('content-type');
+    let data = {};
+    if (contentType?.includes('application/json')) data = await res.json();
+    else if (res.status === 404) throw new Error('API endpoint not found. Is your backend running?');
+    else throw new Error('Server returned a non-JSON response');
+    if (!res.ok) throw new Error(data.error || 'Registration failed');
+    return { success: true, ...data };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
-};
+}
 
 function SignupForm() {
-  const { login } = useAuth();
+  const { login }  = useAuth();
+  const navigate   = useNavigate();
+
   const [form, setForm] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: ''
+    email: '', password: '', confirmPassword: '', firstName: '', lastName: '',
   });
-  const [errors, setErrors] = useState({});
-  const [submitted, setSubmitted] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [apiError, setApiError] = useState('');
+  const [errors,     setErrors]     = useState({});
+  const [loading,    setLoading]    = useState(false);
+  const [apiError,   setApiError]   = useState('');
   const [apiSuccess, setApiSuccess] = useState('');
 
-  const navigate = useNavigate();
-
   const validate = () => {
-    const newErrors = {};
-    if (!form.email) newErrors.email = 'Email is required';
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) newErrors.email = 'Invalid email format';
-    if (!form.password) newErrors.password = 'Password is required';
+    const e = {};
+    if (!form.email) e.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) e.email = 'Invalid email format';
+    if (!form.password) e.password = 'Password is required';
     else if (
-      form.password.length < 8 ||
-      !/[A-Z]/.test(form.password) ||
-      !/[a-z]/.test(form.password) ||
-      !/[0-9]/.test(form.password) ||
+      form.password.length < 8 || !/[A-Z]/.test(form.password) ||
+      !/[a-z]/.test(form.password) || !/[0-9]/.test(form.password) ||
       !/[^A-Za-z0-9]/.test(form.password)
-    ) {
-      newErrors.password = 'Password must be at least 8 characters and contain uppercase, lowercase, number, and special character';
-    }
-    if (!form.confirmPassword) newErrors.confirmPassword = 'Please confirm your password';
-    else if (form.password !== form.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-    if (!form.firstName) newErrors.firstName = 'First name is required';
-    if (!form.lastName) newErrors.lastName = 'Last name is required';
-    return newErrors;
+    ) e.password = 'Must be 8+ chars with uppercase, lowercase, number and special character';
+    if (!form.confirmPassword) e.confirmPassword = 'Please confirm your password';
+    else if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
+    if (!form.firstName) e.firstName = 'First name is required';
+    if (!form.lastName)  e.lastName  = 'Last name is required';
+    return e;
   };
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
     setErrors({ ...errors, [e.target.name]: undefined });
-    setApiError('');
-    setApiSuccess('');
+    setApiError(''); setApiSuccess('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setApiError('');
-    setApiSuccess('');
-    const validationErrors = validate();
-    setErrors(validationErrors);
-    if (Object.keys(validationErrors).length === 0) {
-      setLoading(true);
-      try {
-        const result = await api.signup(form);
-        if (result.success) {
-          localStorage.setItem('token', result.token);
-          if (result.refreshToken) localStorage.setItem('refreshToken', result.refreshToken);
-          localStorage.setItem('userEmail', result.data.email);
+    setApiError(''); setApiSuccess('');
+    const errs = validate();
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
 
-          const normalizedEmail = (result.data.email || '').toLowerCase();
-          const backendRole = result.data.role || 'user';
-          const isOrgAdmin = backendRole === 'admin' || normalizedEmail.includes('@nxlbeautybar.com');
+    setLoading(true);
+    try {
+      const result = await signupApi(form);
+      if (result.success) {
+        localStorage.setItem('token',        result.token);
+        if (result.refreshToken) localStorage.setItem('refreshToken', result.refreshToken);
+        localStorage.setItem('userEmail', result.data.email);
 
-          const userData = {
-            email: result.data.email,
-            firstName: result.data.firstName || form.firstName,
-            lastName: result.data.lastName || form.lastName,
-            id: result.data._id,
-            role: isOrgAdmin ? 'admin' : backendRole
-          };
+        // Trust ONLY the backend role — never infer admin from email domain
+        const backendRole = result.data.role || 'user';
+        const isOrgAdmin  = backendRole === 'admin';
 
-          localStorage.setItem('userInfo', JSON.stringify(userData));
-          login(userData);
+        const userData = {
+          email:     result.data.email,
+          firstName: result.data.firstName || form.firstName,
+          lastName:  result.data.lastName  || form.lastName,
+          id:        result.data._id,
+          role:      backendRole,
+        };
 
-          setApiSuccess('Welcome to NXL Beauty Bar! Your account has been created successfully.');
-          setSubmitted(true);
-          setForm({ email: '', password: '', confirmPassword: '', firstName: '', lastName: '' });
+        localStorage.setItem('userInfo', JSON.stringify(userData));
+        login(userData);
 
-          const targetPath = isOrgAdmin ? '/admin-dashboard' : '/dashboard';
-          setTimeout(() => { navigate(targetPath, { replace: true }); }, 1500);
-        } else {
-          setApiError(result.error || 'Signup failed. Please try again.');
-          setSubmitted(false);
-        }
-      } catch (err) {
-        setApiError('Network error. Please check your connection and try again.');
-        setSubmitted(false);
-      } finally {
-        setLoading(false);
+        setApiSuccess('Welcome to NXL Beauty Bar! Your account has been created.');
+        setForm({ email: '', password: '', confirmPassword: '', firstName: '', lastName: '' });
+
+        setTimeout(() => navigate(isOrgAdmin ? '/admin-dashboard' : '/dashboard', { replace: true }), 1500);
+      } else {
+        setApiError(result.error || 'Signup failed. Please try again.');
       }
-    } else {
-      setSubmitted(false);
+    } catch {
+      setApiError('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -130,82 +107,51 @@ function SignupForm() {
     <div className="nxl-signup-bg">
       <div className="nxl-signup-card">
 
-        {/* Brand */}
         <div className="nxl-signup-brand">
           <div className="nxl-signup-dot-ring">✨</div>
           <h1>Join NXL Beauty Bar</h1>
           <p>Create your account to start booking your nail appointments</p>
         </div>
 
-        {/* Form Panel */}
         <div className="nxl-signup-panel">
           <form onSubmit={handleSubmit} noValidate>
 
-            {/* Name row */}
             <div className="nxl-signup-row">
               <div className="nxl-signup-field">
                 <label>First Name</label>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={form.firstName}
-                  onChange={handleChange}
-                  disabled={loading}
-                  placeholder="First name"
-                />
+                <input type="text" name="firstName" value={form.firstName}
+                  onChange={handleChange} disabled={loading} placeholder="First name" />
                 {errors.firstName && <span className="nxl-signup-error-inline">{errors.firstName}</span>}
               </div>
-
               <div className="nxl-signup-field">
                 <label>Last Name</label>
-                <input
-                  type="text"
-                  name="lastName"
-                  value={form.lastName}
-                  onChange={handleChange}
-                  disabled={loading}
-                  placeholder="Last name"
-                />
+                <input type="text" name="lastName" value={form.lastName}
+                  onChange={handleChange} disabled={loading} placeholder="Last name" />
                 {errors.lastName && <span className="nxl-signup-error-inline">{errors.lastName}</span>}
               </div>
             </div>
 
             <div className="nxl-signup-field">
               <label>Email Address</label>
-              <input
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Enter your email address"
-              />
+              <input type="email" name="email" value={form.email}
+                onChange={handleChange} disabled={loading}
+                placeholder="Enter your email address" />
               {errors.email && <span className="nxl-signup-error-inline">{errors.email}</span>}
             </div>
 
             <div className="nxl-signup-field">
               <label>Password</label>
-              <input
-                type="password"
-                name="password"
-                value={form.password}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Create a strong password"
-              />
+              <input type="password" name="password" value={form.password}
+                onChange={handleChange} disabled={loading}
+                placeholder="Create a strong password" />
               {errors.password && <span className="nxl-signup-error-inline">{errors.password}</span>}
             </div>
 
             <div className="nxl-signup-field">
               <label>Confirm Password</label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={form.confirmPassword}
-                onChange={handleChange}
-                disabled={loading}
-                placeholder="Confirm your password"
-              />
+              <input type="password" name="confirmPassword" value={form.confirmPassword}
+                onChange={handleChange} disabled={loading}
+                placeholder="Confirm your password" />
               {errors.confirmPassword && <span className="nxl-signup-error-inline">{errors.confirmPassword}</span>}
             </div>
 
@@ -218,7 +164,6 @@ function SignupForm() {
 
           </form>
 
-          {/* Footer Links */}
           <div className="nxl-signup-footer">
             <p>Already have an account? <Link to="/login">Sign In</Link></p>
             <Link to="/" className="nxl-signup-back">← Back to Home</Link>
@@ -226,8 +171,6 @@ function SignupForm() {
         </div>
 
       </div>
-
-      {/* Footer Bar */}
       <div className="nxl-signup-footer-bar">NXL Beauty Bar</div>
     </div>
   );

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Offline — NXL Beauty Bar</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100svh;
+      background: linear-gradient(135deg, #1a0c07 0%, #3d1f15 60%, #6b3528 100%);
+      font-family: 'DM Sans', sans-serif;
+      color: #fdf6f0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 2rem;
+    }
+
+    .logo {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      border: 3px solid rgba(201,169,110,0.5);
+      object-fit: cover;
+      margin-bottom: 1.75rem;
+      box-shadow: 0 0 0 8px rgba(201,169,110,0.1);
+    }
+
+    h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2rem, 6vw, 3rem);
+      font-weight: 700;
+      color: #c9a96e;
+      margin-bottom: 0.5rem;
+    }
+
+    .tagline {
+      font-size: 0.82rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255,220,190,0.5);
+      margin-bottom: 2.5rem;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,220,190,0.15);
+      border-radius: 20px;
+      padding: 2.5rem 2rem;
+      max-width: 420px;
+      width: 100%;
+      margin-bottom: 2rem;
+    }
+
+    .icon { font-size: 3rem; margin-bottom: 1rem; display: block; }
+
+    h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #fdf6f0;
+      margin-bottom: 0.75rem;
+    }
+
+    p {
+      font-size: 0.88rem;
+      color: rgba(255,220,190,0.65);
+      line-height: 1.7;
+      margin-bottom: 1.75rem;
+    }
+
+    .btn {
+      display: inline-block;
+      background: #c9a96e;
+      color: #3d1f15;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 700;
+      padding: 0.875rem 2rem;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s, transform 0.15s;
+    }
+
+    .btn:hover { background: #e8c98a; transform: translateY(-2px); }
+
+    .contact {
+      font-size: 0.78rem;
+      color: rgba(255,220,190,0.4);
+      line-height: 1.8;
+    }
+
+    .contact a { color: rgba(201,169,110,0.7); text-decoration: none; }
+    .contact a:hover { color: #c9a96e; }
+  </style>
+</head>
+<body>
+  <img src="/Logo.jpeg" alt="NXL Beauty Bar" class="logo" onerror="this.style.display='none'" />
+  <h1>NXL Beauty Bar</h1>
+  <p class="tagline">Nails · Hair · Beauty · Confidence</p>
+
+  <div class="card">
+    <span class="icon">📶</span>
+    <h2>You're Offline</h2>
+    <p>
+      It looks like you've lost your internet connection.
+      Check your Wi-Fi or mobile data and try again.
+    </p>
+    <button class="btn" onclick="window.location.reload()">Try Again</button>
+  </div>
+
+  <div class="contact">
+    <p>Need to reach us?</p>
+    <p>
+      📞 <a href="tel:+27685113394">068 511 3394</a><br/>
+      💬 <a href="https://wa.me/27685113394">WhatsApp Us</a><br/>
+      📍 1948 Mahalefele Rd, Dube, Soweto
+    </p>
+  </div>
+</body>
+</html>

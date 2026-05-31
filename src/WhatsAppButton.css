@@ -1,0 +1,121 @@
+/* ── WhatsApp Floating Action Button ─────────────────────────────────────── */
+
+.wa-fab-wrap {
+  position: fixed;
+  bottom: 1.75rem;
+  right: 1.75rem;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  opacity: 0;
+  transform: translateY(20px) scale(0.8);
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.wa-fab-wrap--visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: all;
+}
+
+/* The button */
+.wa-fab {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: #25D366;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(37, 211, 102, 0.45),
+              0 2px 8px rgba(0,0,0,0.15);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+}
+
+.wa-fab:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 28px rgba(37, 211, 102, 0.55),
+              0 4px 12px rgba(0,0,0,0.18);
+}
+
+.wa-fab:active {
+  transform: scale(0.96);
+}
+
+.wa-fab-icon {
+  width: 30px;
+  height: 30px;
+  color: #fff;
+}
+
+/* Ripple pulse animation */
+.wa-fab--pulse::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: rgba(37, 211, 102, 0.4);
+  animation: wa-ripple 1s ease-out forwards;
+}
+
+@keyframes wa-ripple {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(1.7); opacity: 0;   }
+}
+
+/* Tooltip */
+.wa-tooltip {
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 500;
+  white-space: nowrap;
+  padding: 0.45rem 0.85rem;
+  border-radius: 8px;
+  pointer-events: none;
+  animation: wa-tooltip-in 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.wa-tooltip-arrow {
+  position: absolute;
+  bottom: -5px;
+  right: 20px;
+  width: 10px;
+  height: 10px;
+  background: #1a1a1a;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+@keyframes wa-tooltip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+/* Mobile — slightly smaller, closer to edge */
+@media (max-width: 480px) {
+  .wa-fab-wrap {
+    bottom: 1.25rem;
+    right: 1.25rem;
+  }
+
+  .wa-fab {
+    width: 52px;
+    height: 52px;
+  }
+
+  .wa-fab-icon {
+    width: 26px;
+    height: 26px;
+  }
+}

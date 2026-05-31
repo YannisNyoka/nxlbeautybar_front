@@ -1,22 +1,46 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import './HomePage.css';
-import noxoloImage from './assets/images/Logo.jpeg';
-import manicureImage from './assets/images/NxlPic5.jpg';
-import pedicureImage from './assets/images/ToesImage.jpg';
+import noxoloImage    from './assets/images/Logo.jpeg';
+import manicureImage  from './assets/images/NxlPic5.jpg';
+import pedicureImage  from './assets/images/ToesImage.jpg';
 import eyelashesImage from './assets/images/EyeLashesImage.jpg';
-// NEW: background image for hero
-import nxlDesignBg from './assets/images/nxl_design1.jpeg';
+import nxlDesignBg    from './assets/images/nxl_design1.jpeg';
 
 const SALON_ADDRESS = 'NXLBEAUTYBAR, 1948 Mahalefele Rd, Dube, Soweto, 1800';
 
-function getUserLocationAndRedirect() {
+function useCartCount() {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const read = () => {
+      try {
+        const items = JSON.parse(localStorage.getItem('nxl_cart') || '[]');
+        setCount(items.reduce((s, i) => s + (i.quantity || 0), 0));
+      } catch { setCount(0); }
+    };
+    read();
+    window.addEventListener('storage', read);
+    const t = setInterval(read, 2000);
+    return () => { window.removeEventListener('storage', read); clearInterval(t); };
+  }, []);
+  return count;
+}
+
+function useScrollY() {
+  const [y, setY] = useState(0);
+  useEffect(() => {
+    const h = () => setY(window.scrollY);
+    window.addEventListener('scroll', h, { passive: true });
+    return () => window.removeEventListener('scroll', h);
+  }, []);
+  return y;
+}
+
+function getDirections() {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude: lat, longitude: lng } = position.coords;
-        window.open(`https://www.google.com/maps/dir/?api=1&origin=${lat},${lng}&destination=${encodeURIComponent(SALON_ADDRESS)}`, '_blank');
-      },
+      ({ coords: { latitude: lat, longitude: lng } }) =>
+        window.open(`https://www.google.com/maps/dir/?api=1&origin=${lat},${lng}&destination=${encodeURIComponent(SALON_ADDRESS)}`, '_blank'),
       () => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(SALON_ADDRESS)}`, '_blank')
     );
   } else {
@@ -24,66 +48,33 @@ function getUserLocationAndRedirect() {
   }
 }
 
-// Shared flip-card face style
-const cardFaceStyle = {
-  position: 'absolute',
-  inset: 0,
-  backfaceVisibility: 'hidden',
-  WebkitBackfaceVisibility: 'hidden',
-  background: '#fff',
-  borderRadius: '18px',
-  boxShadow: '0 8px 32px rgba(61,31,21,0.12)',
-  border: '1px solid #e0ccc4',
-  padding: '1.6rem 1.2rem',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-};
-
-const imgWrapStyle = {
-  width: '110px',
-  height: '110px',
-  borderRadius: '50%',
-  overflow: 'hidden',
-  marginBottom: '1rem',
-  border: '3px solid #e0ccc4',
-  boxShadow: '0 4px 14px rgba(61,31,21,0.10)',
-};
-
+// ── Service flip card ──────────────────────────────────────────────────────
 function ServiceCard({ label, desc, image, backItems, flipped, onFlip }) {
   return (
-    <div
-      className="service-card"
-      style={{ cursor: 'pointer', perspective: '1000px' }}
-      onClick={onFlip}
-    >
-      {/* Flip hint */}
-      <div style={{ position: 'relative', height: '260px', transition: 'transform 0.55s', transformStyle: 'preserve-3d', transform: flipped ? 'rotateY(180deg)' : 'none' }}>
-
-        {/* Front */}
-        <div style={cardFaceStyle}>
-          <div style={imgWrapStyle}>
-            <img src={image} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+    <div className="hp-service-card" onClick={onFlip} role="button" tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && onFlip()}>
+      <div className={`hp-service-inner ${flipped ? 'hp-flipped' : ''}`}>
+        <div className="hp-service-face hp-service-front">
+          <div className="hp-service-img">
+            <img src={image} alt={label} />
           </div>
-          <h3 style={{ marginBottom: '0.3rem' }}>{label}</h3>
-          <p style={{ fontSize: '0.82rem', color: '#9e7060', textAlign: 'center', lineHeight: 1.5 }}>{desc}</p>
-          <span className="hp-flip-hint">Tap to see options</span>
+          <h3>{label}</h3>
+          <p>{desc}</p>
+          <span className="hp-service-hint">Tap to see options ↓</span>
         </div>
-
-        {/* Back */}
-        <div style={{ ...cardFaceStyle, transform: 'rotateY(180deg)', justifyContent: 'flex-start', paddingTop: '2rem' }}>
-          <h3 style={{ marginBottom: '0.8rem' }}>{label}</h3>
-          <ul className="hp-card-back-list">
+        <div className="hp-service-face hp-service-back">
+          <h3>{label}</h3>
+          <ul>
             {backItems.map((item, i) => <li key={i}>{item}</li>)}
           </ul>
-          <span className="hp-flip-hint" style={{ marginTop: '1rem' }}>Tap to go back</span>
+          <span className="hp-service-hint">↑ Tap to go back</span>
         </div>
       </div>
     </div>
   );
 }
 
+// ── Gallery ────────────────────────────────────────────────────────────────
 function GallerySection({ apiBase }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -98,306 +89,337 @@ function GallerySection({ apiBase }) {
       .finally(() => setLoading(false));
   }, [apiBase]);
 
-  if (loading) return (
-    <div style={{ textAlign: 'center', padding: '3rem', color: '#9e7060' }}>Loading gallery…</div>
-  );
-
-  if (!items.length) return (
-    <div className="about-section">
-      <h2 className="section-title">Our Work</h2>
-      <p style={{ textAlign: 'center', color: '#9e7060' }}>No posts yet — check back soon!</p>
-    </div>
-  );
+  if (loading) return <div className="hp-gallery-loading">Loading gallery…</div>;
+  if (!items.length) return null;
 
   return (
-    <div style={{ width: '100%', textAlign: 'center', marginBottom: '2.5rem' }}>
-      <h2 className="section-title">Our Work</h2>
-      <p style={{ color: '#9e7060', marginBottom: '1rem', fontSize: '0.9rem' }}>
-        Real clients, real results
-      </p>
+    <section className="hp-gallery-section" id="hp-our-work">
+      <div className="hp-section-label">Our Work</div>
+      <h2 className="hp-section-title">Real Clients. Real Results.</h2>
+      <p className="hp-section-sub">Swipe to explore our portfolio</p>
 
-      {/* Lightbox */}
       {lightbox && (
-        <div
-          onClick={() => setLightbox(null)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem', cursor: 'pointer' }}
-        >
-          <div onClick={e => e.stopPropagation()} style={{ maxWidth: '600px', width: '100%', background: '#fff', borderRadius: '16px', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', position: 'relative' }}>
-            {lightbox.imageUrl.match(/\.(mp4|webm|mov)$/i) ? (
-              <video src={lightbox.imageUrl} controls autoPlay style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#000' }} />
-            ) : (
-              <img src={lightbox.imageUrl} alt={lightbox.clientName} style={{ width: '100%', maxHeight: '70vh', objectFit: 'contain', background: '#f9f9f9' }} />
-            )}
-            <div style={{ padding: '1rem 1.25rem' }}>
-              {lightbox.clientName && <div style={{ fontWeight: 700, color: '#3d1f15', fontSize: '1rem' }}>{lightbox.clientName}</div>}
-              {lightbox.caption && <div style={{ color: '#9e7060', fontSize: '0.85rem', marginTop: '0.25rem' }}>{lightbox.caption}</div>}
+        <div className="hp-lightbox" onClick={() => setLightbox(null)}>
+          <div className="hp-lightbox-card" onClick={e => e.stopPropagation()}>
+            {lightbox.imageUrl.match(/\.(mp4|webm|mov)$/i)
+              ? <video src={lightbox.imageUrl} controls autoPlay className="hp-lightbox-media" />
+              : <img src={lightbox.imageUrl} alt={lightbox.clientName} className="hp-lightbox-media" />
+            }
+            <div className="hp-lightbox-info">
+              {lightbox.clientName && <strong>{lightbox.clientName}</strong>}
+              {lightbox.caption && <span>{lightbox.caption}</span>}
             </div>
-            <button onClick={() => setLightbox(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'rgba(0,0,0,0.5)', color: '#fff', border: 'none', borderRadius: '50%', width: '36px', height: '36px', cursor: 'pointer', fontSize: '1.1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+            <button className="hp-lightbox-close" onClick={() => setLightbox(null)}>✕</button>
           </div>
         </div>
       )}
 
-      {/* Swipeable track */}
-      <div style={{ position: 'relative' }}>
-        <div
-          ref={trackRef}
-          style={{
-            display: 'flex',
-            gap: '1rem',
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            scrollSnapType: 'x mandatory',
-            WebkitOverflowScrolling: 'touch',
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-            padding: '0.5rem 1.5rem 1rem',
-            cursor: 'grab',
-          }}
-          onMouseDown={e => {
-            const el = trackRef.current;
-            el.style.cursor = 'grabbing';
-            const startX = e.pageX - el.offsetLeft;
-            const scrollLeft = el.scrollLeft;
-            const onMove = ev => { el.scrollLeft = scrollLeft - (ev.pageX - el.offsetLeft - startX); };
-            const onUp = () => { el.style.cursor = 'grab'; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-            window.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', onUp);
-          }}
-        >
-          {/* Hide scrollbar for webkit */}
-          <style>{`#gallery-track::-webkit-scrollbar { display: none; }`}</style>
-
-          {items.map(item => (
-            <div
-              key={item._id}
-              onClick={() => setLightbox(item)}
-              style={{
-                flex: '0 0 220px',
-                scrollSnapAlign: 'start',
-                background: '#fff',
-                borderRadius: '14px',
-                overflow: 'hidden',
-                border: '1px solid #e0ccc4',
-                boxShadow: '0 4px 16px rgba(61,31,21,0.08)',
-                cursor: 'pointer',
-                userSelect: 'none',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.boxShadow = '0 8px 28px rgba(61,31,21,0.16)'; }}
-              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 16px rgba(61,31,21,0.08)'; }}
-            >
-              {item.imageUrl.match(/\.(mp4|webm|mov)$/i) ? (
-                <div style={{ position: 'relative', height: '200px', background: '#000' }}>
-                  <video src={item.imageUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.85 }} muted />
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: '2.5rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' }}>▶️</span>
-                  </div>
-                </div>
-              ) : (
-                <img src={item.imageUrl} alt={item.clientName || 'Gallery'} style={{ width: '100%', height: '200px', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
-              )}
-              <div style={{ padding: '0.75rem 1rem' }}>
-                {item.clientName && <div style={{ fontWeight: 700, color: '#3d1f15', fontSize: '0.88rem' }}>{item.clientName}</div>}
-                {item.caption && <div style={{ color: '#9e7060', fontSize: '0.78rem', marginTop: '0.2rem', lineHeight: 1.4 }}>{item.caption}</div>}
-              </div>
+      <div className="hp-gallery-track" ref={trackRef}
+        onMouseDown={e => {
+          const el = trackRef.current; el.style.cursor = 'grabbing';
+          const startX = e.pageX - el.offsetLeft; const sl = el.scrollLeft;
+          const onMove = ev => { el.scrollLeft = sl - (ev.pageX - el.offsetLeft - startX); };
+          const onUp = () => { el.style.cursor = 'grab'; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+          window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        }}
+      >
+        {items.map(item => (
+          <div key={item._id} className="hp-gallery-item" onClick={() => setLightbox(item)}>
+            {item.imageUrl.match(/\.(mp4|webm|mov)$/i)
+              ? <div className="hp-gallery-video"><video src={item.imageUrl} muted /><span className="hp-play">▶</span></div>
+              : <img src={item.imageUrl} alt={item.clientName || 'Gallery'} />
+            }
+            <div className="hp-gallery-caption">
+              {item.clientName && <strong>{item.clientName}</strong>}
+              {item.caption && <span>{item.caption}</span>}
             </div>
-          ))}
-        </div>
-
-        {/* Swipe hint — fades out on first scroll */}
-        <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#c07a5a', letterSpacing: '0.08em', marginTop: '0.25rem' }}>
-          ← swipe to see more →
-        </div>
+          </div>
+        ))}
       </div>
+      <p className="hp-gallery-scroll-hint">← swipe to see more →</p>
+    </section>
+  );
+}
+
+// ── Stats bar ──────────────────────────────────────────────────────────────
+function StatsBar() {
+  const stats = [
+    { value: '500+', label: 'Happy Clients' },
+    { value: '5★',   label: 'Rating' },
+    { value: '7+',   label: 'Years Experience' },
+    { value: '20+',  label: 'Services' },
+  ];
+  return (
+    <div className="hp-stats-bar">
+      {stats.map((s, i) => (
+        <div key={i} className="hp-stat">
+          <span className="hp-stat-value">{s.value}</span>
+          <span className="hp-stat-label">{s.label}</span>
+        </div>
+      ))}
     </div>
   );
 }
 
-function HomePage() {
-  const [flipped, setFlipped] = useState({ manicure: false, pedicure: false, lashes: false });
-  // NEW: mobile menu state for navbar
+// ── Shop CTA ───────────────────────────────────────────────────────────────
+function ShopCTA() {
+  return (
+    <section className="hp-shop-cta">
+      <div className="hp-shop-cta-inner">
+        <div className="hp-shop-cta-text">
+          <span className="hp-shop-eyebrow"> Now Online</span>
+          <h2>Shop Professional<br />Beauty Products</h2>
+          <p>The same products we use in salon — delivered to your door. Free shipping on orders over <strong>R500</strong>.</p>
+          <div className="hp-shop-cta-pills">
+            <span> Nail Products</span>
+            <span> Hair Care</span>
+            <span>🌿 Skincare</span>
+            <span>💎 Accessories</span>
+          </div>
+          <div className="hp-shop-cta-btns">
+            <Link to="/shop" className="hp-shop-cta-primary">Browse Products →</Link>
+            <Link to="/cart" className="hp-shop-cta-outline">🛒 View Cart</Link>
+          </div>
+        </div>
+        <div className="hp-shop-cta-visual" aria-hidden="true">
+          <div className="hp-shop-orb hp-orb1" />
+          <div className="hp-shop-orb hp-orb2" />
+          <div className="hp-shop-card-float hp-float1"><span></span><p>Gel &amp; Acrylic</p></div>
+          <div className="hp-shop-card-float hp-float2"><span>🌿</span><p>Skincare</p></div>
+          <div className="hp-shop-card-float hp-float3"><span>🚚</span><p>Free over R500</p></div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Booking CTA ────────────────────────────────────────────────────────────
+function BookingCTA() {
+  const isLoggedIn = !!localStorage.getItem('token');
+  return (
+    <section className="hp-booking-cta">
+      <div className="hp-booking-cta-inner">
+        <h2>Ready for Your Next Look?</h2>
+        <p>Book your appointment online in minutes. We're open Tuesday–Sunday, 9AM–5PM.</p>
+        <div className="hp-booking-cta-btns">
+          {isLoggedIn
+            ? <Link to="/dashboard" className="hp-book-btn-primary">Book Appointment →</Link>
+            : <>
+                <Link to="/signup" className="hp-book-btn-primary">Create Account &amp; Book</Link>
+                <Link to="/login" className="hp-book-btn-outline">Sign In</Link>
+              </>
+          }
+        </div>
+        <div className="hp-booking-meta">
+          <span>📍 1948 Mahalefele Rd, Dube, Soweto</span>
+          <span>📞 068 511 3394</span>
+          <span>🕐 Tue–Sun 9AM–5PM</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Footer ─────────────────────────────────────────────────────────────────
+function Footer() {
+  return (
+    <footer className="hp-footer">
+      <div className="hp-footer-inner">
+        <div className="hp-footer-brand">
+          <h3>NXL Beauty Bar</h3>
+          <p>Professional beauty services &amp; products in the heart of Soweto.</p>
+          <div className="hp-footer-socials">
+            <a href="https://wa.me/27685113394" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+              <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" fill="currentColor"/></svg>
+            </a>
+            <a href="https://www.instagram.com/nxlbeauty" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" fill="none" stroke="currentColor" strokeWidth="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" strokeWidth="2"/><circle cx="17.5" cy="6.5" r="1.2" fill="currentColor"/></svg>
+            </a>
+            <a href="https://www.facebook.com/share/17g73Pcr9j/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <svg viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 00-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 011-1h3z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </a>
+            <a href="https://www.tiktok.com/@nxlbeautybar" target="_blank" rel="noopener noreferrer" aria-label="TikTok">
+              <svg viewBox="0 0 24 24"><path d="M9 12a4 4 0 104 4V4a5 5 0 005 5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </a>
+          </div>
+        </div>
+        <div className="hp-footer-links">
+          <h4>Quick Links</h4>
+          <Link to="/shop">Shop Products</Link>
+          <Link to="/login">Book Appointment</Link>
+          <Link to="/signup">Create Account</Link>
+          <Link to="/orders">My Orders</Link>
+          <Link to="/dashboard">My Bookings</Link>
+        </div>
+        <div className="hp-footer-contact">
+          <h4>Contact</h4>
+          <p>📍 1948 Mahalefele Rd<br />Dube, Soweto, 1800</p>
+          <p>📞 <a href="tel:+27685113394">068 511 3394</a></p>
+          <p>✉️ <a href="mailto:nxlbeautybar@gmail.com">nxlbeautybar@gmail.com</a></p>
+          <button className="hp-footer-directions" onClick={getDirections}>Get Directions →</button>
+        </div>
+      </div>
+      <div className="hp-footer-bottom">
+        <p>© {new Date().getFullYear()} NXL Beauty Bar. All rights reserved.</p>
+        <p>Built with ❤️ in Soweto, South Africa</p>
+      </div>
+    </footer>
+  );
+}
+
+// ── Main Component ─────────────────────────────────────────────────────────
+export default function HomePage() {
+  const [flipped,  setFlipped]  = useState({ manicure: false, pedicure: false, lashes: false });
   const [menuOpen, setMenuOpen] = useState(false);
+  const scrollY   = useScrollY();
+  const cartCount = useCartCount();
   const isLoggedIn = !!localStorage.getItem('token');
 
-  const flip = (key) => setFlipped(prev => ({ ...prev, [key]: !prev[key] }));
+  const flip = key => setFlipped(p => ({ ...p, [key]: !p[key] }));
 
-  // NEW: smooth-scroll helper used by navbar buttons
-  const scrollTo = (id) => {
+  const scrollTo = id => {
     setMenuOpen(false);
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  return (
-    <div className="home-container">
+  const navScrolled = scrollY > 60;
 
-      {/* NEW ── Navbar ──────────────────────────────────────────────────────── */}
-      <nav className="hp-navbar">
-        <span className="hp-navbar-brand">NXL Beauty Bar</span>
-        <div className="hp-navbar-links">
-          <button onClick={() => scrollTo('hp-hero')}>Home</button>
-          <button onClick={() => scrollTo('hp-our-work')}>Our Work</button>
-          <button onClick={() => scrollTo('hp-services')}>Services</button>
-          <button onClick={() => scrollTo('hp-contact')}>Contact</button>
-        </div>
-        <button className="hp-navbar-hamburger" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">
-          {menuOpen ? '✕' : '☰'}
-        </button>
-        {menuOpen && (
-          <div className="hp-navbar-mobile-menu">
+  return (
+    <div className="hp-root">
+
+      {/* ── Navbar ──────────────────────────────────────────────────────── */}
+      <nav className={`hp-nav ${navScrolled ? 'hp-nav--scrolled' : ''}`}>
+        <div className="hp-nav-inner">
+          <div className="hp-nav-brand">
+            <img src={noxoloImage} alt="NXL Beauty Bar" className="hp-nav-logo" />
+            <span>NXL Beauty Bar</span>
+          </div>
+
+          <div className="hp-nav-links">
             <button onClick={() => scrollTo('hp-hero')}>Home</button>
-            <button onClick={() => scrollTo('hp-our-work')}>Our Work</button>
+            <button onClick={() => scrollTo('hp-our-work')}>Gallery</button>
             <button onClick={() => scrollTo('hp-services')}>Services</button>
+            <Link to="/shop" className="hp-nav-shop">🛍️ Shop</Link>
+            <button onClick={() => scrollTo('hp-contact')}>Contact</button>
+          </div>
+
+          <div className="hp-nav-actions">
+            <Link to="/cart" className="hp-nav-cart">
+              🛒
+              {cartCount > 0 && <span className="hp-nav-cart-badge">{cartCount}</span>}
+            </Link>
+            {isLoggedIn
+              ? <Link to="/dashboard" className="hp-nav-cta">My Bookings</Link>
+              : <Link to="/login"    className="hp-nav-cta">Book Now</Link>
+            }
+            <button className="hp-nav-burger" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">
+              <span /><span /><span />
+            </button>
+          </div>
+        </div>
+
+        {menuOpen && (
+          <div className="hp-nav-mobile">
+            <button onClick={() => scrollTo('hp-hero')}>Home</button>
+            <button onClick={() => scrollTo('hp-our-work')}>Gallery</button>
+            <button onClick={() => scrollTo('hp-services')}>Services</button>
+            <Link to="/shop"      onClick={() => setMenuOpen(false)}>🛍️ Shop</Link>
+            <Link to="/cart"      onClick={() => setMenuOpen(false)}>🛒 Cart {cartCount > 0 && `(${cartCount})`}</Link>
+            <Link to="/orders"    onClick={() => setMenuOpen(false)}>My Orders</Link>
+            {isLoggedIn
+              ? <Link to="/dashboard"    onClick={() => setMenuOpen(false)}>My Bookings</Link>
+              : <>
+                  <Link to="/login"  onClick={() => setMenuOpen(false)}>Sign In</Link>
+                  <Link to="/signup" onClick={() => setMenuOpen(false)}>Create Account</Link>
+                </>
+            }
             <button onClick={() => scrollTo('hp-contact')}>Contact</button>
           </div>
         )}
       </nav>
-      {/* END Navbar ──────────────────────────────────────────────────────────── */}
 
-      {/* ---- Hero ---- */}
-      {/* NEW: id added for navbar scroll target */}
-      <div id="hp-hero" className="hero-section">
-
-        {/* NEW: background image + overlay, scoped to hero only */}
-        <div className="hp-hero-bg" aria-hidden="true">
-          <img src={nxlDesignBg} alt="" className="hp-hero-bg-img" />
-          <div className="hp-hero-bg-overlay" />
+      {/* ── Hero ────────────────────────────────────────────────────────── */}
+      <section id="hp-hero" className="hp-hero">
+        <div className="hp-hero-bg">
+          <img src={nxlDesignBg} alt="" />
+          <div className="hp-hero-overlay" />
         </div>
-
-        {/* CHANGED: was Booking Policy button — now Book Now link */}
-        <div style={{ position: 'absolute', top: '3.9rem', right: '0.5rem', zIndex: 100 }}>
-          <Link to="/login" className="hp-policy-btn hp-glow">
-            Book Now 
-          </Link>
+        <div className="hp-hero-content">
+          <span className="hp-hero-eyebrow">Dube, Soweto · Est. 2019</span>
+         
+          <p className="hp-hero-tagline">Nails · Hair · Beauty · Confidence</p>
+          <div className="hp-hero-cta">
+            <Link to="/login"  className="hp-hero-btn-primary">Book Appointment</Link>
+            <Link to="/shop"   className="hp-hero-btn-outline">Shop Products</Link>
+          </div>
+         
         </div>
-
-        {/* Title — unchanged */}
-        <h1>NXL Beauty Bar</h1>
         
-        {/* Artist Image — unchanged */}
-        <div className="nail-artist-section">
-          <div className="nail-text">
-            <div className="artist-image">
-              <img src={noxoloImage} alt="NXL Nail Artist" />
-            </div>
+        
+      </section>
+
+      {/* ── Stats ───────────────────────────────────────────────────────── */}
+      <StatsBar />
+
+      {/* ── Gallery ─────────────────────────────────────────────────────── */}
+      <GallerySection apiBase={import.meta.env.VITE_API_BASE_URL || ''} />
+
+      {/* ── Services ────────────────────────────────────────────────────── */}
+      <section id="hp-services" className="hp-services">
+        <div className="hp-section-label">What We Do</div>
+        <h2 className="hp-section-title">Our Services</h2>
+        <p className="hp-section-sub">Click a card to see available styles</p>
+        <div className="hp-services-grid">
+          <ServiceCard label="Manicure"   desc="Long-lasting, chip-resistant polish"  image={manicureImage}  backItems={['Rubberbase', 'Acrylic', 'Polygel']}        flipped={flipped.manicure} onFlip={() => flip('manicure')} />
+          <ServiceCard label="Pedicure"   desc="Custom designs and treatments"        image={pedicureImage}  backItems={['Rubberbase', 'Polygel', 'Gelish']}         flipped={flipped.pedicure} onFlip={() => flip('pedicure')} />
+          <ServiceCard label="Eye Lashes" desc="Professional lash extensions"         image={eyelashesImage} backItems={['Classic Set', 'Volume Set', 'Hybrid Set']} flipped={flipped.lashes}   onFlip={() => flip('lashes')} />
+        </div>
+        <div className="hp-services-cta">
+          <Link to="/login" className="hp-services-book-btn">Book a Service →</Link>
+        </div>
+      </section>
+
+      {/* ── Shop CTA ────────────────────────────────────────────────────── */}
+      <ShopCTA />
+
+      {/* ── Booking CTA ─────────────────────────────────────────────────── */}
+      <BookingCTA />
+
+      {/* ── Contact / Social ────────────────────────────────────────────── */}
+      <section id="hp-contact" className="hp-contact-section">
+        <div className="hp-section-label">Find Us</div>
+        <h2 className="hp-section-title">Get in Touch</h2>
+        <div className="hp-contact-grid">
+          <div className="hp-contact-card">
+            <span>📍</span>
+            <h4>Location</h4>
+            <p>1948 Mahalefele Rd<br />Dube, Soweto, 1800</p>
+            <button onClick={getDirections}>Get Directions →</button>
+          </div>
+          <div className="hp-contact-card">
+            <span>🕐</span>
+            <h4>Hours</h4>
+            <p>Monday – Saturday<br />9:00 AM – 5:00 PM</p>
+            <Link to="/login">Book Now →</Link>
+          </div>
+          <div className="hp-contact-card">
+            <span>📞</span>
+            <h4>Call or WhatsApp</h4>
+            <p>068 511 3394</p>
+            <a href="https://wa.me/27685113394" target="_blank" rel="noopener noreferrer">WhatsApp Us →</a>
+          </div>
+          <div className="hp-contact-card">
+            <span>✉️</span>
+            <h4>Email</h4>
+            <p>nxlbeautybar@gmail.com</p>
+            <a href="mailto:nxlbeautybar@gmail.com">Send Email →</a>
           </div>
         </div>
+      </section>
 
-        {/* Location — unchanged */}
-        <div className="location-bar" onClick={getUserLocationAndRedirect} role="button" tabIndex={0}>
-          <span className="location-icon">📍</span>
-          <span className="location-text">Johannesburg, Soweto</span>
-        </div>
-
-        {/* NEW: wave that blends hero image into page background */}
-        <div className="hp-hero-wave" aria-hidden="true">
-          <svg viewBox="0 0 1440 90" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M0,30 C480,90 960,0 1440,50 L1440,90 L0,90 Z" fill="#fdf6f0" />
-          </svg>
-        </div>
-      </div>
-
-      {/* ---- About / Gallery ---- */}
-      {/* NEW: id added for navbar scroll target */}
-      <div id="hp-our-work">
-        <GallerySection apiBase={import.meta.env.VITE_API_BASE_URL || ''} />
-      </div>
-
-      {/* ---- Services ---- */}
-      {/* NEW: id added for navbar scroll target */}
-      <div id="hp-services" className="services-preview">
-        <h2 className="section-title">Our Services</h2>
-        <div className="services-grid">
-          <ServiceCard
-            label="Manicure"
-            desc="Long-lasting, chip-resistant polish"
-            image={manicureImage}
-            backItems={['Rubberbase', 'Acrylic', 'Polygel']}
-            flipped={flipped.manicure}
-            onFlip={() => flip('manicure')}
-          />
-          <ServiceCard
-            label="Pedicure"
-            desc="Custom designs and treatments"
-            image={pedicureImage}
-            backItems={['Rubberbase','Polygel','Gelish']}
-            flipped={flipped.pedicure}
-            onFlip={() => flip('pedicure')}
-          />
-          <ServiceCard
-            label="Eye Lashes"
-            desc="Professional extensions"
-            image={eyelashesImage}
-            backItems={['Classic Set', 'Volume Set', 'Hybrid Set']}
-            flipped={flipped.lashes}
-            onFlip={() => flip('lashes')}
-          />
-        </div>
-      </div>
-
-      {/* ---- CTA — unchanged ---- */}
-      <div className="navigation-links">
-        <Link to="/signup" className="nav-link primary">Create Account</Link>
-        <Link to="/login" className="nav-link secondary">Sign In</Link>
-        {isLoggedIn && (
-          <Link to="/dashboard" className="nav-link secondary">Dashboard</Link>
-        )}
-      </div>
-
-      {/* ---- Social / Contact — unchanged ---- */}
-      {/* NEW: id added for navbar scroll target */}
-      <div id="hp-contact" className="contact-info">
-        <div className="contact-item">
-          <span className="contact-icon" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24">
-              <rect x="1" y="1" width="22" height="22" rx="5" fill="#25D366"/>
-              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" fill="#fff"/>
-            </svg>
-          </span>
-          <a href="https://wa.me/27685113394?text=Hi%20NXLBeautyBar%2C%20I%20would%20like%20to%20book%20an%20appointment%20please." target="_blank" rel="noopener noreferrer">WhatsApp</a>
-        </div>
-
-        <div className="contact-item">
-          <span className="contact-icon" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24">
-              <rect x="1" y="1" width="22" height="22" rx="5" fill="#1877F2"/>
-                    <path d="M13.2 9.3h1.8V6.8h-1.8c-1.9 0-3.1 1.2-3.1 3.1v1.6H9.1v2.5h1.9v6h2.8v-6h2l.5-2.5h-2.5V9.9c0-.4.2-.6.9-.6z" fill="#fff"/>
-                  </svg>
-                </span>
-                <a href="https://www.facebook.com/share/17g73Pcr9j/" target="_blank" rel="noopener noreferrer">Facebook</a>
-              </div>
-
-              <div className="contact-item">
-                <span className="contact-icon" aria-hidden="true">
-                  <svg width="24" height="24" viewBox="0 0 24 24">
-                    <defs>
-                      <linearGradient id="igGrad" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#f58529"/>
-                        <stop offset="50%" stopColor="#dd2a7b"/>
-                        <stop offset="100%" stopColor="#8134af"/>
-                      </linearGradient>
-                    </defs>
-                    <rect x="1" y="1" width="22" height="22" rx="5" fill="url(#igGrad)"/>
-                    <rect x="7" y="7" width="10" height="10" rx="5" fill="none" stroke="#fff" strokeWidth="2"/>
-                    <circle cx="16.5" cy="7.5" r="1.3" fill="#fff"/>
-                  </svg>
-                </span>
-                <a href="https://www.instagram.com/nxlbeauty?igsh=Z2tnOTl0OXdmdmxz" target="_blank" rel="noopener noreferrer">Instagram</a>
-              </div>
-
-              <div className="contact-item">
-                <span className="contact-icon" aria-hidden="true">
-                  <svg width="24" height="24" viewBox="0 0 24 24">
-                    <rect x="1" y="1" width="22" height="22" rx="5" fill="#000"/>
-                    <path d="M9 7.5c1.7 0 3.2.9 4.1 2.3v6.7h-2v-4.2c-.6-.4-1.4-.6-2.1-.6-1.9 0-3.5 1.2-3.5 3.1 0 1.6 1.2 2.9 2.8 3.1-2.2-.2-4-2.1-4-4.4 0-2.5 2.1-4.4 4.7-4.4zM15 7.2c.7.3 1.3.8 1.8 1.4v6.9h-1.8V7.2z" fill="#fff"/>
-                  </svg>
-                </span>
-                <a href="https://www.tiktok.com/@nxlbeautybar?_r=1&_t=ZS-91Q3zPzMphH" target="_blank" rel="noopener noreferrer">TikTok</a>
-              </div>
-            </div>
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <Footer />
 
     </div>
   );
 }
-
-export default HomePage;
