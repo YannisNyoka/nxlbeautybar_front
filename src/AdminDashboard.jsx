@@ -663,7 +663,7 @@ function AdminDashboard() {
 
     if (shopProducts.length === 0 && !shopLoading) loadProducts();
     const CATEGORIES = ['nails','hair','skincare','accessories','professional','other'];
-    const CAT_EMOJI = { nails:'💅', hair:'💇‍♀️', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'✨' };
+    const CAT_EMOJI = { nails:'', hair:'', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'' };
     return (
       <section className="panel">
         <header><h3>Shop Products <span className="count-chip">{shopProducts.length}</span></h3><div className="button-row"><button className="btn ghost" onClick={loadProducts}>↻ Refresh</button><button className="btn primary" onClick={() => { setEditingProduct(null); setProductForm({name:'',description:'',price:'',comparePrice:'',category:'nails',stock:'',sku:'',brand:'',tags:'',isFeatured:false,isActive:true}); setProductImages([]); setProductImgUrl(''); setShowProductForm(true); }}>➕ Add Product</button></div></header>

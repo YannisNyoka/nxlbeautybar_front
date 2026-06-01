@@ -108,7 +108,7 @@ function SignupForm() {
       <div className="nxl-signup-card">
 
         <div className="nxl-signup-brand">
-          <div className="nxl-signup-dot-ring">✨</div>
+          <div className="nxl-signup-dot-ring"></div>
           <h1>Join NXL Beauty Bar</h1>
           <p>Create your account to start booking your nail appointments</p>
         </div>
