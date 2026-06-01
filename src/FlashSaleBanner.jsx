@@ -42,7 +42,7 @@ export default function FlashSaleBanner() {
   return (
     <div className="fsb-root" style={{ background: `linear-gradient(135deg, ${PROMO.bgFrom}, ${PROMO.bgTo})` }}>
       <div className="fsb-inner">
-        <span className="fsb-icon">✨</span>
+        <span className="fsb-icon"></span>
         <p className="fsb-message">{PROMO.message}</p>
         <button className="fsb-code" onClick={copyCode} title="Click to copy"
           style={{ borderColor: PROMO.accent, color: PROMO.accent }}>

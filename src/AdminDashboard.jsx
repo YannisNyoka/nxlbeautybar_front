@@ -14,20 +14,21 @@ import { usePushAlarm } from './hooks/UsePushAlarm';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const API_ENDPOINTS = {
-  appointments:  `${API_BASE_URL}/appointments`,
-  services:      `${API_BASE_URL}/services`,
-  staff:         `${API_BASE_URL}/employees`,
-  availability:  `${API_BASE_URL}/availability`,
-  clients:       `${API_BASE_URL}/users?limit=500`,
-  payments:      `${API_BASE_URL}/payments`,
-  notifications: `${API_BASE_URL}/notifications`,
-  notifMarkRead: `${API_BASE_URL}/notifications/mark-read`,
-  gallery:       `${API_BASE_URL}/gallery`,
-  shopProducts:      `${API_BASE_URL}/shop/admin/products`, 
-  discountCodes: `${API_BASE_URL}/discount-codes`, 
-shopProductsWrite: `${API_BASE_URL}/shop/products`,       
-shopOrders:      `${API_BASE_URL}/shop/admin/orders`,
-shopOrderUpdate: `${API_BASE_URL}/shop/admin/orders`,
+  appointments:      `${API_BASE_URL}/appointments`,
+  services:          `${API_BASE_URL}/services`,
+  staff:             `${API_BASE_URL}/employees`,
+  availability:      `${API_BASE_URL}/availability`,
+  clients:           `${API_BASE_URL}/users?limit=500`,
+  payments:          `${API_BASE_URL}/payments`,
+  notifications:     `${API_BASE_URL}/notifications`,
+  notifMarkRead:     `${API_BASE_URL}/notifications/mark-read`,
+  gallery:           `${API_BASE_URL}/gallery`,
+  shopProducts:      `${API_BASE_URL}/shop/admin/products`,
+  discountCodes:     `${API_BASE_URL}/discount-codes`,
+  shopProductsWrite: `${API_BASE_URL}/shop/products`,
+  shopOrders:        `${API_BASE_URL}/shop/admin/orders`,
+  shopOrderUpdate:   `${API_BASE_URL}/shop/admin/orders`,
+  shopStats:         `${API_BASE_URL}/shop/admin/stats`,
 };
 
 const decimalToFloat = value => {
@@ -247,37 +248,30 @@ function AdminDashboard() {
   const [galleryForm, setGalleryForm] = useState({ imageUrl:'', clientName:'', caption:'' });
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
-  const [shopProducts,    setShopProducts]    = useState([]);
-  const [shopOrders,      setShopOrders]      = useState([]);
-  const [shopStats,       setShopStats]       = useState(null);
-  const [shopStatsLoad, setShopStatsLoad] = useState(false);
-  const [shopLoading,     setShopLoading]     = useState(false);
-  const [productForm,     setProductForm]     = useState({ name:'', description:'', price:'', comparePrice:'', category:'nails', stock:'', sku:'', brand:'', tags:'', isFeatured:false, isActive:true });
-  const [showProductForm, setShowProductForm] = useState(false);
-  const [editingProduct,  setEditingProduct]  = useState(null);
-  const [productImgUrl,   setProductImgUrl]   = useState('');
-  const [productImages,   setProductImages]   = useState([]);
-  const [imgUploading,    setImgUploading]    = useState(false);
-  const [orderFilter,     setOrderFilter]     = useState('all');
-  const [discountCodes,    setDiscountCodes]    = useState([]);
-  const [discountLoading,  setDiscountLoading]  = useState(false);
-  const [discountForm,     setDiscountForm]     = useState({
-     code: '', type: 'percentage', value: '', description: '',
-    minOrderAmount: '', usageLimit: '', expiresAt: '', isActive: true,
-  });
+  const [shopProducts,     setShopProducts]    = useState([]);
+  const [shopOrders,       setShopOrders]      = useState([]);
+  const [shopStats,        setShopStats]       = useState(null);
+  const [shopStatsLoad,    setShopStatsLoad]   = useState(false);
+  const [shopLoading,      setShopLoading]     = useState(false);
+  const [productForm,      setProductForm]     = useState({ name:'', description:'', price:'', comparePrice:'', category:'nails', stock:'', sku:'', brand:'', tags:'', isFeatured:false, isActive:true });
+  const [showProductForm,  setShowProductForm] = useState(false);
+  const [editingProduct,   setEditingProduct]  = useState(null);
+  const [productImgUrl,    setProductImgUrl]   = useState('');
+  const [productImages,    setProductImages]   = useState([]);
+  const [imgUploading,     setImgUploading]    = useState(false);
+  const [orderFilter,      setOrderFilter]     = useState('all');
+  const [discountCodes,    setDiscountCodes]   = useState([]);
+  const [discountLoading,  setDiscountLoading] = useState(false);
+  const [discountForm,     setDiscountForm]    = useState({ code:'', type:'percentage', value:'', description:'', minOrderAmount:'', usageLimit:'', expiresAt:'', isActive:true });
   const [showDiscountForm, setShowDiscountForm] = useState(false);
-  const [editingDiscount,  setEditingDiscount]  = useState(null);
+  const [editingDiscount,  setEditingDiscount] = useState(null);
 
-  // ─── Background push alarm via Service Worker ─────────────────────────────
-  // Registers /public/sw.js, syncs auth token, fires OS notifications + chime
-  // every 3 minutes while unread bookings exist — even with the tab hidden.
   usePushAlarm({ isAuthenticated, notifications, activeSection });
 
   const showToast = useCallback((msg, type='success') => { setToast({ msg, type, id:Date.now() }); setTimeout(() => setToast(null), 3500); }, []);
   useEffect(() => { localStorage.setItem('adminActiveSection', activeSection); }, [activeSection]);
   useEffect(() => { if (!isAuthenticated || authLoading) return; loadAll(); }, [isAuthenticated, authLoading, user]);
 
-  // Mark as read when admin opens Activity Log tab
   useEffect(() => {
     if (activeSection !== 'notifications') return;
     apiRequest(API_ENDPOINTS.notifMarkRead, { method:'POST' })
@@ -285,7 +279,6 @@ function AdminDashboard() {
       .catch(() => {});
   }, [activeSection]);
 
-  // Lightweight 20-second in-app poll (SW handles the heavy 3-min background alarm)
   useEffect(() => {
     if (!isAuthenticated) return;
     async function pollNotifications() {
@@ -392,7 +385,7 @@ function AdminDashboard() {
   const exportCSV = () => {
     const rows=[['Date','Client','Staff','Services','Status','Payment','Amount (R)'],...appointments.map(appt=>[appt.date,appt.userName||appt.clientName||'Unknown',staff.find(s=>String(s._id)===String(appt.employeeId))?.name||'—',(appt.serviceIds||[]).map(id=>services.find(s=>String(s._id)===String(id))?.name).filter(Boolean).join('; '),appt.status,appt.paymentStatus||'unpaid',(payments.find(p=>String(p.appointmentId)===String(appt._id))?.amount??0).toFixed(2)])];
     const csv=rows.map(r=>r.map(f=>`"${String(f??'').replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const link=document.createElement('a'); link.href=URL.createObjectURL(blob); link.download='nxl-report.csv'; link.click(); URL.revokeObjectURL(link.href);
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const link=document.createElement('a'); link.href=URL.createObjectURL(blob); link.download='nxl-appointments.csv'; link.click(); URL.revokeObjectURL(link.href);
   };
 
   const renderUnpaidPanel = () => {
@@ -650,275 +643,56 @@ function AdminDashboard() {
   );
 
   const renderProducts = () => {
-    const loadProducts = async () => {
-      setShopLoading(true);
-      try {
-        const data = await apiRequest(API_ENDPOINTS.shopProducts);
-        setShopProducts(data.data || []);
-      } catch (e) { showToast(e.message, 'error'); }
-      finally { setShopLoading(false); }
-    };
-
-    const handleProductImage = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      setImgUploading(true);
-      try {
-        const formData = new FormData();
-        formData.append('file',           file);
-        formData.append('upload_preset',  'NXLBEAUTYBAR');
-        formData.append('cloud_name',     'djjxu9yg9');
-        const res  = await fetch('https://api.cloudinary.com/v1_1/djjxu9yg9/image/upload', { method:'POST', body:formData });
-        const data = await res.json();
-        setProductImgUrl(data.secure_url);
-        setProductImages(prev => [...prev, data.secure_url]);
-        showToast('Image uploaded!');
-      } catch { showToast('Image upload failed', 'error'); }
-      finally { setImgUploading(false); }
-    };
-
-    const handleProductSubmit = async (e) => {
-      e.preventDefault();
-      setIsSubmitting(true);
-      try {
-        const payload = {
-          name:         productForm.name,
-          description:  productForm.description,
-          price:        parseFloat(productForm.price),
-          comparePrice: productForm.comparePrice ? parseFloat(productForm.comparePrice) : undefined,
-          category:     productForm.category,
-          stock:        parseInt(productForm.stock),
-          sku:          productForm.sku,
-          brand:        productForm.brand,
-          tags:         productForm.tags ? productForm.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-          isFeatured:   productForm.isFeatured,
-          isActive:     productForm.isActive,
-          images:       productImages,
-        };
-        const method   = editingProduct ? 'PUT' : 'POST';
-        const endpoint = editingProduct
-  ? `${API_ENDPOINTS.shopProductsWrite}/${editingProduct._id}`
-  : API_ENDPOINTS.shopProductsWrite;
-        await apiRequest(endpoint, { method, body: JSON.stringify(payload) });
-        showToast(`Product ${editingProduct ? 'updated' : 'created'}.`);
-        setShowProductForm(false);
-        setEditingProduct(null);
-        setProductImages([]);
-        setProductImgUrl('');
-        loadProducts();
-      } catch (e) { showToast(e.message, 'error'); }
-      finally { setIsSubmitting(false); }
-    };
-
-    const openEdit = (product) => {
-      setEditingProduct(product);
-      setProductForm({
-        name:         product.name,
-        description:  product.description || '',
-        price:        String(product.price),
-        comparePrice: product.comparePrice ? String(product.comparePrice) : '',
-        category:     product.category,
-        stock:        String(product.stock),
-        sku:          product.sku || '',
-        brand:        product.brand || '',
-        tags:         (product.tags || []).join(', '),
-        isFeatured:   product.isFeatured || false,
-        isActive:     product.isActive !== false,
-      });
-      setProductImages(product.images || []);
-      setProductImgUrl('');
-      setShowProductForm(true);
-    };
-
-    const handleToggleActive = async (product) => {
-      try {
-        await apiRequest(`${API_ENDPOINTS.shopProductsWrite}/${product._id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ isActive: !product.isActive }),
-        });
-        showToast(`Product ${product.isActive ? 'deactivated' : 'activated'}.`);
-        loadProducts();
-      } catch (e) { showToast(e.message, 'error'); }
-    };
-
-    // Load on first render of this section
+    const loadProducts = async () => { setShopLoading(true); try { const data = await apiRequest(API_ENDPOINTS.shopProducts); setShopProducts(data.data || []); } catch (e) { showToast(e.message, 'error'); } finally { setShopLoading(false); } };
+    const handleProductImage = async (e) => { const file = e.target.files[0]; if (!file) return; setImgUploading(true); try { const formData = new FormData(); formData.append('file', file); formData.append('upload_preset', 'NXLBEAUTYBAR'); formData.append('cloud_name', 'djjxu9yg9'); const res = await fetch('https://api.cloudinary.com/v1_1/djjxu9yg9/image/upload', { method:'POST', body:formData }); const data = await res.json(); setProductImgUrl(data.secure_url); setProductImages(prev => [...prev, data.secure_url]); showToast('Image uploaded!'); } catch { showToast('Image upload failed', 'error'); } finally { setImgUploading(false); } };
+    const handleProductSubmit = async (e) => { e.preventDefault(); setIsSubmitting(true); try { const payload = { name:productForm.name, description:productForm.description, price:parseFloat(productForm.price), comparePrice:productForm.comparePrice?parseFloat(productForm.comparePrice):undefined, category:productForm.category, stock:parseInt(productForm.stock), sku:productForm.sku, brand:productForm.brand, tags:productForm.tags?productForm.tags.split(',').map(t=>t.trim()).filter(Boolean):[], isFeatured:productForm.isFeatured, isActive:productForm.isActive, images:productImages }; const method = editingProduct ? 'PUT' : 'POST'; const endpoint = editingProduct ? `${API_ENDPOINTS.shopProductsWrite}/${editingProduct._id}` : API_ENDPOINTS.shopProductsWrite; await apiRequest(endpoint, { method, body:JSON.stringify(payload) }); showToast(`Product ${editingProduct?'updated':'created'}.`); setShowProductForm(false); setEditingProduct(null); setProductImages([]); setProductImgUrl(''); loadProducts(); } catch (e) { showToast(e.message, 'error'); } finally { setIsSubmitting(false); } };
+    const openEdit = (product) => { setEditingProduct(product); setProductForm({ name:product.name, description:product.description||'', price:String(product.price), comparePrice:product.comparePrice?String(product.comparePrice):'', category:product.category, stock:String(product.stock), sku:product.sku||'', brand:product.brand||'', tags:(product.tags||[]).join(', '), isFeatured:product.isFeatured||false, isActive:product.isActive!==false }); setProductImages(product.images||[]); setProductImgUrl(''); setShowProductForm(true); };
+    const handleToggleActive = async (product) => { try { await apiRequest(`${API_ENDPOINTS.shopProductsWrite}/${product._id}`, { method:'PUT', body:JSON.stringify({ isActive:!product.isActive }) }); showToast(`Product ${product.isActive?'deactivated':'activated'}.`); loadProducts(); } catch (e) { showToast(e.message, 'error'); } };
     if (shopProducts.length === 0 && !shopLoading) loadProducts();
-
     const CATEGORIES = ['nails','hair','skincare','accessories','professional','other'];
-    const CAT_EMOJI  = { nails:'💅', hair:'💇‍♀️', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'✨' };
-
+    const CAT_EMOJI = { nails:'', hair:'', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'' };
     return (
       <section className="panel">
-        <header>
-          <h3>Shop Products <span className="count-chip">{shopProducts.length}</span></h3>
-          <div className="button-row">
-            <button className="btn ghost" onClick={loadProducts}>↻ Refresh</button>
-            <button className="btn primary" onClick={() => {
-              setEditingProduct(null);
-              setProductForm({ name:'',description:'',price:'',comparePrice:'',category:'nails',stock:'',sku:'',brand:'',tags:'',isFeatured:false,isActive:true });
-              setProductImages([]);
-              setProductImgUrl('');
-              setShowProductForm(true);
-            }}>➕ Add Product</button>
-          </div>
-        </header>
-
-        {shopLoading ? (
-          <div style={{ textAlign:'center', padding:'3rem', color:'#94a3b8' }}>Loading products…</div>
-        ) : (
-          <div className="table-responsive">
-            <table>
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th>Category</th>
-                  <th>Price</th>
-                  <th>Stock</th>
-                  <th>Status</th>
-                  <th>Featured</th>
-                  <th>Actions</th>
+        <header><h3>Shop Products <span className="count-chip">{shopProducts.length}</span></h3><div className="button-row"><button className="btn ghost" onClick={loadProducts}>↻ Refresh</button><button className="btn primary" onClick={() => { setEditingProduct(null); setProductForm({name:'',description:'',price:'',comparePrice:'',category:'nails',stock:'',sku:'',brand:'',tags:'',isFeatured:false,isActive:true}); setProductImages([]); setProductImgUrl(''); setShowProductForm(true); }}>➕ Add Product</button></div></header>
+        {shopLoading ? <div style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>Loading products…</div> : (
+          <div className="table-responsive"><table>
+            <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Featured</th><th>Actions</th></tr></thead>
+            <tbody>
+              {shopProducts.map(p => (
+                <tr key={p._id} style={{opacity:p.isActive?1:0.5}}>
+                  <td><div style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>{p.images?.[0]?<img src={p.images[0]} alt={p.name} style={{width:42,height:42,objectFit:'cover',borderRadius:8,border:'1px solid #e2e8f0',flexShrink:0}} />:<div style={{width:42,height:42,background:'#f1f5f9',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>{CAT_EMOJI[p.category]||'✨'}</div>}<div><div style={{fontWeight:600,fontSize:'0.88rem'}}>{p.name}</div>{p.brand&&<div style={{fontSize:'0.72rem',color:'#94a3b8'}}>{p.brand}</div>}</div></div></td>
+                  <td style={{textTransform:'capitalize'}}>{CAT_EMOJI[p.category]} {p.category}</td>
+                  <td><div style={{fontWeight:700}}>R{parseFloat(p.price).toFixed(2)}</div>{p.comparePrice&&<div style={{fontSize:'0.72rem',color:'#94a3b8',textDecoration:'line-through'}}>R{parseFloat(p.comparePrice).toFixed(2)}</div>}</td>
+                  <td><span style={{fontWeight:600,color:p.stock===0?'#c53030':p.stock<=5?'#c05621':'#276749'}}>{p.stock}</span></td>
+                  <td><span className={`status ${p.isActive?'booked':'cancelled'}`}>{p.isActive?'Active':'Inactive'}</span></td>
+                  <td>{p.isFeatured?<span style={{color:'#d97706',fontWeight:700}}>★ Yes</span>:<span style={{color:'#94a3b8'}}>—</span>}</td>
+                  <td className="row-actions"><button className="action-btn" onClick={()=>openEdit(p)}>Edit</button><button className="action-btn" onClick={()=>handleToggleActive(p)}>{p.isActive?'Deactivate':'Activate'}</button></td>
                 </tr>
-              </thead>
-              <tbody>
-                {shopProducts.map(p => (
-                  <tr key={p._id} style={{ opacity: p.isActive ? 1 : 0.5 }}>
-                    <td>
-                      <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
-                        {p.images?.[0]
-                          ? <img src={p.images[0]} alt={p.name} style={{ width:42, height:42, objectFit:'cover', borderRadius:8, border:'1px solid #e2e8f0', flexShrink:0 }} />
-                          : <div style={{ width:42, height:42, background:'#f1f5f9', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem', flexShrink:0 }}>{CAT_EMOJI[p.category] || '✨'}</div>
-                        }
-                        <div>
-                          <div style={{ fontWeight:600, fontSize:'0.88rem' }}>{p.name}</div>
-                          {p.brand && <div style={{ fontSize:'0.72rem', color:'#94a3b8' }}>{p.brand}</div>}
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ textTransform:'capitalize' }}>{CAT_EMOJI[p.category]} {p.category}</td>
-                    <td>
-                      <div style={{ fontWeight:700 }}>R{parseFloat(p.price).toFixed(2)}</div>
-                      {p.comparePrice && <div style={{ fontSize:'0.72rem', color:'#94a3b8', textDecoration:'line-through' }}>R{parseFloat(p.comparePrice).toFixed(2)}</div>}
-                    </td>
-                    <td>
-                      <span style={{ fontWeight:600, color: p.stock === 0 ? '#c53030' : p.stock <= 5 ? '#c05621' : '#276749' }}>
-                        {p.stock}
-                      </span>
-                    </td>
-                    <td><span className={`status ${p.isActive ? 'booked' : 'cancelled'}`}>{p.isActive ? 'Active' : 'Inactive'}</span></td>
-                    <td>{p.isFeatured ? <span style={{ color:'#d97706', fontWeight:700 }}>★ Yes</span> : <span style={{ color:'#94a3b8' }}>—</span>}</td>
-                    <td className="row-actions">
-                      <button className="action-btn" onClick={() => openEdit(p)}>Edit</button>
-                      <button className="action-btn" onClick={() => handleToggleActive(p)}>
-                        {p.isActive ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {shopProducts.length === 0 && (
-                  <tr><td colSpan="7" className="empty-row">No products yet. Add your first product!</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              ))}
+              {shopProducts.length===0&&<tr><td colSpan="7" className="empty-row">No products yet. Add your first product!</td></tr>}
+            </tbody>
+          </table></div>
         )}
-
-        {/* Product Form Modal */}
         {showProductForm && (
-          <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowProductForm(false)}>
-            <div className="modal" style={{ maxWidth:600, maxHeight:'90vh', overflowY:'auto' }}>
-              <header>
-                <h3>{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
-                <button onClick={() => setShowProductForm(false)}>✕</button>
-              </header>
-
+          <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setShowProductForm(false)}>
+            <div className="modal" style={{maxWidth:600,maxHeight:'90vh',overflowY:'auto'}}>
+              <header><h3>{editingProduct?'Edit Product':'Add New Product'}</h3><button onClick={()=>setShowProductForm(false)}>✕</button></header>
               <form onSubmit={handleProductSubmit} className="form-grid">
-
-                {/* Image upload */}
-                <div style={{ gridColumn:'1 / -1' }}>
-                  <label style={{ fontSize:'0.78rem', fontWeight:600, color:'#64748b', display:'block', marginBottom:'0.4rem' }}>Product Images</label>
-                  <input type="file" accept="image/*" onChange={handleProductImage} style={{ marginBottom:'0.5rem', width:'100%' }} />
-                  {imgUploading && <div style={{ fontSize:'0.78rem', color:'#64748b' }}>Uploading…</div>}
-                  {productImages.length > 0 && (
-                    <div style={{ display:'flex', gap:'0.5rem', flexWrap:'wrap', marginTop:'0.5rem' }}>
-                      {productImages.map((url, i) => (
-                        <div key={i} style={{ position:'relative' }}>
-                          <img src={url} alt="" style={{ width:64, height:64, objectFit:'cover', borderRadius:8, border:'1px solid #e2e8f0' }} />
-                          <button
-                            type="button"
-                            onClick={() => setProductImages(prev => prev.filter((_, idx) => idx !== i))}
-                            style={{ position:'absolute', top:-6, right:-6, background:'#ef4444', border:'none', color:'#fff', borderRadius:'50%', width:18, height:18, fontSize:'0.6rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
-                          >✕</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                <div style={{gridColumn:'1 / -1'}}><label style={{fontSize:'0.78rem',fontWeight:600,color:'#64748b',display:'block',marginBottom:'0.4rem'}}>Product Images</label><input type="file" accept="image/*" onChange={handleProductImage} style={{marginBottom:'0.5rem',width:'100%'}} />{imgUploading&&<div style={{fontSize:'0.78rem',color:'#64748b'}}>Uploading…</div>}{productImages.length>0&&(<div style={{display:'flex',gap:'0.5rem',flexWrap:'wrap',marginTop:'0.5rem'}}>{productImages.map((url,i)=>(<div key={i} style={{position:'relative'}}><img src={url} alt="" style={{width:64,height:64,objectFit:'cover',borderRadius:8,border:'1px solid #e2e8f0'}} /><button type="button" onClick={()=>setProductImages(prev=>prev.filter((_,idx)=>idx!==i))} style={{position:'absolute',top:-6,right:-6,background:'#ef4444',border:'none',color:'#fff',borderRadius:'50%',width:18,height:18,fontSize:'0.6rem',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button></div>))}</div>)}</div>
+                <div style={{gridColumn:'1 / -1'}}><label>Name *</label><input required placeholder="Product name" value={productForm.name} onChange={e=>setProductForm(f=>({...f,name:e.target.value}))} /></div>
+                <div style={{gridColumn:'1 / -1'}}><label>Description</label><textarea rows={3} placeholder="Product description" value={productForm.description} onChange={e=>setProductForm(f=>({...f,description:e.target.value}))} /></div>
+                <div><label>Price (R) *</label><input required type="number" min="0.01" step="0.01" placeholder="e.g. 250.00" value={productForm.price} onChange={e=>setProductForm(f=>({...f,price:e.target.value}))} /></div>
+                <div><label>Compare Price (R)</label><input type="number" min="0" step="0.01" placeholder="Original price (optional)" value={productForm.comparePrice} onChange={e=>setProductForm(f=>({...f,comparePrice:e.target.value}))} /></div>
+                <div><label>Category *</label><select required value={productForm.category} onChange={e=>setProductForm(f=>({...f,category:e.target.value}))}>{CATEGORIES.map(c=><option key={c} value={c}>{CAT_EMOJI[c]} {c.charAt(0).toUpperCase()+c.slice(1)}</option>)}</select></div>
+                <div><label>Stock *</label><input required type="number" min="0" step="1" placeholder="e.g. 50" value={productForm.stock} onChange={e=>setProductForm(f=>({...f,stock:e.target.value}))} /></div>
+                <div><label>Brand</label><input placeholder="e.g. OPI, Gelish" value={productForm.brand} onChange={e=>setProductForm(f=>({...f,brand:e.target.value}))} /></div>
+                <div><label>SKU</label><input placeholder="e.g. GEL-001" value={productForm.sku} onChange={e=>setProductForm(f=>({...f,sku:e.target.value}))} /></div>
+                <div style={{gridColumn:'1 / -1'}}><label>Tags (comma separated)</label><input placeholder="e.g. gel, nails, professional" value={productForm.tags} onChange={e=>setProductForm(f=>({...f,tags:e.target.value}))} /></div>
+                <div style={{gridColumn:'1 / -1',display:'flex',gap:'1.5rem'}}>
+                  <label style={{display:'flex',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.88rem',fontWeight:500}}><input type="checkbox" checked={productForm.isFeatured} onChange={e=>setProductForm(f=>({...f,isFeatured:e.target.checked}))} />★ Featured product</label>
+                  <label style={{display:'flex',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.88rem',fontWeight:500}}><input type="checkbox" checked={productForm.isActive} onChange={e=>setProductForm(f=>({...f,isActive:e.target.checked}))} />Active (visible in shop)</label>
                 </div>
-
-                <div style={{ gridColumn:'1 / -1' }}>
-                  <label>Name *</label>
-                  <input required placeholder="Product name" value={productForm.name} onChange={e => setProductForm(f => ({...f, name:e.target.value}))} />
-                </div>
-
-                <div style={{ gridColumn:'1 / -1' }}>
-                  <label>Description</label>
-                  <textarea rows={3} placeholder="Product description" value={productForm.description} onChange={e => setProductForm(f => ({...f, description:e.target.value}))} />
-                </div>
-
-                <div>
-                  <label>Price (R) *</label>
-                  <input required type="number" min="0.01" step="0.01" placeholder="e.g. 250.00" value={productForm.price} onChange={e => setProductForm(f => ({...f, price:e.target.value}))} />
-                </div>
-
-                <div>
-                  <label>Compare Price (R)</label>
-                  <input type="number" min="0" step="0.01" placeholder="Original price (optional)" value={productForm.comparePrice} onChange={e => setProductForm(f => ({...f, comparePrice:e.target.value}))} />
-                </div>
-
-                <div>
-                  <label>Category *</label>
-                  <select required value={productForm.category} onChange={e => setProductForm(f => ({...f, category:e.target.value}))}>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{CAT_EMOJI[c]} {c.charAt(0).toUpperCase()+c.slice(1)}</option>)}
-                  </select>
-                </div>
-
-                <div>
-                  <label>Stock *</label>
-                  <input required type="number" min="0" step="1" placeholder="e.g. 50" value={productForm.stock} onChange={e => setProductForm(f => ({...f, stock:e.target.value}))} />
-                </div>
-
-                <div>
-                  <label>Brand</label>
-                  <input placeholder="e.g. OPI, Gelish" value={productForm.brand} onChange={e => setProductForm(f => ({...f, brand:e.target.value}))} />
-                </div>
-
-                <div>
-                  <label>SKU</label>
-                  <input placeholder="e.g. GEL-001" value={productForm.sku} onChange={e => setProductForm(f => ({...f, sku:e.target.value}))} />
-                </div>
-
-                <div style={{ gridColumn:'1 / -1' }}>
-                  <label>Tags (comma separated)</label>
-                  <input placeholder="e.g. gel, nails, professional" value={productForm.tags} onChange={e => setProductForm(f => ({...f, tags:e.target.value}))} />
-                </div>
-
-                <div style={{ gridColumn:'1 / -1', display:'flex', gap:'1.5rem' }}>
-                  <label style={{ display:'flex', alignItems:'center', gap:'0.5rem', cursor:'pointer', fontSize:'0.88rem', fontWeight:500 }}>
-                    <input type="checkbox" checked={productForm.isFeatured} onChange={e => setProductForm(f => ({...f, isFeatured:e.target.checked}))} />
-                    ★ Featured product
-                  </label>
-                  <label style={{ display:'flex', alignItems:'center', gap:'0.5rem', cursor:'pointer', fontSize:'0.88rem', fontWeight:500 }}>
-                    <input type="checkbox" checked={productForm.isActive} onChange={e => setProductForm(f => ({...f, isActive:e.target.checked}))} />
-                    Active (visible in shop)
-                  </label>
-                </div>
-
-                <footer className="modal-actions" style={{ gridColumn:'1 / -1' }}>
-                  <button type="button" onClick={() => setShowProductForm(false)}>Cancel</button>
-                  <button type="submit" className="btn primary" disabled={isSubmitting}>
-                    {isSubmitting ? 'Saving…' : editingProduct ? 'Update Product' : 'Create Product'}
-                  </button>
-                </footer>
-
+                <footer className="modal-actions" style={{gridColumn:'1 / -1'}}><button type="button" onClick={()=>setShowProductForm(false)}>Cancel</button><button type="submit" className="btn primary" disabled={isSubmitting}>{isSubmitting?'Saving…':editingProduct?'Update Product':'Create Product'}</button></footer>
               </form>
             </div>
           </div>
@@ -927,6 +701,7 @@ function AdminDashboard() {
     );
   };
 
+  // ── PATCHED: renderShopOrders — added exportOrdersCSV, fulfillment badge, ready status ──
   const renderShopOrders = () => {
     const loadOrders = async () => {
       setShopLoading(true);
@@ -938,57 +713,66 @@ function AdminDashboard() {
       finally { setShopLoading(false); }
     };
 
-    const exportOrdersCSV = async () => {
-  try {
-    const allData = await apiRequest(`${API_ENDPOINTS.shopOrders}?limit=1000`);
-    const orders  = allData.data || [];
-    const rows = [
-      ['Order ID','Date','Customer','Email','Items','Subtotal (R)','Shipping (R)','Total (R)','Status','Payment','Tracking'],
-      ...orders.map(o => [
-        o._id?.slice(-6).toUpperCase(),
-        new Date(o.createdAt).toLocaleDateString('en-ZA'),
-        `${o.customer?.firstName||''} ${o.customer?.lastName||''}`.trim() || '—',
-        o.customer?.email || '—',
-        (o.items||[]).map(i => `${i.productName} x${i.quantity}`).join('; '),
-        parseFloat(o.subtotal    ||0).toFixed(2),
-        parseFloat(o.shippingFee ||0).toFixed(2),
-        parseFloat(o.totalAmount ||0).toFixed(2),
-        o.status, o.paymentStatus,
-        o.trackingNumber || '—',
-      ]),
-    ];
-    const csv  = rows.map(r => r.map(f => `"${String(f??'').replace(/"/g,'""')}"`).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href     = URL.createObjectURL(blob);
-    link.download = `nxl-shop-orders-${new Date().toISOString().slice(0,10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    showToast('Orders exported.');
-  } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
-};
-
     if (shopOrders.length === 0 && !shopLoading) loadOrders();
+
+    // ── PATCH: Export orders to CSV ──────────────────────────────────────────
+    const exportOrdersCSV = async () => {
+      try {
+        const allData = await apiRequest(`${API_ENDPOINTS.shopOrders}?limit=1000`);
+        const orders  = allData.data || [];
+        const rows = [
+          ['Order ID','Date','Fulfillment','Customer','Email','Phone','Items','Subtotal (R)','Shipping (R)','Total (R)','Status','Payment','Tracking','Address'],
+          ...orders.map(o => [
+            o._id?.slice(-6).toUpperCase(),
+            new Date(o.createdAt).toLocaleDateString('en-ZA'),
+            o.fulfillmentType === 'pickup' ? 'Pickup' : 'Delivery',
+            `${o.customer?.firstName||''} ${o.customer?.lastName||''}`.trim() || '—',
+            o.customer?.email || '—',
+            o.shippingAddress?.phone || '—',
+            (o.items||[]).map(i => `${i.productName} x${i.quantity}`).join('; '),
+            parseFloat(o.subtotal    ||0).toFixed(2),
+            parseFloat(o.shippingFee ||0).toFixed(2),
+            parseFloat(o.totalAmount ||0).toFixed(2),
+            o.status, o.paymentStatus,
+            o.trackingNumber || '—',
+            o.fulfillmentType === 'pickup' ? 'Salon Pickup' : `${o.shippingAddress?.address||''}, ${o.shippingAddress?.city||''}`,
+          ]),
+        ];
+        const csv  = rows.map(r => r.map(f => `"${String(f??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href     = URL.createObjectURL(blob);
+        link.download = `nxl-shop-orders-${new Date().toISOString().slice(0,10)}.csv`;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        showToast('Orders exported to CSV.');
+      } catch (e) { showToast('Export failed: ' + e.message, 'error'); }
+    };
+    // ────────────────────────────────────────────────────────────────────────
 
     const STATUS_COLORS = {
       pending:    { bg:'#fff7ed', color:'#c2410c', border:'#fed7aa' },
       confirmed:  { bg:'#fefce8', color:'#a16207', border:'#fde047' },
       processing: { bg:'#eff6ff', color:'#1d4ed8', border:'#bfdbfe' },
+      ready:      { bg:'#f0fdf4', color:'#15803d', border:'#bbf7d0' }, // ← PATCH: pickup ready
       shipped:    { bg:'#f5f3ff', color:'#6d28d9', border:'#ddd6fe' },
       delivered:  { bg:'#f0fdf4', color:'#15803d', border:'#bbf7d0' },
       cancelled:  { bg:'#f8fafc', color:'#64748b', border:'#e2e8f0' },
       refunded:   { bg:'#fef2f2', color:'#dc2626', border:'#fecaca' },
     };
 
+    // ── PATCH: Added ready status for pickup orders ──────────────────────────
     const ORDER_TRANSITIONS = {
       pending:    ['confirmed', 'cancelled'],
-      confirmed:  ['processing', 'cancelled'],
-      processing: ['shipped',   'cancelled'],
+      confirmed:  ['processing', 'ready', 'cancelled'],
+      processing: ['shipped', 'ready', 'cancelled'],
+      ready:      ['delivered'],         // pickup: ready to collect → collected
       shipped:    ['delivered'],
       delivered:  ['refunded'],
       cancelled:  [],
       refunded:   [],
     };
+    // ────────────────────────────────────────────────────────────────────────
 
     const handleStatusChange = async (orderId, newStatus) => {
       try {
@@ -1014,7 +798,8 @@ function AdminDashboard() {
       } catch (e) { showToast(e.message, 'error'); }
     };
 
-    const FILTER_OPTIONS = ['all','pending','confirmed','processing','shipped','delivered','cancelled','refunded'];
+    // ── PATCH: Added ready to filter options ────────────────────────────────
+    const FILTER_OPTIONS = ['all','pending','confirmed','processing','ready','shipped','delivered','cancelled','refunded'];
 
     return (
       <section className="panel">
@@ -1046,8 +831,8 @@ function AdminDashboard() {
                   <th>Customer</th>
                   <th>Items</th>
                   <th>Total</th>
+                  <th>Fulfillment</th>
                   <th>Status</th>
-                   <th>Fulfillment</th>
                   <th>Payment</th>
                   <th>Date</th>
                   <th>Actions</th>
@@ -1059,6 +844,7 @@ function AdminDashboard() {
                   const shortId = order._id?.slice(-6).toUpperCase();
                   const itemCount = (order.items || []).reduce((s,i) => s + i.quantity, 0);
                   const nextStatuses = ORDER_TRANSITIONS[order.status] || [];
+                  const isPickup = order.fulfillmentType === 'pickup';
 
                   return (
                     <tr key={order._id}>
@@ -1090,9 +876,24 @@ function AdminDashboard() {
                         <div style={{ fontSize:'0.72rem', color:'#94a3b8', marginTop:2 }}>{itemCount} item{itemCount !== 1 ? 's' : ''}</div>
                       </td>
                       <td style={{ fontWeight:700 }}>R{parseFloat(order.totalAmount || 0).toFixed(2)}</td>
+
+                      {/* ── PATCH: Fulfillment badge ── */}
+                      <td>
+                        <span style={{
+                          padding:'0.2rem 0.6rem', borderRadius:'50px', fontSize:'0.72rem', fontWeight:700, whiteSpace:'nowrap',
+                          background: isPickup ? '#f0fdf4' : '#eff6ff',
+                          color:      isPickup ? '#15803d' : '#1d4ed8',
+                          border:     isPickup ? '1px solid #bbf7d0' : '1px solid #bfdbfe',
+                        }}>
+                          {isPickup ? '🏪 Pickup' : '🚚 Delivery'}
+                        </span>
+                        {isPickup && <div style={{fontSize:'0.65rem',color:'#94a3b8',marginTop:2}}>Collect in salon</div>}
+                        {!isPickup && order.shippingAddress?.city && <div style={{fontSize:'0.65rem',color:'#94a3b8',marginTop:2}}>{order.shippingAddress.city}</div>}
+                      </td>
+
                       <td>
                         <span style={{ background:sc.bg, color:sc.color, border:`1px solid ${sc.border}`, padding:'0.2rem 0.6rem', borderRadius:'50px', fontSize:'0.72rem', fontWeight:700, whiteSpace:'nowrap' }}>
-                          {order.status}
+                          {order.status === 'ready' ? '🏪 Ready' : order.status}
                         </span>
                       </td>
                       <td>
@@ -1105,45 +906,21 @@ function AdminDashboard() {
                       </td>
                       <td className="row-actions">
                         {nextStatuses.map(s => (
-                          <button
-                            key={s}
-                            className="action-btn"
-                            style={{ fontSize:'0.72rem' }}
-                            onClick={() => handleStatusChange(order._id, s)}
-                          >
-                            → {s}
+                          <button key={s} className="action-btn" style={{ fontSize:'0.72rem' }} onClick={() => handleStatusChange(order._id, s)}>
+                            {s === 'ready' ? '🏪 Ready' : `→ ${s}`}
                           </button>
                         ))}
-                        {['shipped','processing'].includes(order.status) && (
-                          <button
-                            className="action-btn"
-                            style={{ fontSize:'0.72rem' }}
-                            onClick={() => handleAddTracking(order._id)}
-                          >
+                        {['shipped','processing'].includes(order.status) && !isPickup && (
+                          <button className="action-btn" style={{ fontSize:'0.72rem' }} onClick={() => handleAddTracking(order._id)}>
                             📦 Track
                           </button>
                         )}
-                      </td>
-
-                      <td>
-                       <span style={{ 
-                        padding: '0.2rem 0.6rem',
-                        borderRadius: '50px',
-      fontSize: '0.72rem',
-      fontWeight: 700,
-       background: order.fulfillmentType === 'pickup' ? '#f0fdf4' : '#eff6ff',
-       color:      order.fulfillmentType === 'pickup' ? '#15803d' : '#1d4ed8',
-       border:     order.fulfillmentType === 'pickup' ? '1px solid #bbf7d0' : '1px solid #bfdbfe',
-       whiteSpace: 'nowrap',
-     }}>
-      {order.fulfillmentType === 'pickup' ? '🏪 Pickup' : '🚚 Delivery'}
-    </span>
                       </td>
                     </tr>
                   );
                 })}
                 {shopOrders.length === 0 && (
-                  <tr><td colSpan="8" className="empty-row">No orders found.</td></tr>
+                  <tr><td colSpan="9" className="empty-row">No orders found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -1154,427 +931,138 @@ function AdminDashboard() {
   };
 
   const renderShopRevenue = () => {
- 
-  const loadStats = async () => {
-    setShopStatsLoad(true);
-    try {
-      const data = await apiRequest(API_ENDPOINTS.shopStats);
-      setShopStats(data.data);
-    } catch (e) { showToast(e.message, 'error'); }
-    finally { setShopStatsLoad(false); }
-  };
- 
-  if (!shopStats && !shopStatsLoad) loadStats();
- 
-  const buildChart = (dailyRevenue = []) => {
-    if (!dailyRevenue.length) return [];
-    const max = Math.max(...dailyRevenue.map(d => d.revenue), 1);
-    return dailyRevenue.map(d => ({
-      date:    d._id,
-      revenue: d.revenue,
-      orders:  d.orders,
-      pct:     Math.round((d.revenue / max) * 100),
-      label:   new Date(d._id + 'T00:00:00').toLocaleDateString('en-ZA', { day:'numeric', month:'short' }),
-    }));
-  };
- 
-  const chartData = buildChart(shopStats?.dailyRevenue || []);
- 
-  const STAT_CARDS = shopStats ? [
-    { icon:'📦', label:'Total Products',   value: shopStats.totalProducts,   color:'#6366f1' },
-    { icon:'✅', label:'Active Products',  value: shopStats.activeProducts,  color:'#10b981' },
-    { icon:'⚠️', label:'Low Stock',        value: shopStats.lowStock,        color: shopStats.lowStock > 0 ? '#ef4444' : '#10b981' },
-    { icon:'🛒', label:'Total Orders',     value: shopStats.totalOrders,     color:'#f59e0b' },
-    { icon:'⏳', label:'Pending Orders',   value: shopStats.pendingOrders,   color: shopStats.pendingOrders > 0 ? '#f59e0b' : '#10b981' },
-    { icon:'📅', label:'Orders Today',     value: shopStats.todayOrders,     color:'#3b82f6' },
-    { icon:'💰', label:'Revenue (7 days)', value:`R${Number(shopStats.revenueWeek).toFixed(2)}`,  color:'#10b981' },
-    { icon:'📈', label:'Revenue (30 days)',value:`R${Number(shopStats.revenueMonth).toFixed(2)}`, color:'#6366f1' },
-  ] : [];
- 
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
- 
-      {/* Stat cards */}
-      <section className="panel">
-        <header>
-          <h3>Shop Overview</h3>
-          <div className="button-row">
-            <button className="btn ghost" onClick={loadStats}>↻ Refresh</button>
-          </div>
-        </header>
-        {shopStatsLoad ? (
-          <div style={{ textAlign:'center', padding:'2rem', color:'#94a3b8' }}>Loading stats…</div>
-        ) : (
-          <div className="grid grid-responsive">
-            {STAT_CARDS.map((c, i) => (
-              <div key={i} style={{
-                background:`linear-gradient(135deg, ${c.color}22 0%, ${c.color}11 100%)`,
-                border:`1px solid ${c.color}44`,
-                borderRadius:'14px', padding:'1.25rem 1.5rem',
-                display:'flex', alignItems:'center', gap:'1rem',
-              }}>
-                <span style={{ fontSize:'1.75rem' }}>{c.icon}</span>
-                <div>
-                  <p style={{ margin:0, fontSize:'0.72rem', color:'#64748b', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.06em' }}>{c.label}</p>
-                  <h3 style={{ margin:'0.15rem 0 0', fontSize:'1.4rem', fontWeight:800, color:c.color }}>{c.value}</h3>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
- 
-      {/* Revenue chart */}
-      <section className="panel">
-        <header><h3>Daily Revenue — Last 30 Days</h3></header>
-        {shopStatsLoad ? (
-          <div style={{ textAlign:'center', padding:'2rem', color:'#94a3b8' }}>Loading chart…</div>
-        ) : chartData.length === 0 ? (
-          <div style={{ textAlign:'center', padding:'3rem', color:'#94a3b8' }}>No paid orders in the last 30 days.</div>
-        ) : (
-          <div style={{ overflowX:'auto', paddingBottom:'0.5rem' }}>
-            <div style={{ display:'flex', alignItems:'flex-end', gap:'6px', minWidth:`${chartData.length * 36}px`, height:'200px', padding:'0 0.5rem' }}>
-              {chartData.map((d, i) => (
-                <div key={i} title={`${d.label}\nRevenue: R${d.revenue.toFixed(2)}\nOrders: ${d.orders}`}
-                  style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'4px', flex:1, cursor:'default' }}>
-                  <span style={{ fontSize:'0.58rem', color:'#64748b', writingMode:'vertical-rl', transform:'rotate(180deg)', maxHeight:'60px', overflow:'hidden' }}>
-                    R{d.revenue >= 1000 ? (d.revenue/1000).toFixed(1)+'k' : d.revenue.toFixed(0)}
-                  </span>
-                  <div style={{
-                    width:'100%', minWidth:'20px',
-                    height:`${Math.max(d.pct * 1.4, 4)}px`,
-                    background: d.pct > 60
-                      ? 'linear-gradient(180deg, #6366f1, #4f46e5)'
-                      : 'linear-gradient(180deg, #818cf8, #6366f1)',
-                    borderRadius:'4px 4px 0 0',
-                    transition:'height 0.3s ease',
-                    boxShadow:'0 2px 8px rgba(99,102,241,0.3)',
-                  }} />
-                  <span style={{ fontSize:'0.56rem', color:'#94a3b8', transform:'rotate(-45deg)', transformOrigin:'top left', whiteSpace:'nowrap', marginTop:'8px' }}>
-                    {d.label}
-                  </span>
+    const loadStats = async () => { setShopStatsLoad(true); try { const data = await apiRequest(API_ENDPOINTS.shopStats); setShopStats(data.data); } catch (e) { showToast(e.message, 'error'); } finally { setShopStatsLoad(false); } };
+    if (!shopStats && !shopStatsLoad) loadStats();
+    const buildChart = (dailyRevenue = []) => { if (!dailyRevenue.length) return []; const max = Math.max(...dailyRevenue.map(d => d.revenue), 1); return dailyRevenue.map(d => ({ date:d._id, revenue:d.revenue, orders:d.orders, pct:Math.round((d.revenue/max)*100), label:new Date(d._id+'T00:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'short'}) })); };
+    const chartData = buildChart(shopStats?.dailyRevenue || []);
+    const STAT_CARDS = shopStats ? [
+      { icon:'📦', label:'Total Products',   value:shopStats.totalProducts,   color:'#6366f1' },
+      { icon:'✅', label:'Active Products',  value:shopStats.activeProducts,  color:'#10b981' },
+      { icon:'⚠️', label:'Low Stock',        value:shopStats.lowStock,        color:shopStats.lowStock>0?'#ef4444':'#10b981' },
+      { icon:'🛒', label:'Total Orders',     value:shopStats.totalOrders,     color:'#f59e0b' },
+      { icon:'⏳', label:'Pending Orders',   value:shopStats.pendingOrders,   color:shopStats.pendingOrders>0?'#f59e0b':'#10b981' },
+      { icon:'📅', label:'Orders Today',     value:shopStats.todayOrders,     color:'#3b82f6' },
+      { icon:'💰', label:'Revenue (7 days)', value:`R${Number(shopStats.revenueWeek).toFixed(2)}`,  color:'#10b981' },
+      { icon:'📈', label:'Revenue (30 days)',value:`R${Number(shopStats.revenueMonth).toFixed(2)}`, color:'#6366f1' },
+    ] : [];
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:'1.5rem'}}>
+        <section className="panel">
+          <header><h3>Shop Overview</h3><div className="button-row"><button className="btn ghost" onClick={loadStats}>↻ Refresh</button></div></header>
+          {shopStatsLoad ? <div style={{textAlign:'center',padding:'2rem',color:'#94a3b8'}}>Loading stats…</div> : (
+            <div className="grid grid-responsive">
+              {STAT_CARDS.map((c,i) => (
+                <div key={i} style={{background:`linear-gradient(135deg, ${c.color}22 0%, ${c.color}11 100%)`,border:`1px solid ${c.color}44`,borderRadius:'14px',padding:'1.25rem 1.5rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+                  <span style={{fontSize:'1.75rem'}}>{c.icon}</span>
+                  <div><p style={{margin:0,fontSize:'0.72rem',color:'#64748b',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.06em'}}>{c.label}</p><h3 style={{margin:'0.15rem 0 0',fontSize:'1.4rem',fontWeight:800,color:c.color}}>{c.value}</h3></div>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+        <section className="panel">
+          <header><h3>Daily Revenue — Last 30 Days</h3></header>
+          {shopStatsLoad ? <div style={{textAlign:'center',padding:'2rem',color:'#94a3b8'}}>Loading chart…</div> : chartData.length === 0 ? (
+            <div style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>No paid orders in the last 30 days.</div>
+          ) : (
+            <div style={{overflowX:'auto',paddingBottom:'0.5rem'}}>
+              <div style={{display:'flex',alignItems:'flex-end',gap:'6px',minWidth:`${chartData.length*36}px`,height:'200px',padding:'0 0.5rem'}}>
+                {chartData.map((d,i) => (
+                  <div key={i} title={`${d.label}\nRevenue: R${d.revenue.toFixed(2)}\nOrders: ${d.orders}`} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'4px',flex:1,cursor:'default'}}>
+                    <span style={{fontSize:'0.58rem',color:'#64748b',writingMode:'vertical-rl',transform:'rotate(180deg)',maxHeight:'60px',overflow:'hidden'}}>R{d.revenue>=1000?(d.revenue/1000).toFixed(1)+'k':d.revenue.toFixed(0)}</span>
+                    <div style={{width:'100%',minWidth:'20px',height:`${Math.max(d.pct*1.4,4)}px`,background:d.pct>60?'linear-gradient(180deg, #6366f1, #4f46e5)':'linear-gradient(180deg, #818cf8, #6366f1)',borderRadius:'4px 4px 0 0',transition:'height 0.3s ease',boxShadow:'0 2px 8px rgba(99,102,241,0.3)'}} />
+                    <span style={{fontSize:'0.56rem',color:'#94a3b8',transform:'rotate(-45deg)',transformOrigin:'top left',whiteSpace:'nowrap',marginTop:'8px'}}>{d.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+        <section className="panel">
+          <header><h3>Top Selling Products</h3></header>
+          {shopStatsLoad ? <div style={{textAlign:'center',padding:'2rem',color:'#94a3b8'}}>Loading…</div> : !shopStats?.topProducts?.length ? (
+            <div style={{textAlign:'center',padding:'2rem',color:'#94a3b8'}}>No sales data yet.</div>
+          ) : (
+            <div className="table-responsive"><table>
+              <thead><tr><th>#</th><th>Product</th><th>Units Sold</th><th>Revenue</th><th>Share</th></tr></thead>
+              <tbody>
+                {shopStats.topProducts.map((p,i) => { const maxSold=shopStats.topProducts[0]?.sold||1; const pct=Math.round((p.sold/maxSold)*100); return (
+                  <tr key={i}>
+                    <td style={{fontWeight:700,color:i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#c97c2e':'#64748b'}}>{i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}</td>
+                    <td style={{fontWeight:600}}>{p.name}</td>
+                    <td style={{fontWeight:700}}>{p.sold}</td>
+                    <td style={{fontWeight:700,color:'#10b981'}}>R{Number(p.revenue).toFixed(2)}</td>
+                    <td style={{minWidth:'120px'}}><div style={{display:'flex',alignItems:'center',gap:'0.5rem'}}><div style={{flex:1,height:'6px',background:'#f1f5f9',borderRadius:'3px',overflow:'hidden'}}><div style={{width:`${pct}%`,height:'100%',background:'linear-gradient(90deg, #6366f1, #818cf8)',borderRadius:'3px',transition:'width 0.4s'}} /></div><span style={{fontSize:'0.72rem',color:'#64748b',minWidth:'30px'}}>{pct}%</span></div></td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table></div>
+          )}
+        </section>
+        {shopStats?.lowStock > 0 && (
+          <section className="panel" style={{border:'1.5px solid #fca5a5'}}>
+            <header><h3 style={{color:'#dc2626'}}>⚠️ Low Stock Alert</h3><button className="btn ghost" onClick={()=>setActiveSection('shop-products')}>View Products →</button></header>
+            <p style={{color:'#64748b',fontSize:'0.85rem',margin:0}}>{shopStats.lowStock} product{shopStats.lowStock>1?'s are':' is'} running low (5 or fewer units remaining). Restock soon to avoid stockouts.</p>
+          </section>
+        )}
+      </div>
+    );
+  };
+
+  const renderDiscounts = () => {
+    const discountCodesEndpoint = API_ENDPOINTS.discountCodes;
+    const loadDiscounts = async () => { setDiscountLoading(true); try { const data = await apiRequest(discountCodesEndpoint); setDiscountCodes(data.data || []); } catch (e) { showToast(e.message, 'error'); } finally { setDiscountLoading(false); } };
+    if (discountCodes.length === 0 && !discountLoading) loadDiscounts();
+    const handleDiscountSubmit = async (e) => { e.preventDefault(); setIsSubmitting(true); try { const payload = { code:discountForm.code.toUpperCase().trim(), type:discountForm.type, value:parseFloat(discountForm.value), description:discountForm.description, minOrderAmount:discountForm.minOrderAmount?parseFloat(discountForm.minOrderAmount):0, usageLimit:discountForm.usageLimit?parseInt(discountForm.usageLimit):null, expiresAt:discountForm.expiresAt||null, isActive:discountForm.isActive }; const method = editingDiscount ? 'PUT' : 'POST'; const endpoint = editingDiscount ? `${discountCodesEndpoint}/${editingDiscount._id}` : discountCodesEndpoint; await apiRequest(endpoint, { method, body:JSON.stringify(payload) }); showToast(`Code ${editingDiscount?'updated':'created'}.`); setShowDiscountForm(false); setEditingDiscount(null); setDiscountForm({code:'',type:'percentage',value:'',description:'',minOrderAmount:'',usageLimit:'',expiresAt:'',isActive:true}); loadDiscounts(); } catch (e) { showToast(e.message, 'error'); } finally { setIsSubmitting(false); } };
+    const handleToggleDiscount = async (dc) => { try { await apiRequest(`${discountCodesEndpoint}/${dc._id}`, { method:'PUT', body:JSON.stringify({isActive:!dc.isActive}) }); showToast(`Code ${dc.isActive?'deactivated':'activated'}.`); loadDiscounts(); } catch (e) { showToast(e.message, 'error'); } };
+    const handleDeleteDiscount = async (dc) => { if (!window.confirm(`Delete code "${dc.code}"?`)) return; try { await apiRequest(`${discountCodesEndpoint}/${dc._id}`, { method:'DELETE' }); showToast(`Code "${dc.code}" deleted.`); loadDiscounts(); } catch (e) { showToast(e.message, 'error'); } };
+    const openEdit = (dc) => { setEditingDiscount(dc); setDiscountForm({ code:dc.code, type:dc.type, value:String(dc.value), description:dc.description||'', minOrderAmount:dc.minOrderAmount?String(dc.minOrderAmount):'', usageLimit:dc.usageLimit?String(dc.usageLimit):'', expiresAt:dc.expiresAt?dc.expiresAt.slice(0,10):'', isActive:dc.isActive }); setShowDiscountForm(true); };
+    const isExpired = (dc) => dc.expiresAt && new Date(dc.expiresAt) < new Date();
+    const isLimitReached = (dc) => dc.usageLimit && dc.usedCount >= dc.usageLimit;
+    return (
+      <section className="panel">
+        <header><h3>Discount Codes <span className="count-chip">{discountCodes.length}</span></h3><div className="button-row"><button className="btn ghost" onClick={loadDiscounts}>↻ Refresh</button><button className="btn primary" onClick={()=>{ setEditingDiscount(null); setDiscountForm({code:'',type:'percentage',value:'',description:'',minOrderAmount:'',usageLimit:'',expiresAt:'',isActive:true}); setShowDiscountForm(true); }}>➕ Add Code</button></div></header>
+        {discountLoading ? <div style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>Loading…</div> : (
+          <div className="table-responsive"><table>
+            <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Used / Limit</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {discountCodes.map(dc => (
+                <tr key={dc._id} style={{opacity:(!dc.isActive||isExpired(dc)||isLimitReached(dc))?0.5:1}}>
+                  <td><span style={{fontFamily:'monospace',fontWeight:700,fontSize:'0.9rem',letterSpacing:'0.08em',color:'#c9a96e'}}>{dc.code}</span>{dc.description&&<div style={{fontSize:'0.72rem',color:'#94a3b8',marginTop:'0.1rem'}}>{dc.description}</div>}</td>
+                  <td style={{textTransform:'capitalize'}}>{dc.type}</td>
+                  <td style={{fontWeight:700}}>{dc.type==='percentage'?`${dc.value}%`:`R${dc.value}`}</td>
+                  <td>{dc.minOrderAmount>0?`R${dc.minOrderAmount}`:'—'}</td>
+                  <td><span style={{fontWeight:600,color:isLimitReached(dc)?'#dc2626':'inherit'}}>{dc.usedCount||0}</span>{dc.usageLimit?` / ${dc.usageLimit}`:' / ∞'}</td>
+                  <td>{dc.expiresAt?<span style={{color:isExpired(dc)?'#dc2626':'#94a3b8',fontSize:'0.8rem'}}>{new Date(dc.expiresAt).toLocaleDateString('en-ZA')}{isExpired(dc)&&' (Expired)'}</span>:<span style={{color:'#94a3b8'}}>Never</span>}</td>
+                  <td><span className={`status ${dc.isActive&&!isExpired(dc)&&!isLimitReached(dc)?'booked':'cancelled'}`}>{isExpired(dc)?'Expired':isLimitReached(dc)?'Limit Reached':dc.isActive?'Active':'Inactive'}</span></td>
+                  <td className="row-actions"><button className="action-btn" onClick={()=>openEdit(dc)}>Edit</button><button className="action-btn" onClick={()=>handleToggleDiscount(dc)}>{dc.isActive?'Deactivate':'Activate'}</button><button className="action-btn delete-btn" onClick={()=>handleDeleteDiscount(dc)}>Delete</button></td>
+                </tr>
+              ))}
+              {discountCodes.length===0&&<tr><td colSpan="8" className="empty-row">No discount codes yet.</td></tr>}
+            </tbody>
+          </table></div>
+        )}
+        {showDiscountForm && (
+          <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setShowDiscountForm(false)}>
+            <div className="modal" style={{maxWidth:560}}>
+              <header><h3>{editingDiscount?'Edit Code':'Create Discount Code'}</h3><button onClick={()=>setShowDiscountForm(false)}>✕</button></header>
+              <form onSubmit={handleDiscountSubmit} className="form-grid">
+                <div style={{gridColumn:'1 / -1'}}><label>Code *</label><input required placeholder="e.g. BEAUTY10" value={discountForm.code} onChange={e=>setDiscountForm(f=>({...f,code:e.target.value.toUpperCase()}))} style={{textTransform:'uppercase',fontFamily:'monospace',letterSpacing:'0.08em',fontWeight:700}} /></div>
+                <div><label>Type *</label><select value={discountForm.type} onChange={e=>setDiscountForm(f=>({...f,type:e.target.value}))}><option value="percentage">Percentage (%)</option><option value="fixed">Fixed Amount (R)</option></select></div>
+                <div><label>Value * {discountForm.type==='percentage'?'(%)':'(R)'}</label><input required type="number" min="0.01" step="0.01" placeholder={discountForm.type==='percentage'?'e.g. 10':'e.g. 50'} value={discountForm.value} onChange={e=>setDiscountForm(f=>({...f,value:e.target.value}))} /></div>
+                <div style={{gridColumn:'1 / -1'}}><label>Description (shown to customer)</label><input placeholder="e.g. 10% off your first order" value={discountForm.description} onChange={e=>setDiscountForm(f=>({...f,description:e.target.value}))} /></div>
+                <div><label>Min Order Amount (R)</label><input type="number" min="0" step="0.01" placeholder="e.g. 200 (optional)" value={discountForm.minOrderAmount} onChange={e=>setDiscountForm(f=>({...f,minOrderAmount:e.target.value}))} /></div>
+                <div><label>Usage Limit</label><input type="number" min="1" step="1" placeholder="e.g. 100 (blank = unlimited)" value={discountForm.usageLimit} onChange={e=>setDiscountForm(f=>({...f,usageLimit:e.target.value}))} /></div>
+                <div style={{gridColumn:'1 / -1'}}><label>Expiry Date</label><input type="date" value={discountForm.expiresAt} onChange={e=>setDiscountForm(f=>({...f,expiresAt:e.target.value}))} /></div>
+                <div style={{gridColumn:'1 / -1'}}><label style={{display:'flex',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.88rem',fontWeight:500}}><input type="checkbox" checked={discountForm.isActive} onChange={e=>setDiscountForm(f=>({...f,isActive:e.target.checked}))} />Active (customers can use this code)</label></div>
+                <footer className="modal-actions" style={{gridColumn:'1 / -1'}}><button type="button" onClick={()=>setShowDiscountForm(false)}>Cancel</button><button type="submit" className="btn primary" disabled={isSubmitting}>{isSubmitting?'Saving…':editingDiscount?'Update Code':'Create Code'}</button></footer>
+              </form>
             </div>
           </div>
         )}
       </section>
- 
-      {/* Top products */}
-      <section className="panel">
-        <header><h3>Top Selling Products</h3></header>
-        {shopStatsLoad ? (
-          <div style={{ textAlign:'center', padding:'2rem', color:'#94a3b8' }}>Loading…</div>
-        ) : !shopStats?.topProducts?.length ? (
-          <div style={{ textAlign:'center', padding:'2rem', color:'#94a3b8' }}>No sales data yet.</div>
-        ) : (
-          <div className="table-responsive">
-            <table>
-              <thead>
-                <tr><th>#</th><th>Product</th><th>Units Sold</th><th>Revenue</th><th>Share</th></tr>
-              </thead>
-              <tbody>
-                {shopStats.topProducts.map((p, i) => {
-                  const maxSold = shopStats.topProducts[0]?.sold || 1;
-                  const pct = Math.round((p.sold / maxSold) * 100);
-                  return (
-                    <tr key={i}>
-                      <td style={{ fontWeight:700, color: i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#c97c2e':'#64748b' }}>
-                        {i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}
-                      </td>
-                      <td style={{ fontWeight:600 }}>{p.name}</td>
-                      <td style={{ fontWeight:700 }}>{p.sold}</td>
-                      <td style={{ fontWeight:700, color:'#10b981' }}>R{Number(p.revenue).toFixed(2)}</td>
-                      <td style={{ minWidth:'120px' }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
-                          <div style={{ flex:1, height:'6px', background:'#f1f5f9', borderRadius:'3px', overflow:'hidden' }}>
-                            <div style={{ width:`${pct}%`, height:'100%', background:'linear-gradient(90deg, #6366f1, #818cf8)', borderRadius:'3px', transition:'width 0.4s' }} />
-                          </div>
-                          <span style={{ fontSize:'0.72rem', color:'#64748b', minWidth:'30px' }}>{pct}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
- 
-      {/* Low stock alert */}
-      {shopStats?.lowStock > 0 && (
-        <section className="panel" style={{ border:'1.5px solid #fca5a5' }}>
-          <header>
-            <h3 style={{ color:'#dc2626' }}>⚠️ Low Stock Alert</h3>
-            <button className="btn ghost" onClick={() => setActiveSection('shop-products')}>View Products →</button>
-          </header>
-          <p style={{ color:'#64748b', fontSize:'0.85rem', margin:0 }}>
-            {shopStats.lowStock} product{shopStats.lowStock > 1 ? 's are' : ' is'} running low (5 or fewer units remaining). Restock soon to avoid stockouts.
-          </p>
-        </section>
-      )}
- 
-    </div>
-  );
-};
- 
-
-  const renderDiscounts = () => {
-  const API_BASE_URL_LOCAL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
-  const discountCodesEndpoint = `${API_BASE_URL_LOCAL}/discount-codes`;
- 
-  const loadDiscounts = async () => {
-    setDiscountLoading(true);
-    try {
-      const data = await apiRequest(discountCodesEndpoint);
-      setDiscountCodes(data.data || []);
-    } catch (e) { showToast(e.message, 'error'); }
-    finally { setDiscountLoading(false); }
+    );
   };
- 
-  if (discountCodes.length === 0 && !discountLoading) loadDiscounts();
- 
-  const handleDiscountSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const payload = {
-        code:           discountForm.code.toUpperCase().trim(),
-        type:           discountForm.type,
-        value:          parseFloat(discountForm.value),
-        description:    discountForm.description,
-        minOrderAmount: discountForm.minOrderAmount ? parseFloat(discountForm.minOrderAmount) : 0,
-        usageLimit:     discountForm.usageLimit ? parseInt(discountForm.usageLimit) : null,
-        expiresAt:      discountForm.expiresAt || null,
-        isActive:       discountForm.isActive,
-      };
-      const method   = editingDiscount ? 'PUT' : 'POST';
-      const endpoint = editingDiscount
-        ? `${discountCodesEndpoint}/${editingDiscount._id}`
-        : discountCodesEndpoint;
-      await apiRequest(endpoint, { method, body: JSON.stringify(payload) });
-      showToast(`Code ${editingDiscount ? 'updated' : 'created'}.`);
-      setShowDiscountForm(false);
-      setEditingDiscount(null);
-      setDiscountForm({ code:'', type:'percentage', value:'', description:'', minOrderAmount:'', usageLimit:'', expiresAt:'', isActive:true });
-      loadDiscounts();
-    } catch (e) { showToast(e.message, 'error'); }
-    finally { setIsSubmitting(false); }
-  };
- 
-  const handleToggleDiscount = async (dc) => {
-    try {
-      await apiRequest(`${discountCodesEndpoint}/${dc._id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ isActive: !dc.isActive }),
-      });
-      showToast(`Code ${dc.isActive ? 'deactivated' : 'activated'}.`);
-      loadDiscounts();
-    } catch (e) { showToast(e.message, 'error'); }
-  };
- 
-  const handleDeleteDiscount = async (dc) => {
-    if (!window.confirm(`Delete code "${dc.code}"?`)) return;
-    try {
-      await apiRequest(`${discountCodesEndpoint}/${dc._id}`, { method: 'DELETE' });
-      showToast(`Code "${dc.code}" deleted.`);
-      loadDiscounts();
-    } catch (e) { showToast(e.message, 'error'); }
-  };
- 
-  const openEdit = (dc) => {
-    setEditingDiscount(dc);
-    setDiscountForm({
-      code:           dc.code,
-      type:           dc.type,
-      value:          String(dc.value),
-      description:    dc.description || '',
-      minOrderAmount: dc.minOrderAmount ? String(dc.minOrderAmount) : '',
-      usageLimit:     dc.usageLimit    ? String(dc.usageLimit)    : '',
-      expiresAt:      dc.expiresAt     ? dc.expiresAt.slice(0, 10) : '',
-      isActive:       dc.isActive,
-    });
-    setShowDiscountForm(true);
-  };
- 
-  const isExpired = (dc) => dc.expiresAt && new Date(dc.expiresAt) < new Date();
-  const isLimitReached = (dc) => dc.usageLimit && dc.usedCount >= dc.usageLimit;
- 
-  return (
-    <section className="panel">
-      <header>
-        <h3>Discount Codes <span className="count-chip">{discountCodes.length}</span></h3>
-        <div className="button-row">
-          <button className="btn ghost" onClick={loadDiscounts}>↻ Refresh</button>
-          <button className="btn primary" onClick={() => {
-            setEditingDiscount(null);
-            setDiscountForm({ code:'', type:'percentage', value:'', description:'', minOrderAmount:'', usageLimit:'', expiresAt:'', isActive:true });
-            setShowDiscountForm(true);
-          }}>➕ Add Code</button>
-        </div>
-      </header>
- 
-      {discountLoading ? (
-        <div style={{ textAlign:'center', padding:'3rem', color:'#94a3b8' }}>Loading…</div>
-      ) : (
-        <div className="table-responsive">
-          <table>
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Type</th>
-                <th>Value</th>
-                <th>Min Order</th>
-                <th>Used / Limit</th>
-                <th>Expires</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {discountCodes.map(dc => (
-                <tr key={dc._id} style={{ opacity: (!dc.isActive || isExpired(dc) || isLimitReached(dc)) ? 0.5 : 1 }}>
-                  <td>
-                    <span style={{ fontFamily:'monospace', fontWeight:700, fontSize:'0.9rem', letterSpacing:'0.08em', color:'#c9a96e' }}>
-                      {dc.code}
-                    </span>
-                    {dc.description && <div style={{ fontSize:'0.72rem', color:'#94a3b8', marginTop:'0.1rem' }}>{dc.description}</div>}
-                  </td>
-                  <td style={{ textTransform:'capitalize' }}>{dc.type}</td>
-                  <td style={{ fontWeight:700 }}>
-                    {dc.type === 'percentage' ? `${dc.value}%` : `R${dc.value}`}
-                  </td>
-                  <td>{dc.minOrderAmount > 0 ? `R${dc.minOrderAmount}` : '—'}</td>
-                  <td>
-                    <span style={{ fontWeight:600, color: isLimitReached(dc) ? '#dc2626' : 'inherit' }}>
-                      {dc.usedCount || 0}
-                    </span>
-                    {dc.usageLimit ? ` / ${dc.usageLimit}` : ' / ∞'}
-                  </td>
-                  <td>
-                    {dc.expiresAt
-                      ? <span style={{ color: isExpired(dc) ? '#dc2626' : '#94a3b8', fontSize:'0.8rem' }}>
-                          {new Date(dc.expiresAt).toLocaleDateString('en-ZA')}
-                          {isExpired(dc) && ' (Expired)'}
-                        </span>
-                      : <span style={{ color:'#94a3b8' }}>Never</span>
-                    }
-                  </td>
-                  <td>
-                    <span className={`status ${dc.isActive && !isExpired(dc) && !isLimitReached(dc) ? 'booked' : 'cancelled'}`}>
-                      {isExpired(dc) ? 'Expired' : isLimitReached(dc) ? 'Limit Reached' : dc.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="row-actions">
-                    <button className="action-btn" onClick={() => openEdit(dc)}>Edit</button>
-                    <button className="action-btn" onClick={() => handleToggleDiscount(dc)}>
-                      {dc.isActive ? 'Deactivate' : 'Activate'}
-                    </button>
-                    <button className="action-btn delete-btn" onClick={() => handleDeleteDiscount(dc)}>Delete</button>
-                  </td>
-                </tr>
-              ))}
-              {discountCodes.length === 0 && (
-                <tr><td colSpan="8" className="empty-row">No discount codes yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
- 
-      {/* Form Modal */}
-      {showDiscountForm && (
-        <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && setShowDiscountForm(false)}>
-          <div className="modal" style={{ maxWidth: 560 }}>
-            <header>
-              <h3>{editingDiscount ? 'Edit Code' : 'Create Discount Code'}</h3>
-              <button onClick={() => setShowDiscountForm(false)}>✕</button>
-            </header>
-            <form onSubmit={handleDiscountSubmit} className="form-grid">
- 
-              <div style={{ gridColumn:'1 / -1' }}>
-                <label>Code *</label>
-                <input required
-                  placeholder="e.g. BEAUTY10"
-                  value={discountForm.code}
-                  onChange={e => setDiscountForm(f => ({ ...f, code: e.target.value.toUpperCase() }))}
-                  style={{ textTransform:'uppercase', fontFamily:'monospace', letterSpacing:'0.08em', fontWeight:700 }}
-                />
-              </div>
- 
-              <div>
-                <label>Type *</label>
-                <select value={discountForm.type} onChange={e => setDiscountForm(f => ({ ...f, type: e.target.value }))}>
-                  <option value="percentage">Percentage (%)</option>
-                  <option value="fixed">Fixed Amount (R)</option>
-                </select>
-              </div>
- 
-              <div>
-                <label>Value * {discountForm.type === 'percentage' ? '(%)' : '(R)'}</label>
-                <input required type="number" min="0.01" step="0.01"
-                  placeholder={discountForm.type === 'percentage' ? 'e.g. 10' : 'e.g. 50'}
-                  value={discountForm.value}
-                  onChange={e => setDiscountForm(f => ({ ...f, value: e.target.value }))}
-                />
-              </div>
- 
-              <div style={{ gridColumn:'1 / -1' }}>
-                <label>Description (shown to customer)</label>
-                <input placeholder="e.g. 10% off your first order"
-                  value={discountForm.description}
-                  onChange={e => setDiscountForm(f => ({ ...f, description: e.target.value }))}
-                />
-              </div>
- 
-              <div>
-                <label>Min Order Amount (R)</label>
-                <input type="number" min="0" step="0.01" placeholder="e.g. 200 (optional)"
-                  value={discountForm.minOrderAmount}
-                  onChange={e => setDiscountForm(f => ({ ...f, minOrderAmount: e.target.value }))}
-                />
-              </div>
- 
-              <div>
-                <label>Usage Limit</label>
-                <input type="number" min="1" step="1" placeholder="e.g. 100 (blank = unlimited)"
-                  value={discountForm.usageLimit}
-                  onChange={e => setDiscountForm(f => ({ ...f, usageLimit: e.target.value }))}
-                />
-              </div>
- 
-              <div style={{ gridColumn:'1 / -1' }}>
-                <label>Expiry Date</label>
-                <input type="date"
-                  value={discountForm.expiresAt}
-                  onChange={e => setDiscountForm(f => ({ ...f, expiresAt: e.target.value }))}
-                />
-              </div>
- 
-              <div style={{ gridColumn:'1 / -1' }}>
-                <label style={{ display:'flex', alignItems:'center', gap:'0.5rem', cursor:'pointer', fontSize:'0.88rem', fontWeight:500 }}>
-                  <input type="checkbox"
-                    checked={discountForm.isActive}
-                    onChange={e => setDiscountForm(f => ({ ...f, isActive: e.target.checked }))}
-                  />
-                  Active (customers can use this code)
-                </label>
-              </div>
- 
-              <footer className="modal-actions" style={{ gridColumn:'1 / -1' }}>
-                <button type="button" onClick={() => setShowDiscountForm(false)}>Cancel</button>
-                <button type="submit" className="btn primary" disabled={isSubmitting}>
-                  {isSubmitting ? 'Saving…' : editingDiscount ? 'Update Code' : 'Create Code'}
-                </button>
-              </footer>
-            </form>
-          </div>
-        </div>
-      )}
-    </section>
-  );
-};
 
   const sectionRenderer = () => {
     switch (activeSection) {
@@ -1588,8 +1076,8 @@ function AdminDashboard() {
       case 'gallery':       return renderGallery();
       case 'shop-products': return renderProducts();
       case 'shop-orders':   return renderShopOrders();
-      case 'discounts': return renderDiscounts();
-      case 'shop-revenue': return renderShopRevenue();
+      case 'discounts':     return renderDiscounts();
+      case 'shop-revenue':  return renderShopRevenue();
       default:              return renderOverview();
     }
   };
@@ -1613,10 +1101,10 @@ function AdminDashboard() {
           <SidebarBtn icon="💸" label="Payments"      section="payments"      active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="🔔" label="Activity Log"  section="notifications" active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} badge={unreadNotifCount||null} />
           <SidebarBtn icon="🖼️" label="Gallery"       section="gallery"       active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
-          <SidebarBtn icon="🛍️" label="Products"    section="shop-products" active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
-          <SidebarBtn icon="📦" label="Shop Orders" section="shop-orders"   active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
-          <SidebarBtn icon="🏷️" label="Discounts" section="discounts"     active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
-          <SidebarBtn icon="📊" label="Shop Revenue" section="shop-revenue" active={activeSection} onClick={setActiveSection} onNavigate={() => setSidebarOpen(false)} />
+          <SidebarBtn icon="🛍️" label="Products"      section="shop-products" active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
+          <SidebarBtn icon="📦" label="Shop Orders"   section="shop-orders"   active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
+          <SidebarBtn icon="🏷️" label="Discounts"     section="discounts"     active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
+          <SidebarBtn icon="📊" label="Shop Revenue"  section="shop-revenue"  active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
         </nav>
         <footer>
           <button className="btn ghost" onClick={()=>{localStorage.removeItem('adminActiveSection');navigate('/dashboard');}}>← User View</button>
@@ -1646,16 +1134,40 @@ function AdminDashboard() {
   );
 }
 
-const SECTION_TITLES = { overview:'Dashboard Overview', appointments:'Appointments', services:'Services', staff:'Staff Management', clients:'Clients', availability:'Availability', payments:'Payments & Reports', notifications:'Activity Log', gallery:'Gallery Management','shop-products': 'Shop — Products',
-'shop-orders':   'Shop — Orders','discounts': 'Discount Codes','shop-revenue': 'Shop — Revenue', };
-const COLOR_MAP = { rose:'linear-gradient(135deg,#f87171,#ef4444)', sky:'linear-gradient(135deg,#38bdf8,#0ea5e9)', emerald:'linear-gradient(135deg,#34d399,#10b981)', violet:'linear-gradient(135deg,#a78bfa,#7c3aed)', amber:'linear-gradient(135deg,#fbbf24,#d97706)', slate:'linear-gradient(135deg,#94a3b8,#64748b)', danger:'linear-gradient(135deg,#f87171,#dc2626)' };
+const SECTION_TITLES = {
+  overview:       'Dashboard Overview',
+  appointments:   'Appointments',
+  services:       'Services',
+  staff:          'Staff Management',
+  clients:        'Clients',
+  availability:   'Availability',
+  payments:       'Payments & Reports',
+  notifications:  'Activity Log',
+  gallery:        'Gallery Management',
+  'shop-products':'Shop — Products',
+  'shop-orders':  'Shop — Orders',
+  'discounts':    'Discount Codes',
+  'shop-revenue': 'Shop — Revenue',
+};
+
+const COLOR_MAP = {
+  rose:    'linear-gradient(135deg,#f87171,#ef4444)',
+  sky:     'linear-gradient(135deg,#38bdf8,#0ea5e9)',
+  emerald: 'linear-gradient(135deg,#34d399,#10b981)',
+  violet:  'linear-gradient(135deg,#a78bfa,#7c3aed)',
+  amber:   'linear-gradient(135deg,#fbbf24,#d97706)',
+  slate:   'linear-gradient(135deg,#94a3b8,#64748b)',
+  danger:  'linear-gradient(135deg,#f87171,#dc2626)',
+};
 
 function StatCard({ label, value, icon, color='slate', onClick, clickable }) {
   return <div className={`stat-card${clickable?' stat-card-clickable':''}`} style={{background:COLOR_MAP[color]||COLOR_MAP.slate,cursor:clickable?'pointer':'default'}} onClick={onClick}><div className="icon">{icon}</div><div><p>{label}</p><h3>{value}</h3></div></div>;
 }
+
 function SidebarBtn({ icon, label, section, active, onClick, badge, onNavigate }) {
   return <button className={`sidebar-btn ${active===section?'active':''}`} onClick={()=>{onClick(section);if(onNavigate)onNavigate();}}><span className="sb-icon">{icon}</span><span className="sb-label">{label}</span>{badge?<span className="sb-badge">{badge}</span>:null}</button>;
 }
+
 function Modal({ title, onClose, children }) {
   return <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><header><h3>{title}</h3><button onClick={onClose}>✕</button></header>{children}</div></div>;
 }

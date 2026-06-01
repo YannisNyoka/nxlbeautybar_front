@@ -122,7 +122,7 @@ function SignIn({ onSignIn }) {
       <div className="nxl-signin-card">
 
         <div className="nxl-signin-brand">
-          <div className="nxl-signin-dot-ring">💅</div>
+          <div className="nxl-signin-dot-ring"></div>
           <h1>Welcome Back</h1>
           <p>Sign in to your NXL Beauty Bar account</p>
         </div>
