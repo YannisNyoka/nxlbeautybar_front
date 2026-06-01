@@ -540,3 +540,64 @@
 .cp-topbar-logo { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; }
 .cp-topbar-logo-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(201,169,110,0.45); flex-shrink: 0; }
 .cp-topbar-logo span { font-family: 'Cormorant Garamond', serif; font-size: 1rem; font-weight: 700; letter-spacing: 0.1em; color: var(--cp-cream, #ffe8d6); white-space: nowrap; }
+
+/* ── Stock management styles ──────────────────────────────────────────────── */
+.cp-item--oos {
+  opacity: 0.7;
+  border: 1.5px solid rgba(220,50,50,0.3) !important;
+}
+
+.cp-item-img-wrap { position: relative; }
+
+.cp-item-oos-badge {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(220,38,38,0.85);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 0.2rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: 0 0 4px 4px;
+}
+
+.cp-stock-warn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin: 0.25rem 0 0.4rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+}
+
+.cp-stock-warn--oos {
+  background: rgba(220,38,38,0.08);
+  color: #dc2626;
+  border: 1px solid rgba(220,38,38,0.2);
+}
+
+.cp-stock-warn--low {
+  background: rgba(217,119,6,0.08);
+  color: #b45309;
+  border: 1px solid rgba(217,119,6,0.2);
+}
+
+.cp-stock-block-warn {
+  margin: 0.75rem 0;
+  padding: 0.75rem 1rem;
+  background: rgba(220,38,38,0.08);
+  border: 1px solid rgba(220,38,38,0.2);
+  border-radius: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #dc2626;
+  line-height: 1.4;
+}
+
+.cp-btn-checkout:disabled {
+  background: #94a3b8 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+}

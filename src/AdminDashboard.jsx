@@ -648,9 +648,22 @@ function AdminDashboard() {
     const handleProductSubmit = async (e) => { e.preventDefault(); setIsSubmitting(true); try { const payload = { name:productForm.name, description:productForm.description, price:parseFloat(productForm.price), comparePrice:productForm.comparePrice?parseFloat(productForm.comparePrice):undefined, category:productForm.category, stock:parseInt(productForm.stock), sku:productForm.sku, brand:productForm.brand, tags:productForm.tags?productForm.tags.split(',').map(t=>t.trim()).filter(Boolean):[], isFeatured:productForm.isFeatured, isActive:productForm.isActive, images:productImages }; const method = editingProduct ? 'PUT' : 'POST'; const endpoint = editingProduct ? `${API_ENDPOINTS.shopProductsWrite}/${editingProduct._id}` : API_ENDPOINTS.shopProductsWrite; await apiRequest(endpoint, { method, body:JSON.stringify(payload) }); showToast(`Product ${editingProduct?'updated':'created'}.`); setShowProductForm(false); setEditingProduct(null); setProductImages([]); setProductImgUrl(''); loadProducts(); } catch (e) { showToast(e.message, 'error'); } finally { setIsSubmitting(false); } };
     const openEdit = (product) => { setEditingProduct(product); setProductForm({ name:product.name, description:product.description||'', price:String(product.price), comparePrice:product.comparePrice?String(product.comparePrice):'', category:product.category, stock:String(product.stock), sku:product.sku||'', brand:product.brand||'', tags:(product.tags||[]).join(', '), isFeatured:product.isFeatured||false, isActive:product.isActive!==false }); setProductImages(product.images||[]); setProductImgUrl(''); setShowProductForm(true); };
     const handleToggleActive = async (product) => { try { await apiRequest(`${API_ENDPOINTS.shopProductsWrite}/${product._id}`, { method:'PUT', body:JSON.stringify({ isActive:!product.isActive }) }); showToast(`Product ${product.isActive?'deactivated':'activated'}.`); loadProducts(); } catch (e) { showToast(e.message, 'error'); } };
+
+    const handleStockUpdate = async (product) => {
+      const input = window.prompt(`Update stock for "${product.name}"\nCurrent: ${product.stock} units\n\nNew quantity:`, String(product.stock));
+      if (input === null) return;
+      const qty = parseInt(input, 10);
+      if (isNaN(qty) || qty < 0) { showToast('Enter a valid stock number (0 or more).', 'error'); return; }
+      try {
+        await apiRequest(`${API_ENDPOINTS.shopProductsWrite}/${product._id}`, { method:'PUT', body:JSON.stringify({ stock: qty }) });
+        showToast(`"${product.name}" stock updated to ${qty}.`);
+        loadProducts();
+      } catch (e) { showToast(e.message, 'error'); }
+    };
+
     if (shopProducts.length === 0 && !shopLoading) loadProducts();
     const CATEGORIES = ['nails','hair','skincare','accessories','professional','other'];
-    const CAT_EMOJI = { nails:'', hair:'', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'' };
+    const CAT_EMOJI = { nails:'💅', hair:'💇‍♀️', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'✨' };
     return (
       <section className="panel">
         <header><h3>Shop Products <span className="count-chip">{shopProducts.length}</span></h3><div className="button-row"><button className="btn ghost" onClick={loadProducts}>↻ Refresh</button><button className="btn primary" onClick={() => { setEditingProduct(null); setProductForm({name:'',description:'',price:'',comparePrice:'',category:'nails',stock:'',sku:'',brand:'',tags:'',isFeatured:false,isActive:true}); setProductImages([]); setProductImgUrl(''); setShowProductForm(true); }}>➕ Add Product</button></div></header>
@@ -663,10 +676,20 @@ function AdminDashboard() {
                   <td><div style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>{p.images?.[0]?<img src={p.images[0]} alt={p.name} style={{width:42,height:42,objectFit:'cover',borderRadius:8,border:'1px solid #e2e8f0',flexShrink:0}} />:<div style={{width:42,height:42,background:'#f1f5f9',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.2rem',flexShrink:0}}>{CAT_EMOJI[p.category]||'✨'}</div>}<div><div style={{fontWeight:600,fontSize:'0.88rem'}}>{p.name}</div>{p.brand&&<div style={{fontSize:'0.72rem',color:'#94a3b8'}}>{p.brand}</div>}</div></div></td>
                   <td style={{textTransform:'capitalize'}}>{CAT_EMOJI[p.category]} {p.category}</td>
                   <td><div style={{fontWeight:700}}>R{parseFloat(p.price).toFixed(2)}</div>{p.comparePrice&&<div style={{fontSize:'0.72rem',color:'#94a3b8',textDecoration:'line-through'}}>R{parseFloat(p.comparePrice).toFixed(2)}</div>}</td>
-                  <td><span style={{fontWeight:600,color:p.stock===0?'#c53030':p.stock<=5?'#c05621':'#276749'}}>{p.stock}</span></td>
+                  <td>
+                    <div style={{display:'flex',alignItems:'center',gap:'0.5rem'}}>
+                      <span style={{fontWeight:700,fontSize:'1rem',color:p.stock===0?'#c53030':p.stock<=5?'#c05621':'#276749',minWidth:'28px'}}>{p.stock}</span>
+                      {p.stock === 0 && <span style={{background:'#fee2e2',color:'#991b1b',fontSize:'0.62rem',fontWeight:700,padding:'0.1rem 0.4rem',borderRadius:'4px',whiteSpace:'nowrap'}}>OUT</span>}
+                      {p.stock > 0 && p.stock <= 5 && <span style={{background:'#fef3c7',color:'#92400e',fontSize:'0.62rem',fontWeight:700,padding:'0.1rem 0.4rem',borderRadius:'4px',whiteSpace:'nowrap'}}>LOW</span>}
+                    </div>
+                  </td>
                   <td><span className={`status ${p.isActive?'booked':'cancelled'}`}>{p.isActive?'Active':'Inactive'}</span></td>
                   <td>{p.isFeatured?<span style={{color:'#d97706',fontWeight:700}}>★ Yes</span>:<span style={{color:'#94a3b8'}}>—</span>}</td>
-                  <td className="row-actions"><button className="action-btn" onClick={()=>openEdit(p)}>Edit</button><button className="action-btn" onClick={()=>handleToggleActive(p)}>{p.isActive?'Deactivate':'Activate'}</button></td>
+                  <td className="row-actions">
+                    <button className="action-btn" onClick={()=>openEdit(p)}>Edit</button>
+                    <button className="action-btn" onClick={()=>handleStockUpdate(p)} title="Update stock" style={{fontWeight:700}}>📦 Stock</button>
+                    <button className="action-btn" onClick={()=>handleToggleActive(p)}>{p.isActive?'Deactivate':'Activate'}</button>
+                  </td>
                 </tr>
               ))}
               {shopProducts.length===0&&<tr><td colSpan="7" className="empty-row">No products yet. Add your first product!</td></tr>}
