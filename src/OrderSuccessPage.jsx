@@ -2,12 +2,15 @@ import nxlLogo from './assets/images/Logo.jpeg';
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import './OrderSuccessPage.css';
+import { useSEO } from './useSEO';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 export default function OrderSuccessPage() {
   const [searchParams]  = useSearchParams();
   const orderId         = searchParams.get('orderId');
+
+  useSEO({ title: 'Order Confirmed', url: '/shop/order-success', noIndex: true });
 
   const [order,    setOrder]   = useState(null);
   const [loading,  setLoading] = useState(true);

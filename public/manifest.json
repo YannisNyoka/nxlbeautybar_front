@@ -1,32 +1,59 @@
 {
   "name": "NXL Beauty Bar",
   "short_name": "NXL Beauty",
-  "description": "Book appointments and shop professional beauty products at NXL Beauty Bar, Soweto.",
+  "description": "Book nail, hair & beauty appointments and shop professional beauty products at NXL Beauty Bar, Soweto.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
   "orientation": "portrait-primary",
   "background_color": "#1a0c07",
   "theme_color": "#3d1f15",
   "categories": ["beauty", "lifestyle", "shopping"],
   "lang": "en-ZA",
+  "dir": "ltr",
+  "id": "nxl-beauty-bar",
   "icons": [
     {
-      "src": "/Logo.jpeg",
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/Logo.jpeg",
+      "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/Logo.jpeg",
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/jpeg",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -35,7 +62,15 @@
       "src": "/og-image.jpg",
       "sizes": "1200x630",
       "type": "image/jpeg",
-      "label": "NXL Beauty Bar Homepage"
+      "form_factor": "wide",
+      "label": "NXL Beauty Bar — Home"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "NXL Beauty Bar on Mobile"
     }
   ],
   "shortcuts": [
@@ -44,16 +79,22 @@
       "short_name": "Book",
       "description": "Book a nail or beauty appointment",
       "url": "/login",
-      "icons": [{ "src": "/Logo.jpeg", "sizes": "96x96", "type": "image/jpeg" }]
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
       "name": "Shop Products",
       "short_name": "Shop",
       "description": "Browse and buy beauty products",
       "url": "/shop",
-      "icons": [{ "src": "/Logo.jpeg", "sizes": "96x96", "type": "image/jpeg" }]
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "My Orders",
+      "short_name": "Orders",
+      "description": "Track your beauty product orders",
+      "url": "/orders",
+      "icons": [{ "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ],
-  "related_applications": [],
   "prefer_related_applications": false
 }

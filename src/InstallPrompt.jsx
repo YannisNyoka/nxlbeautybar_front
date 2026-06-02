@@ -66,7 +66,7 @@ export default function InstallPrompt() {
         }
       `}</style>
 
-      <img src="/Logo.jpeg" alt="" style={{ width: 44, height: 44, borderRadius: '10px', objectFit: 'cover', flexShrink: 0, border: '2px solid rgba(201,169,110,0.4)' }} />
+      <img src="/android-chrome-192x192.png" alt="NXL Beauty Bar" style={{ width: 44, height: 44, borderRadius: '10px', objectFit: 'cover', flexShrink: 0, border: '2px solid rgba(201,169,110,0.4)' }} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ margin: '0 0 0.2rem', fontFamily: "'DM Sans', sans-serif", fontSize: '0.85rem', fontWeight: 700, color: '#fdf6f0' }}>

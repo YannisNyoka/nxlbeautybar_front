@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from './hooks/useCart';
 import './CheckoutPage.css';
+import { useSEO } from './useSEO';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -14,6 +15,8 @@ const PROVINCES = [
 export default function CheckoutPage() {
   const { items, subtotal, shippingFee, total, clearCart } = useCart();
   const navigate = useNavigate();
+
+  useSEO({ title: 'Checkout', url: '/checkout', noIndex: true });
 
   const [form, setForm] = useState({
     fullName:  '',

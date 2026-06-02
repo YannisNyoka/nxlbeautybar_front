@@ -3,13 +3,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useCart } from './hooks/useCart';
 import './ShopPage.css';
+import { useSEO } from './useSEO';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 const CATEGORIES = [
-  { id: 'all',          label: 'All Products', emoji: '' },
-  { id: 'nails',        label: 'Nails',        emoji: '' },
-  { id: 'hair',         label: 'Hair',         emoji: '' },
+  { id: 'all',          label: 'All Products', emoji: '✨' },
+  { id: 'nails',        label: 'Nails',        emoji: '💅' },
+  { id: 'hair',         label: 'Hair',         emoji: '💇‍♀️' },
   { id: 'skincare',     label: 'Skincare',     emoji: '🌿' },
   { id: 'accessories',  label: 'Accessories',  emoji: '💎' },
   { id: 'professional', label: 'Professional', emoji: '🛠️' },
@@ -86,6 +87,12 @@ function ProductCard({ product }) {
 export default function ShopPage() {
   const { itemCount } = useCart();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  useSEO({
+    title:       'Shop Beauty Products — Nails, Hair & Skincare',
+    description: 'Shop professional-grade nail, hair and skincare products at NXL Beauty Bar. Gel polish, acrylic sets, lash supplies & more. Free delivery on orders over R500.',
+    url:         '/shop',
+  });
 
   const [products, setProducts]   = useState([]);
   const [featured, setFeatured]   = useState([]);

@@ -3,12 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useCart } from './hooks/useCart';
 import './CartPage.css';
+import { useSEO } from './useSEO';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 export default function CartPage() {
   const { items, subtotal, updateQuantity, removeItem, itemCount } = useCart();
   const navigate = useNavigate();
+
+  useSEO({ title: 'Your Cart', url: '/cart', noIndex: true });
 
   // Block checkout if any item is out of stock
   const hasOutOfStock = items.some(item => item.stock === 0);

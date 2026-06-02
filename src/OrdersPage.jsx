@@ -2,6 +2,7 @@ import nxlLogo from './assets/images/Logo.jpeg';
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './OrdersPage.css';
+import { useSEO } from './useSEO';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -165,14 +166,27 @@ function OrderCard({ order, expanded, onToggle }) {
             </div>
 
             <div className="op-detail-section">
-              <h3 className="op-detail-title">Delivery Address</h3>
-              {order.shippingAddress && (
-                <address className="op-address">
-                  <strong>{order.shippingAddress.fullName}</strong>
-                  <span>{order.shippingAddress.address}</span>
-                  <span>{order.shippingAddress.city}, {order.shippingAddress.province} {order.shippingAddress.postalCode}</span>
-                  <span>{order.shippingAddress.phone}</span>
-                </address>
+              <h3 className="op-detail-title">
+                {order.fulfillmentType === 'pickup' ? '🏪 Salon Pickup' : '🚚 Delivery Address'}
+              </h3>
+              {order.fulfillmentType === 'pickup' ? (
+                <div className="op-pickup-notice">
+                  <p><strong>NXL Beauty Bar</strong></p>
+                  <p>1948 Mahalefele Rd, Dube, Soweto, 1800</p>
+                  <p>Mon–Sat 9AM–5PM · 068 511 3394</p>
+                  <p style={{ marginTop:'0.5rem', color:'#86efac', fontSize:'0.8rem' }}>
+                    We'll notify you via WhatsApp when your order is ready.
+                  </p>
+                </div>
+              ) : (
+                order.shippingAddress && (
+                  <address className="op-address">
+                    <strong>{order.shippingAddress.fullName}</strong>
+                    <span>{order.shippingAddress.address}</span>
+                    <span>{order.shippingAddress.city}, {order.shippingAddress.province} {order.shippingAddress.postalCode}</span>
+                    <span>{order.shippingAddress.phone}</span>
+                  </address>
+                )
               )}
               {order.trackingNumber && (
                 <div className="op-tracking">
@@ -213,6 +227,7 @@ function OrderCard({ order, expanded, onToggle }) {
 
 export default function OrdersPage() {
   const navigate = useNavigate();
+  useSEO({ title: 'My Orders', url: '/orders', noIndex: true });
   const [orders,   setOrders]   = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');

@@ -6,6 +6,7 @@ import manicureImage  from './assets/images/NxlPic5.jpg';
 import pedicureImage  from './assets/images/ToesImage.jpg';
 import eyelashesImage from './assets/images/EyeLashesImage.jpg';
 import nxlDesignBg    from './assets/images/nxl_design1.jpeg';
+import { useSEO, LOCAL_BUSINESS_SCHEMA } from './useSEO';
 
 const SALON_ADDRESS = 'NXLBEAUTYBAR, 1948 Mahalefele Rd, Dube, Soweto, 1800';
 
@@ -146,7 +147,7 @@ function StatsBar() {
   const stats = [
     { value: '500+', label: 'Happy Clients' },
     { value: '5★',   label: 'Rating' },
-    { value: '7+',   label: 'Years Experience' },
+    { value: '3+',   label: 'Years Experience' },
     { value: '20+',  label: 'Services' },
   ];
   return (
@@ -167,12 +168,12 @@ function ShopCTA() {
     <section className="hp-shop-cta">
       <div className="hp-shop-cta-inner">
         <div className="hp-shop-cta-text">
-          <span className="hp-shop-eyebrow"> Now Online</span>
+          <span className="hp-shop-eyebrow">✨ Now Online</span>
           <h2>Shop Professional<br />Beauty Products</h2>
           <p>The same products we use in salon — delivered to your door. Free shipping on orders over <strong>R500</strong>.</p>
           <div className="hp-shop-cta-pills">
-            <span> Nail Products</span>
-            <span> Hair Care</span>
+            <span>💅 Nail Products</span>
+            <span>💇‍♀️ Hair Care</span>
             <span>🌿 Skincare</span>
             <span>💎 Accessories</span>
           </div>
@@ -184,7 +185,7 @@ function ShopCTA() {
         <div className="hp-shop-cta-visual" aria-hidden="true">
           <div className="hp-shop-orb hp-orb1" />
           <div className="hp-shop-orb hp-orb2" />
-          <div className="hp-shop-card-float hp-float1"><span></span><p>Gel &amp; Acrylic</p></div>
+          <div className="hp-shop-card-float hp-float1"><span>💅</span><p>Gel &amp; Acrylic</p></div>
           <div className="hp-shop-card-float hp-float2"><span>🌿</span><p>Skincare</p></div>
           <div className="hp-shop-card-float hp-float3"><span>🚚</span><p>Free over R500</p></div>
         </div>
@@ -200,7 +201,7 @@ function BookingCTA() {
     <section className="hp-booking-cta">
       <div className="hp-booking-cta-inner">
         <h2>Ready for Your Next Look?</h2>
-        <p>Book your appointment online in minutes. We're open Tuesday–Sunday, 9AM–5PM.</p>
+        <p>Book your appointment online in minutes. We're open Mon–Sat, 9AM–5PM.</p>
         <div className="hp-booking-cta-btns">
           {isLoggedIn
             ? <Link to="/dashboard" className="hp-book-btn-primary">Book Appointment →</Link>
@@ -213,7 +214,7 @@ function BookingCTA() {
         <div className="hp-booking-meta">
           <span>📍 1948 Mahalefele Rd, Dube, Soweto</span>
           <span>📞 068 511 3394</span>
-          <span>🕐 Tue–Sun 9AM–5PM</span>
+          <span>🕐 Mon–Sat 9AM–5PM</span>
         </div>
       </div>
     </section>
@@ -275,6 +276,12 @@ export default function HomePage() {
   const cartCount = useCartCount();
   const isLoggedIn = !!localStorage.getItem('token');
 
+  useSEO({
+    title:       'NXL Beauty Bar — Nails, Hair & Beauty in Soweto',
+    description: 'Book professional nail, hair and beauty services at NXL Beauty Bar in Dube, Soweto. Acrylic nails, gel polish, pedicures, lash extensions & more. Shop beauty products online.',
+    url:         '/',
+    schema:      LOCAL_BUSINESS_SCHEMA,
+  });
   const flip = key => setFlipped(p => ({ ...p, [key]: !p[key] }));
 
   const scrollTo = id => {
@@ -345,17 +352,28 @@ export default function HomePage() {
           <div className="hp-hero-overlay" />
         </div>
         <div className="hp-hero-content">
-          <span className="hp-hero-eyebrow">Dube, Soweto · Est. 2019</span>
-         
+          <span className="hp-hero-eyebrow">Dube, Soweto · Est. 2021</span>
+          <h1 className="hp-hero-title">
+            <span>NXL</span>
+            <span>Beauty Bar</span>
+          </h1>
           <p className="hp-hero-tagline">Nails · Hair · Beauty · Confidence</p>
           <div className="hp-hero-cta">
             <Link to="/login"  className="hp-hero-btn-primary">Book Appointment</Link>
             <Link to="/shop"   className="hp-hero-btn-outline">Shop Products</Link>
           </div>
-         
+          <button className="hp-hero-location" onClick={getDirections}>
+            <span>📍</span> Johannesburg, Soweto
+          </button>
         </div>
-        
-        
+        <div className="hp-hero-artist">
+          <img src={noxoloImage} alt="NXL Beauty Bar Artist" />
+        </div>
+        <div className="hp-hero-wave">
+          <svg viewBox="0 0 1440 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+            <path d="M0,40 C360,80 1080,0 1440,40 L1440,80 L0,80 Z" fill="#fdf6f0"/>
+          </svg>
+        </div>
       </section>
 
       {/* ── Stats ───────────────────────────────────────────────────────── */}
@@ -399,7 +417,7 @@ export default function HomePage() {
           <div className="hp-contact-card">
             <span>🕐</span>
             <h4>Hours</h4>
-            <p>Monday – Saturday<br />9:00 AM – 5:00 PM</p>
+            <p>Tuesday – Sunday<br />9:00 AM – 5:00 PM</p>
             <Link to="/login">Book Now →</Link>
           </div>
           <div className="hp-contact-card">

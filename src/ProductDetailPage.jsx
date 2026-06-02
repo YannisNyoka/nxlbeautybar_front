@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from './hooks/useCart';
 import './ProductDetailPage.css';
+import { useSEO, productSchema, breadcrumbSchema } from './useSEO';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -42,6 +43,35 @@ export default function ProductDetailPage() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError,   setReviewError]   = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
+
+  // ── Dynamic SEO — updates when product loads ──────────────────────────────
+  useSEO(product ? {
+    title:       `${product.name} — NXL Beauty Bar`,
+    description: product.description
+      ? `${product.description.slice(0, 155)}…`
+      : `Buy ${product.name} at NXL Beauty Bar. Professional beauty products delivered in South Africa. Free delivery over R500.`,
+    image:       product.images?.[0] || undefined,
+    url:         `/shop/product/${id}`,
+    type:        'product',
+    schema: {
+      '@context': 'https://schema.org',
+      '@graph': [
+        productSchema(product),
+        breadcrumbSchema([
+          { name: 'Home',     url: '/' },
+          { name: 'Shop',     url: '/shop' },
+          { name: product.category?.charAt(0).toUpperCase() + product.category?.slice(1), url: `/shop?category=${product.category}` },
+          { name: product.name, url: `/shop/product/${id}` },
+        ]),
+      ],
+    },
+  } : {
+    title:       'Product — NXL Beauty Bar',
+    description: 'Professional beauty products at NXL Beauty Bar.',
+    url:         `/shop/product/${id}`,
+    noIndex:     true,
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   const loadProduct = async () => {
     setLoading(true);
