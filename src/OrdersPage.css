@@ -686,3 +686,29 @@
 .op-logo { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; }
 .op-logo-img { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(201,169,110,0.45); flex-shrink: 0; }
 .op-logo span { font-family: 'Cormorant Garamond', serif; font-size: 1rem; font-weight: 700; letter-spacing: 0.1em; color: var(--op-cream, #ffe8d6); white-space: nowrap; }
+
+/* ── Pickup notice ────────────────────────────────────────────────────────── */
+.op-pickup-notice {
+  background: rgba(134,239,172,0.07);
+  border: 1px solid rgba(134,239,172,0.18);
+  border-radius: 10px;
+  padding: 0.875rem 1.1rem;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.op-pickup-notice p { margin: 0 0 0.15rem; color: rgba(255,220,190,0.75); }
+.op-pickup-notice p:first-child strong { color: var(--op-cream, #ffe8d6); }
+
+/* Track button */
+.op-btn-track {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.55rem 1.1rem;
+  background: linear-gradient(135deg, var(--op-brown, #3d1f15), #a0502e);
+  color: var(--op-cream, #ffe8d6);
+  border-radius: 8px; font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem; font-weight: 700;
+  text-decoration: none; transition: opacity 0.2s, transform 0.15s;
+  white-space: nowrap;
+}
+.op-btn-track:hover { opacity: 0.88; transform: translateY(-1px); }

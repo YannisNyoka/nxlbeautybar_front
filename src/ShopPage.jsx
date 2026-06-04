@@ -4,13 +4,14 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useCart } from './hooks/useCart';
 import './ShopPage.css';
 import { useSEO } from './useSEO';
+import LazyImage from './LazyImage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
 const CATEGORIES = [
-  { id: 'all',          label: 'All Products', emoji: '✨' },
-  { id: 'nails',        label: 'Nails',        emoji: '💅' },
-  { id: 'hair',         label: 'Hair',         emoji: '💇‍♀️' },
+  { id: 'all',          label: 'All Products', emoji: '' },
+  { id: 'nails',        label: 'Nails',        emoji: '' },
+  { id: 'hair',         label: 'Hair',         emoji: '' },
   { id: 'skincare',     label: 'Skincare',     emoji: '🌿' },
   { id: 'accessories',  label: 'Accessories',  emoji: '💎' },
   { id: 'professional', label: 'Professional', emoji: '🛠️' },
@@ -53,7 +54,7 @@ function ProductCard({ product }) {
     <Link to={`/shop/product/${product._id}`} className="sp-card">
       <div className="sp-card-img-wrap">
         {product.images?.[0]
-          ? <img src={product.images[0]} alt={product.name} className="sp-card-img" loading="lazy" />
+          ? <LazyImage src={product.images[0]} alt={product.name} className="sp-card-img" />
           : <div className="sp-card-img-placeholder">💅</div>
         }
         {discount && <span className="sp-card-badge">−{discount}%</span>}

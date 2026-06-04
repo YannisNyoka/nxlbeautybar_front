@@ -7,6 +7,7 @@ import pedicureImage  from './assets/images/ToesImage.jpg';
 import eyelashesImage from './assets/images/EyeLashesImage.jpg';
 import nxlDesignBg    from './assets/images/nxl_design1.jpeg';
 import { useSEO, LOCAL_BUSINESS_SCHEMA } from './useSEO';
+import NotificationBell from './NotificationBell';
 
 const SALON_ADDRESS = 'NXLBEAUTYBAR, 1948 Mahalefele Rd, Dube, Soweto, 1800';
 
@@ -201,7 +202,7 @@ function BookingCTA() {
     <section className="hp-booking-cta">
       <div className="hp-booking-cta-inner">
         <h2>Ready for Your Next Look?</h2>
-        <p>Book your appointment online in minutes. We're open Tuesday–Sunday, 9AM–5PM.</p>
+        <p>Book your appointment online in minutes. We're open Mon–Sat, 9AM–5PM.</p>
         <div className="hp-booking-cta-btns">
           {isLoggedIn
             ? <Link to="/dashboard" className="hp-book-btn-primary">Book Appointment →</Link>
@@ -214,7 +215,7 @@ function BookingCTA() {
         <div className="hp-booking-meta">
           <span>📍 1948 Mahalefele Rd, Dube, Soweto</span>
           <span>📞 068 511 3394</span>
-          <span>🕐 Tuesday–Sunday 9AM–5PM</span>
+          <span>🕐 Tue–Sun 9AM–5PM</span>
         </div>
       </div>
     </section>
@@ -307,6 +308,7 @@ export default function HomePage() {
             <button onClick={() => scrollTo('hp-our-work')}>Gallery</button>
             <button onClick={() => scrollTo('hp-services')}>Services</button>
             <Link to="/shop" className="hp-nav-shop">🛍️ Shop</Link>
+            <Link to="/subscriptions" className="hp-nav-shop">💅 Plans</Link>
             <button onClick={() => scrollTo('hp-contact')}>Contact</button>
           </div>
 
@@ -315,6 +317,7 @@ export default function HomePage() {
               🛒
               {cartCount > 0 && <span className="hp-nav-cart-badge">{cartCount}</span>}
             </Link>
+            {isLoggedIn && <NotificationBell />}
             {isLoggedIn
               ? <Link to="/dashboard" className="hp-nav-cta">My Bookings</Link>
               : <Link to="/login"    className="hp-nav-cta">Book Now</Link>
@@ -361,7 +364,9 @@ export default function HomePage() {
             <Link to="/login"  className="hp-hero-btn-primary">Book Appointment</Link>
             <Link to="/shop"   className="hp-hero-btn-outline">Shop Products</Link>
           </div>
-         
+          <button className="hp-hero-location" onClick={getDirections}>
+            <span>📍</span> 
+          </button>
         </div>
         
         

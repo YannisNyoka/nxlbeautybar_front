@@ -11,6 +11,8 @@ import './AdminDashboard.css';
 import EditAppointmentModal from './components/EditAppointmentModal';
 import PaymentModal from './components/PaymentModal';
 import { usePushAlarm } from './hooks/UsePushAlarm';
+import { usePushNotifications, requestNotificationPermission } from './usePushNotifications';
+import StaffSchedule from './components/StaffSchedule';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const API_ENDPOINTS = {
@@ -266,9 +268,50 @@ function AdminDashboard() {
   const [showDiscountForm, setShowDiscountForm] = useState(false);
   const [editingDiscount,  setEditingDiscount] = useState(null);
 
-  usePushAlarm({ isAuthenticated, notifications, activeSection });
+  // ── Analytics state ───────────────────────────────────────────────────
+  const [analyticsData,  setAnalyticsData]  = useState(null);
+  const [analyticsRange, setAnalyticsRange] = useState('30');
+  const [analyticsLoad,  setAnalyticsLoad]  = useState(false);
+
+  // ── Inventory state ───────────────────────────────────────────────────
+  const [inventory,    setInventory]    = useState(null);
+  const [invHistory,   setInvHistory]   = useState([]);
+  const [suppliers,    setSuppliers]    = useState([]);
+  const [invLoading,   setInvLoading]   = useState(false);
+  const [showRestock,  setShowRestock]  = useState(false);
+  const [restockForm,  setRestockForm]  = useState({ productId:'', quantity:'', costPerUnit:'', supplier:'', invoiceRef:'', notes:'' });
 
   const showToast = useCallback((msg, type='success') => { setToast({ msg, type, id:Date.now() }); setTimeout(() => setToast(null), 3500); }, []);
+
+  const loadAnalytics = useCallback(async (range) => {
+    const r = range || '30';
+    setAnalyticsLoad(true);
+    try {
+      const data = await apiRequest(`${API_BASE_URL}/analytics?range=${r}`);
+      setAnalyticsData(data.data);
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { setAnalyticsLoad(false); }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (activeSection === 'analytics' && !analyticsData && !analyticsLoad) {
+      loadAnalytics(analyticsRange);
+    }
+  }, [activeSection]);
+
+  usePushAlarm({ isAuthenticated, notifications, activeSection });
+  usePushNotifications({ notifications, isAdmin: user?.role === 'admin' });
+
+  const [notifPermission, setNotifPermission] = useState(() =>
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+
+  const handleEnableNotifications = async () => {
+    const result = await requestNotificationPermission();
+    setNotifPermission(result);
+    if (result === 'granted') showToast('🔔 Browser notifications enabled!');
+  };
+
   useEffect(() => { localStorage.setItem('adminActiveSection', activeSection); }, [activeSection]);
   useEffect(() => { if (!isAuthenticated || authLoading) return; loadAll(); }, [isAuthenticated, authLoading, user]);
 
@@ -296,7 +339,63 @@ function AdminDashboard() {
   }, [isAuthenticated, showToast]);
 
   const loadGallery = async () => { try { setGalleryLoading(true); const data = await apiRequest(API_ENDPOINTS.gallery); setGalleryItems(data.data || []); } catch (e) { console.error(e); } finally { setGalleryLoading(false); } };
+
   useEffect(() => { if (activeSection === 'gallery') loadGallery(); }, [activeSection]);
+
+  // ── Load section data when tab is first opened ───────────────────────
+  useEffect(() => {
+    if (activeSection === 'shop-products' && shopProducts.length === 0 && !shopLoading) {
+      apiRequest(API_ENDPOINTS.shopProducts).then(d => setShopProducts(d.data || [])).catch(() => {});
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection === 'shop-orders' && shopOrders.length === 0 && !shopLoading) {
+      const params = orderFilter !== 'all' ? `?status=${orderFilter}` : '';
+      setShopLoading(true);
+      apiRequest(`${API_ENDPOINTS.shopOrders}${params}`)
+        .then(d => setShopOrders(d.data || []))
+        .catch(() => {})
+        .finally(() => setShopLoading(false));
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection === 'shop-revenue' && !shopStats && !shopStatsLoad) {
+      setShopStatsLoad(true);
+      apiRequest(API_ENDPOINTS.shopStats)
+        .then(d => setShopStats(d.data))
+        .catch(e => showToast(e.message, 'error'))
+        .finally(() => setShopStatsLoad(false));
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection === 'discounts' && discountCodes.length === 0 && !discountLoading) {
+      setDiscountLoading(true);
+      apiRequest(API_ENDPOINTS.discountCodes)
+        .then(d => setDiscountCodes(d.data || []))
+        .catch(() => {})
+        .finally(() => setDiscountLoading(false));
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (activeSection === 'inventory' && !inventory && !invLoading) {
+      setInvLoading(true);
+      Promise.all([
+        apiRequest(`${API_BASE_URL}/inventory`),
+        apiRequest(`${API_BASE_URL}/inventory/history?limit=20`),
+        apiRequest(`${API_BASE_URL}/suppliers`),
+      ]).then(([inv, hist, sups]) => {
+        setInventory(inv.data);
+        setInvHistory(hist.data || []);
+        setSuppliers(sups.data || []);
+      }).catch(e => showToast(e.message, 'error'))
+        .finally(() => setInvLoading(false));
+    }
+  }, [activeSection]);
+  // ─────────────────────────────────────────────────────────────────────
 
   const loadAll = async () => {
     try {
@@ -467,6 +566,13 @@ function AdminDashboard() {
                 <button className="action-btn" title="Edit" onClick={()=>{setEditingAppointment(appt);setShowEditAppointmentModal(true);}}>✏️</button>
                 <button className="action-btn" title="Mark Complete" onClick={()=>mutateAppointment(appt._id,{status:'completed'}).then(()=>showToast('Marked complete.'))}>✓</button>
                 <button className="action-btn" title="Cancel" onClick={()=>mutateAppointment(appt._id,{status:'cancelled'}).then(()=>showToast('Appointment cancelled.'))}>✕</button>
+                <button className="action-btn" title="WhatsApp Reminder" style={{background:'#dcfce7',color:'#15803d',border:'1px solid #86efac'}}
+                  onClick={async () => {
+                    try {
+                      const res = await apiRequest(`${API_ENDPOINTS.appointments}/${appt._id}/whatsapp-reminder`, { method:'POST' });
+                      if (res.data?.waUrl) window.open(res.data.waUrl, '_blank');
+                    } catch { showToast('Add phone number to client profile first.', 'error'); }
+                  }}>💬</button>
                 {(appt.paymentStatus==='unpaid'||appt.paymentStatus==='deposit_paid')&&<button className="action-btn" title="Record Payment" onClick={()=>{setSelectedAppointment(appt);setShowPaymentModal(true);}}>💳</button>}
                 {appt.paymentStatus==='unpaid'&&<button className="action-btn delete-btn" title="Permanently delete" disabled={deletingId===appt._id} onClick={()=>hardDeleteAppointment(appt)}>{deletingId===appt._id?'…':'🗑'}</button>}
               </td>
@@ -541,21 +647,65 @@ function AdminDashboard() {
     <section className="panel">
       <header><h3>Clients <span className="count-chip">{clients.length}</span></h3><input placeholder="Search clients…" value={filters.client} onChange={e=>setFilters({...filters,client:e.target.value})} style={{padding:'0.5rem 0.75rem',border:'1px solid #e2e8f0',borderRadius:'8px',fontSize:'0.875rem'}} /></header>
       <div className="table-responsive"><table>
-        <thead><tr><th>Name</th><th>Email</th><th>Bookings</th><th>Last Booking</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Bookings</th><th>Last Booking</th><th>Loyalty</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
           {clients.filter(c=>c.email?.toLowerCase().includes(filters.client.toLowerCase())||`${c.firstName} ${c.lastName}`.toLowerCase().includes(filters.client.toLowerCase())).map(client=>{
             const stats=clientStats[String(client._id)]||{total:0,last:null}; const active=client.isActive!==false;
             return (<tr key={client._id}>
               <td style={{fontWeight:600}}>{client.firstName} {client.lastName}</td><td>{client.email}</td><td>{stats.total}</td>
               <td>{stats.last?stats.last.toISOString().split('T')[0]:'—'}</td>
+              <td>
+                <button
+                  className="action-btn"
+                  style={{fontSize:'0.72rem',background:'#fffbeb',border:'1px solid #fde68a',color:'#92400e'}}
+                  onClick={async () => {
+                    const pts = window.prompt(`Adjust loyalty points for ${client.firstName} ${client.lastName}\n\nEnter amount (+100 to add, -50 to deduct):`);
+                    if (!pts) return;
+                    const parsed = parseInt(pts, 10);
+                    if (isNaN(parsed)) { showToast('Enter a valid number.', 'error'); return; }
+                    const reason = window.prompt('Reason for adjustment:') || 'Admin adjustment';
+                    try {
+                      const token = localStorage.getItem('token');
+                      const res = await fetch(`${API_BASE_URL}/loyalty/admin/adjust`, {
+                        method: 'POST',
+                        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+                        body: JSON.stringify({ userId: client._id, points: parsed, reason }),
+                      });
+                      const data = await res.json();
+                      if (data.success) showToast(`Points adjusted. New balance: ${data.data.points} pts`);
+                      else showToast(data.error || 'Adjustment failed.', 'error');
+                    } catch { showToast('Network error.', 'error'); }
+                  }}
+                >⭐ Adjust Pts</button>
+              </td>
               <td><span className={`status ${active?'booked':'cancelled'}`}>{active?'Active':'Blocked'}</span></td>
               <td className="row-actions">
                 <button className="action-btn" onClick={()=>{addNotification(`Reminder sent to ${client.email}`);showToast('Reminder sent.');}}>Notify</button>
+                <button className="action-btn" style={{background:'#f0fdf4',color:'#15803d',border:'1px solid #bbf7d0'}}
+                  onClick={async () => {
+                    if (!client.phone) { showToast('No phone number on file for this client.', 'error'); return; }
+                    const msg = window.prompt(`SMS to ${client.firstName} (${client.phone}):\n\nMax 160 characters.`,
+                      `Hi ${client.firstName}! This is NXL Beauty Bar. Book your next appointment at nxlbeautybar.co.za 💅`);
+                    if (!msg) return;
+                    try {
+                      const token = localStorage.getItem('token');
+                      const res = await fetch(`${API_BASE_URL}/sms/send`, {
+                        method: 'POST',
+                        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+                        body: JSON.stringify({ phone: client.phone, message: msg }),
+                      });
+                      const data = await res.json();
+                      if (data.success) {
+                        showToast(data.data?.sent ? `SMS sent to ${client.phone}` : `SMS queued (wa.me fallback)`);
+                        if (data.data?.waUrl) window.open(data.data.waUrl, '_blank');
+                      } else showToast(data.error || 'SMS failed.', 'error');
+                    } catch { showToast('Network error.', 'error'); }
+                  }}>📱 SMS</button>
                 <button className={`action-btn ${active?'delete-btn':''}`} onClick={()=>blockClient(client._id,active).then(()=>showToast(`Client ${active?'blocked':'unblocked'}.`))}>{active?'Block':'Unblock'}</button>
               </td>
             </tr>);
           })}
-          {!clients.length&&<tr><td colSpan="6" className="empty-row">No clients registered yet.</td></tr>}
+          {!clients.length&&<tr><td colSpan="7" className="empty-row">No clients registered yet.</td></tr>}
         </tbody>
       </table></div>
     </section>
@@ -602,19 +752,112 @@ function AdminDashboard() {
     </section>
   );
 
-  const renderNotifications = () => (
+  const renderNotifications = () => {
+    const sendBroadcast = async () => {
+      const title = window.prompt('Notification title (e.g. "Flash Sale Today! 🎉"):');
+      if (!title) return;
+      const body  = window.prompt('Message body:');
+      if (!body) return;
+      const link  = window.prompt('Link (optional, e.g. /shop):') || null;
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`${API_BASE_URL}/client-notifications/admin-send`, {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+          body: JSON.stringify({ title, body, type:'promotion', link }),
+        });
+        const data = await res.json();
+        if (data.success) showToast(`Notification sent to ${data.data.sent} clients.`);
+        else showToast(data.error || 'Failed.', 'error');
+      } catch { showToast('Network error.', 'error'); }
+    };
+
+    return (
     <section className="panel">
-      <header><h3>Activity Log</h3><button className="btn ghost" onClick={async()=>{try{await apiRequest(API_ENDPOINTS.notifications,{method:'DELETE'});setNotifications([]);lastNotifCountRef.current=0;}catch(e){alert('Failed to clear notifications: '+e.message);}}}>Clear All</button></header>
+      <header><h3>Activity Log</h3>
+        <div className="button-row">
+          <button className="btn ghost" style={{background:'#fff7ed',borderColor:'#fed7aa',color:'#c2410c'}}
+            onClick={sendBroadcast} title="Send in-app notification to all clients">
+            📢 Notify All Clients
+          </button>
+          <button className="btn ghost" onClick={async()=>{try{await apiRequest(API_ENDPOINTS.notifications,{method:'DELETE'});setNotifications([]);lastNotifCountRef.current=0;}catch(e){alert('Failed to clear notifications: '+e.message);}}}>Clear All</button>
+        </div>
+      </header>
       <ul className="notification-feed">
         {notifications.map(n=>(<li key={n._id||n.id} style={{opacity:n.read?0.7:1,fontWeight:n.read?400:600}}><span>{n.message}</span><small>{new Date(n.createdAt).toLocaleString()}</small></li>))}
         {!notifications.length&&<li className="empty-row">No activity yet.</li>}
       </ul>
     </section>
   );
+  };
 
-  const renderGallery = () => (
+  const renderGallery = () => {
+    const [clientPosts, setClientPosts] = useState([]);
+    const [clientPostsLoading, setClientPostsLoading] = useState(false);
+    const [galleryTab, setGalleryTab] = useState('admin'); // 'admin' | 'client'
+
+    const loadClientPosts = async (status = 'pending') => {
+      setClientPostsLoading(true);
+      try { const data = await apiRequest(`${API_BASE_URL}/client-gallery/admin?status=${status}`); setClientPosts(data.data || []); }
+      catch (e) { showToast(e.message, 'error'); }
+      finally { setClientPostsLoading(false); }
+    };
+
+    const handleApprove = async (id, status) => {
+      try {
+        await apiRequest(`${API_BASE_URL}/client-gallery/${id}/approve`, { method:'PUT', body:JSON.stringify({ status }) });
+        showToast(`Photo ${status}.`);
+        loadClientPosts();
+      } catch (e) { showToast(e.message, 'error'); }
+    };
+
+    return (
     <section className="panel">
-      <header><h3>Gallery Posts</h3></header>
+      <header><h3>Gallery Management</h3>
+        <div className="button-row">
+          <button className={`btn ${galleryTab==='admin'?'primary':'ghost'}`} onClick={()=>setGalleryTab('admin')}>Admin Posts</button>
+          <button className={`btn ${galleryTab==='client'?'primary':'ghost'}`} onClick={()=>{ setGalleryTab('client'); if(!clientPosts.length) loadClientPosts(); }}>
+            Client Submissions
+          </button>
+        </div>
+      </header>
+
+      {galleryTab === 'client' ? (
+        <div>
+          <div style={{display:'flex',gap:'0.5rem',marginBottom:'1rem'}}>
+            {['pending','approved','rejected','all'].map(s => (
+              <button key={s} className="btn ghost" style={{fontSize:'0.78rem',textTransform:'capitalize'}} onClick={()=>loadClientPosts(s)}>{s}</button>
+            ))}
+          </div>
+          {clientPostsLoading ? <div style={{textAlign:'center',padding:'2rem',color:'#94a3b8'}}>Loading…</div> : (
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'1rem'}}>
+              {clientPosts.map(post => (
+                <div key={post._id} style={{background:'#fff',border:'1px solid #e5e7eb',borderRadius:'10px',overflow:'hidden'}}>
+                  <div style={{position:'relative',aspectRatio:'1',overflow:'hidden'}}>
+                    <img src={post.afterImageUrl} alt="" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}} />
+                    {post.beforeImageUrl && <div style={{position:'absolute',top:4,right:4,background:'rgba(0,0,0,0.6)',color:'#fff',fontSize:'0.6rem',padding:'2px 6px',borderRadius:'4px',fontWeight:700}}>B/A</div>}
+                  </div>
+                  <div style={{padding:'0.75rem'}}>
+                    <div style={{fontWeight:700,fontSize:'0.82rem',color:'#111'}}>{post.clientName}</div>
+                    {post.caption && <div style={{fontSize:'0.72rem',color:'#6b7280',marginTop:'0.15rem',lineHeight:1.4}}>{post.caption}</div>}
+                    <div style={{display:'flex',alignItems:'center',gap:'0.35rem',marginTop:'0.35rem'}}>
+                      <span style={{fontSize:'0.68rem',padding:'0.15rem 0.5rem',borderRadius:'50px',fontWeight:700,background:post.status==='approved'?'#f0fdf4':post.status==='rejected'?'#fef2f2':'#fffbeb',color:post.status==='approved'?'#15803d':post.status==='rejected'?'#dc2626':'#92400e',border:`1px solid ${post.status==='approved'?'#bbf7d0':post.status==='rejected'?'#fecaca':'#fde68a'}`}}>{post.status}</span>
+                    </div>
+                    {post.status === 'pending' && (
+                      <div style={{display:'flex',gap:'0.35rem',marginTop:'0.5rem'}}>
+                        <button className="action-btn" style={{flex:1,justifyContent:'center',background:'#f0fdf4',color:'#15803d',border:'1px solid #bbf7d0',fontSize:'0.72rem'}} onClick={()=>handleApprove(post._id,'approved')}>✓ Approve</button>
+                        <button className="action-btn delete-btn" style={{flex:1,justifyContent:'center',fontSize:'0.72rem'}} onClick={()=>handleApprove(post._id,'rejected')}>✕ Reject</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {!clientPosts.length && <div style={{gridColumn:'1/-1',textAlign:'center',padding:'2rem',color:'#9ca3af',fontStyle:'italic'}}>No submissions found.</div>}
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
       <div style={{background:'#f9fafb',borderRadius:'10px',padding:'1.25rem',marginBottom:'1.25rem',border:'1px solid #e5e7eb'}}>
         <h4 style={{marginBottom:'0.875rem',fontSize:'0.875rem',fontWeight:700,color:'#374151'}}>➕ Add New Post</h4>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.65rem'}}>
@@ -639,8 +882,11 @@ function AdminDashboard() {
           {!galleryItems.length&&<div style={{gridColumn:'1 / -1',textAlign:'center',padding:'2rem',color:'#9ca3af',fontStyle:'italic'}}>No gallery posts yet.</div>}
         </div>
       )}
+      </>
+      )}
     </section>
   );
+};
 
   const renderProducts = () => {
     const loadProducts = async () => { setShopLoading(true); try { const data = await apiRequest(API_ENDPOINTS.shopProducts); setShopProducts(data.data || []); } catch (e) { showToast(e.message, 'error'); } finally { setShopLoading(false); } };
@@ -661,9 +907,8 @@ function AdminDashboard() {
       } catch (e) { showToast(e.message, 'error'); }
     };
 
-    if (shopProducts.length === 0 && !shopLoading) loadProducts();
     const CATEGORIES = ['nails','hair','skincare','accessories','professional','other'];
-    const CAT_EMOJI = { nails:'', hair:'', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'' };
+    const CAT_EMOJI = { nails:'💅', hair:'💇‍♀️', skincare:'🌿', accessories:'💎', professional:'🛠️', other:'✨' };
     return (
       <section className="panel">
         <header><h3>Shop Products <span className="count-chip">{shopProducts.length}</span></h3><div className="button-row"><button className="btn ghost" onClick={loadProducts}>↻ Refresh</button><button className="btn primary" onClick={() => { setEditingProduct(null); setProductForm({name:'',description:'',price:'',comparePrice:'',category:'nails',stock:'',sku:'',brand:'',tags:'',isFeatured:false,isActive:true}); setProductImages([]); setProductImgUrl(''); setShowProductForm(true); }}>➕ Add Product</button></div></header>
@@ -736,7 +981,6 @@ function AdminDashboard() {
       finally { setShopLoading(false); }
     };
 
-    if (shopOrders.length === 0 && !shopLoading) loadOrders();
 
     // ── PATCH: Export orders to CSV ──────────────────────────────────────────
     const exportOrdersCSV = async () => {
@@ -955,7 +1199,6 @@ function AdminDashboard() {
 
   const renderShopRevenue = () => {
     const loadStats = async () => { setShopStatsLoad(true); try { const data = await apiRequest(API_ENDPOINTS.shopStats); setShopStats(data.data); } catch (e) { showToast(e.message, 'error'); } finally { setShopStatsLoad(false); } };
-    if (!shopStats && !shopStatsLoad) loadStats();
     const buildChart = (dailyRevenue = []) => { if (!dailyRevenue.length) return []; const max = Math.max(...dailyRevenue.map(d => d.revenue), 1); return dailyRevenue.map(d => ({ date:d._id, revenue:d.revenue, orders:d.orders, pct:Math.round((d.revenue/max)*100), label:new Date(d._id+'T00:00:00').toLocaleDateString('en-ZA',{day:'numeric',month:'short'}) })); };
     const chartData = buildChart(shopStats?.dailyRevenue || []);
     const STAT_CARDS = shopStats ? [
@@ -1032,10 +1275,355 @@ function AdminDashboard() {
     );
   };
 
+  const renderAnalytics = () => {
+    const d = analyticsData;
+
+    // Mini bar chart helper
+    const MiniBar = ({ items, valueKey = 'count', labelKey = 'name', color = '#6366f1', maxItems = 8 }) => {
+      if (!items?.length) return <div style={{color:'#94a3b8',fontSize:'0.82rem',padding:'1rem 0'}}>No data yet.</div>;
+      const top = items.slice(0, maxItems);
+      const max = Math.max(...top.map(i => i[valueKey] || 0), 1);
+      return (
+        <div style={{display:'flex',flexDirection:'column',gap:'0.5rem'}}>
+          {top.map((item, i) => (
+            <div key={i} style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>
+              <span style={{fontSize:'0.72rem',color:'#64748b',minWidth:'100px',maxWidth:'140px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flexShrink:0}}>{item[labelKey] || '—'}</span>
+              <div style={{flex:1,height:'20px',background:'#f1f5f9',borderRadius:'4px',overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${Math.round((item[valueKey]/max)*100)}%`,background:color,borderRadius:'4px',transition:'width 0.4s',display:'flex',alignItems:'center',paddingLeft:'6px'}}>
+                  {(item[valueKey]/max) > 0.2 && <span style={{fontSize:'0.65rem',color:'#fff',fontWeight:700}}>{item[valueKey]}</span>}
+                </div>
+              </div>
+              {(item[valueKey]/max) <= 0.2 && <span style={{fontSize:'0.65rem',color:'#64748b',minWidth:'24px'}}>{item[valueKey]}</span>}
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    // Line/bar spark chart for daily data
+    const SparkChart = ({ data: chartData = [], valueKey = 'count', color = '#6366f1', height = 80 }) => {
+      if (!chartData.length) return null;
+      const max = Math.max(...chartData.map(d => d[valueKey] || 0), 1);
+      const w = 600; const h = height;
+      const barW = Math.max(2, Math.floor(w / chartData.length) - 2);
+      return (
+        <svg viewBox={`0 0 ${w} ${h}`} style={{width:'100%',height:h}}>
+          {chartData.map((d, i) => {
+            const barH = Math.max(2, Math.round((d[valueKey] / max) * (h - 10)));
+            const x = Math.round((i / chartData.length) * w);
+            return (
+              <g key={i}>
+                <rect x={x} y={h - barH} width={barW} height={barH} fill={color} rx={2} opacity={0.85} />
+                <title>{d._id}: {d[valueKey]}</title>
+              </g>
+            );
+          })}
+        </svg>
+      );
+    };
+
+    const statCard = (icon, label, value, sub, color = '#6366f1') => (
+      <div style={{background:`linear-gradient(135deg,${color}22,${color}11)`,border:`1px solid ${color}44`,borderRadius:'14px',padding:'1.25rem 1.5rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+        <span style={{fontSize:'1.75rem'}}>{icon}</span>
+        <div>
+          <p style={{margin:0,fontSize:'0.72rem',color:'#64748b',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.06em'}}>{label}</p>
+          <h3 style={{margin:'0.1rem 0 0',fontSize:'1.35rem',fontWeight:800,color}}>{value}</h3>
+          {sub && <p style={{margin:'0.1rem 0 0',fontSize:'0.7rem',color:'#94a3b8'}}>{sub}</p>}
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:'1.5rem'}}>
+
+        {/* Range selector */}
+        <section className="panel">
+          <header>
+            <h3>📊 Business Analytics</h3>
+            <div className="button-row">
+              {[['7','7 days'],['30','30 days'],['90','90 days'],['365','1 year']].map(([val, label]) => (
+                <button key={val} className={`btn ${analyticsRange===val?'primary':'ghost'}`}
+                  onClick={() => { setAnalyticsRange(val); setAnalyticsData(null); loadAnalytics(val); }}>
+                  {label}
+                </button>
+              ))}
+              <button className="btn ghost" onClick={() => loadAnalytics(analyticsRange)}>↻ Refresh</button>
+            </div>
+          </header>
+
+          {analyticsLoad ? (
+            <div style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>Loading analytics…</div>
+          ) : !d ? null : (
+            <>
+              {/* KPI row */}
+              <div className="grid grid-responsive" style={{marginBottom:'1.5rem'}}>
+                {statCard('💰', 'Combined Revenue', `R${Number(d.revenue.combined).toFixed(0)}`, `Last ${d.range} days`, '#10b981')}
+                {statCard('📅', 'Bookings', d.bookings.period, `${d.bookings.today} today`, '#3b82f6')}
+                {statCard('🛒', 'Shop Orders', d.shop.orders, `R${Number(d.shop.revenue).toFixed(0)} revenue`, '#f59e0b')}
+                {statCard('👥', 'Total Clients', d.clients.total, `+${d.clients.newInPeriod} new`, '#8b5cf6')}
+                {statCard('✅', 'Completion Rate', `${d.bookings.completionRate}%`, `${d.bookings.cancellationRate}% cancelled`, '#10b981')}
+                {statCard('⭐', 'Loyalty Members', d.loyalty.members, `Avg ${d.loyalty.avgPoints} pts`, '#f59e0b')}
+              </div>
+
+              {/* Charts row */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.5rem'}}>
+                {/* Daily bookings spark */}
+                <div style={{background:'#f8fafc',borderRadius:'12px',padding:'1.25rem',border:'1px solid #e2e8f0'}}>
+                  <p style={{margin:'0 0 0.75rem',fontWeight:700,fontSize:'0.88rem',color:'#1e293b'}}>Daily Bookings</p>
+                  <SparkChart data={d.bookings.daily} valueKey="count" color="#3b82f6" height={80} />
+                  <p style={{margin:'0.5rem 0 0',fontSize:'0.72rem',color:'#94a3b8'}}>{d.bookings.period} bookings in last {d.range} days</p>
+                </div>
+
+                {/* Daily revenue spark */}
+                <div style={{background:'#f8fafc',borderRadius:'12px',padding:'1.25rem',border:'1px solid #e2e8f0'}}>
+                  <p style={{margin:'0 0 0.75rem',fontWeight:700,fontSize:'0.88rem',color:'#1e293b'}}>Daily Revenue (Bookings)</p>
+                  <SparkChart data={d.revenue.daily} valueKey="revenue" color="#10b981" height={80} />
+                  <p style={{margin:'0.5rem 0 0',fontSize:'0.72rem',color:'#94a3b8'}}>R{Number(d.revenue.period).toFixed(0)} in last {d.range} days</p>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        {!analyticsLoad && d && (
+          <>
+            {/* Services + Staff */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.5rem'}}>
+              <section className="panel">
+                <header><h3>Top Services</h3></header>
+                <MiniBar items={d.bookings.byService} valueKey="count" labelKey="name" color="#6366f1" />
+              </section>
+              <section className="panel">
+                <header><h3>Staff Bookings</h3></header>
+                <MiniBar items={d.bookings.byStaff} valueKey="count" labelKey="name" color="#f59e0b" />
+              </section>
+            </div>
+
+            {/* Booking status + payment methods */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.5rem'}}>
+              <section className="panel">
+                <header><h3>Booking Status Breakdown</h3></header>
+                <div style={{display:'flex',flexDirection:'column',gap:'0.6rem'}}>
+                  {d.bookings.byStatus.map((s,i) => {
+                    const colors = { booked:'#3b82f6', completed:'#10b981', cancelled:'#ef4444', pending:'#f59e0b', 'no-show':'#64748b' };
+                    const col = colors[s._id] || '#94a3b8';
+                    const pct = d.bookings.total > 0 ? Math.round((s.count/d.bookings.total)*100) : 0;
+                    return (
+                      <div key={i} style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>
+                        <span style={{width:'80px',fontSize:'0.75rem',color:'#374151',textTransform:'capitalize',flexShrink:0}}>{s._id}</span>
+                        <div style={{flex:1,height:'18px',background:'#f1f5f9',borderRadius:'4px',overflow:'hidden'}}>
+                          <div style={{height:'100%',width:`${pct}%`,background:col,borderRadius:'4px'}} />
+                        </div>
+                        <span style={{fontSize:'0.72rem',color:'#64748b',minWidth:'50px',textAlign:'right'}}>{s.count} ({pct}%)</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+              <section className="panel">
+                <header><h3>Revenue by Payment Method</h3></header>
+                <div style={{display:'flex',flexDirection:'column',gap:'0.6rem'}}>
+                  {d.revenue.byMethod.map((m,i) => {
+                    const colors = { cash:'#10b981', card:'#3b82f6', online:'#8b5cf6', yoco:'#f59e0b' };
+                    const col = colors[m._id] || '#94a3b8';
+                    const maxVal = Math.max(...d.revenue.byMethod.map(x => x.total), 1);
+                    const pct = Math.round((m.total/maxVal)*100);
+                    return (
+                      <div key={i} style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>
+                        <span style={{width:'60px',fontSize:'0.75rem',color:'#374151',textTransform:'capitalize',flexShrink:0}}>{m._id}</span>
+                        <div style={{flex:1,height:'18px',background:'#f1f5f9',borderRadius:'4px',overflow:'hidden'}}>
+                          <div style={{height:'100%',width:`${pct}%`,background:col,borderRadius:'4px'}} />
+                        </div>
+                        <span style={{fontSize:'0.72rem',color:'#64748b',minWidth:'70px',textAlign:'right'}}>R{Number(m.total).toFixed(0)} ({m.count})</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            </div>
+
+            {/* Top clients */}
+            <section className="panel">
+              <header><h3>Top Clients by Bookings</h3></header>
+              <div className="table-responsive"><table>
+                <thead><tr><th>#</th><th>Client</th><th>Email</th><th>Bookings</th></tr></thead>
+                <tbody>
+                  {d.clients.top.map((c, i) => (
+                    <tr key={i}>
+                      <td style={{fontWeight:700,color:i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#c97c2e':'#64748b'}}>
+                        {i===0?'🥇':i===1?'🥈':i===2?'🥉':`#${i+1}`}
+                      </td>
+                      <td style={{fontWeight:600}}>{c.user ? `${c.user.firstName} ${c.user.lastName}` : '—'}</td>
+                      <td style={{color:'#94a3b8',fontSize:'0.82rem'}}>{c.user?.email || '—'}</td>
+                      <td style={{fontWeight:700}}>{c.bookings}</td>
+                    </tr>
+                  ))}
+                  {!d.clients.top.length && <tr><td colSpan="4" className="empty-row">No data yet.</td></tr>}
+                </tbody>
+              </table></div>
+            </section>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const renderInventory = () => {
+    const loadInventory = async () => {
+      setInvLoading(true);
+      try {
+        const [inv, hist, sups] = await Promise.all([
+          apiRequest(`${API_BASE_URL}/inventory`),
+          apiRequest(`${API_BASE_URL}/inventory/history?limit=30`),
+          apiRequest(`${API_BASE_URL}/suppliers`),
+        ]);
+        setInventory(inv.data);
+        setInvHistory(hist.data || []);
+        setSuppliers(sups.data || []);
+      } catch (e) { showToast(e.message, 'error'); }
+      finally { setInvLoading(false); }
+    };
+
+    const handleRestock = async (e) => {
+      e.preventDefault();
+      if (!restockForm.productId || !restockForm.quantity || !restockForm.costPerUnit) {
+        showToast('Product, quantity and cost are required.', 'error'); return;
+      }
+      setIsSubmitting(true);
+      try {
+        await apiRequest(`${API_BASE_URL}/inventory/restock`, { method:'POST', body:JSON.stringify({
+          ...restockForm, quantity:parseInt(restockForm.quantity), costPerUnit:parseFloat(restockForm.costPerUnit),
+        })});
+        showToast('Stock updated successfully.');
+        setShowRestock(false);
+        setRestockForm({ productId:'', quantity:'', costPerUnit:'', supplier:'', invoiceRef:'', notes:'' });
+        setInventory(null); // force reload
+        loadInventory();
+      } catch (e) { showToast(e.message, 'error'); }
+      finally { setIsSubmitting(false); }
+    };
+
+    const stats = inventory?.stats;
+    const products = inventory?.products || [];
+    const STATUS_STYLE = { ok:{bg:'#f0fdf4',color:'#15803d',border:'#bbf7d0',label:'✅ OK'}, low:{bg:'#fffbeb',color:'#92400e',border:'#fde68a',label:'⚠️ Low'}, out:{bg:'#fef2f2',color:'#dc2626',border:'#fecaca',label:'🔴 Out'} };
+
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:'1.5rem'}}>
+
+        {/* Stats */}
+        {stats && (
+          <section className="panel">
+            <header><h3>📦 Inventory Overview</h3><div className="button-row">
+              <button className="btn ghost" onClick={loadInventory}>↻ Refresh</button>
+              <button className="btn primary" onClick={() => setShowRestock(true)}>➕ Record Restock</button>
+            </div></header>
+            <div className="grid grid-responsive">
+              {[
+                {icon:'📦',label:'Total Products',value:stats.total,color:'#6366f1'},
+                {icon:'✅',label:'In Stock',value:stats.ok,color:'#10b981'},
+                {icon:'⚠️',label:'Low Stock',value:stats.low,color:stats.low>0?'#f59e0b':'#10b981'},
+                {icon:'🔴',label:'Out of Stock',value:stats.out,color:stats.out>0?'#ef4444':'#10b981'},
+                {icon:'💰',label:'Inventory Value',value:`R${stats.totalValue.toFixed(0)}`,color:'#8b5cf6'},
+              ].map((c,i) => (
+                <div key={i} style={{background:`linear-gradient(135deg,${c.color}22,${c.color}11)`,border:`1px solid ${c.color}44`,borderRadius:'14px',padding:'1.25rem 1.5rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+                  <span style={{fontSize:'1.75rem'}}>{c.icon}</span>
+                  <div><p style={{margin:0,fontSize:'0.72rem',color:'#64748b',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.06em'}}>{c.label}</p><h3 style={{margin:'0.1rem 0 0',fontSize:'1.35rem',fontWeight:800,color:c.color}}>{c.value}</h3></div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Products table */}
+        <section className="panel">
+          <header><h3>Stock Levels</h3></header>
+          {invLoading ? <div style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>Loading…</div> : (
+            <div className="table-responsive"><table>
+              <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                {products.map(p => {
+                  const ss = STATUS_STYLE[p.stockStatus] || STATUS_STYLE.ok;
+                  return (
+                    <tr key={p._id} style={{opacity:p.stock===0?0.7:1}}>
+                      <td><div style={{display:'flex',alignItems:'center',gap:'0.75rem'}}>
+                        {p.images?.[0] ? <img src={p.images[0]} alt="" style={{width:36,height:36,objectFit:'cover',borderRadius:6,border:'1px solid #e2e8f0',flexShrink:0}} /> : <div style={{width:36,height:36,background:'#f1f5f9',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>💅</div>}
+                        <span style={{fontWeight:600,fontSize:'0.88rem'}}>{p.name}</span>
+                      </div></td>
+                      <td style={{fontFamily:'monospace',fontSize:'0.8rem',color:'#94a3b8'}}>{p.sku||'—'}</td>
+                      <td style={{textTransform:'capitalize'}}>{p.category}</td>
+                      <td><span style={{fontWeight:800,fontSize:'1rem',color:p.stock===0?'#dc2626':p.stock<=5?'#92400e':'#15803d'}}>{p.stock}</span></td>
+                      <td><span style={{background:ss.bg,color:ss.color,border:`1px solid ${ss.border}`,padding:'0.2rem 0.6rem',borderRadius:'50px',fontSize:'0.72rem',fontWeight:700}}>{ss.label}</span></td>
+                      <td className="row-actions">
+                        <button className="action-btn" style={{background:'#f0fdf4',color:'#15803d',border:'1px solid #bbf7d0'}}
+                          onClick={() => { setRestockForm(f=>({...f,productId:p._id.toString()})); setShowRestock(true); }}>
+                          📦 Restock
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!products.length && <tr><td colSpan="6" className="empty-row">No products found.</td></tr>}
+              </tbody>
+            </table></div>
+          )}
+        </section>
+
+        {/* Restock history */}
+        <section className="panel">
+          <header><h3>Restock History</h3><button className="btn ghost" onClick={() => apiRequest(`${API_BASE_URL}/inventory/history`).then(d => setInvHistory(d.data||[]))}>↻</button></header>
+          <div className="table-responsive"><table>
+            <thead><tr><th>Date</th><th>Product</th><th>Qty Added</th><th>Cost/Unit</th><th>Total Cost</th><th>Invoice</th><th>Supplier</th></tr></thead>
+            <tbody>
+              {invHistory.map(h => (
+                <tr key={h._id}>
+                  <td style={{color:'#94a3b8',fontSize:'0.8rem',whiteSpace:'nowrap'}}>{new Date(h.createdAt).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'})}</td>
+                  <td style={{fontWeight:600}}>{h.productName}</td>
+                  <td><span style={{color:'#15803d',fontWeight:700}}>+{h.quantity}</span></td>
+                  <td>R{h.costPerUnit?.toFixed(2)}</td>
+                  <td style={{fontWeight:700}}>R{h.totalCost?.toFixed(2)}</td>
+                  <td style={{fontFamily:'monospace',fontSize:'0.8rem',color:'#64748b'}}>{h.invoiceRef||'—'}</td>
+                  <td>{h.supplier||'—'}</td>
+                </tr>
+              ))}
+              {!invHistory.length && <tr><td colSpan="7" className="empty-row">No restock records yet.</td></tr>}
+            </tbody>
+          </table></div>
+        </section>
+
+        {/* Restock modal */}
+        {showRestock && (
+          <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setShowRestock(false)}>
+            <div className="modal" style={{maxWidth:520}}>
+              <header><h3>📦 Record Restock</h3><button onClick={()=>setShowRestock(false)}>✕</button></header>
+              <form onSubmit={handleRestock} className="form-grid">
+                <div style={{gridColumn:'1/-1'}}><label>Product *</label>
+                  <select value={restockForm.productId} onChange={e=>setRestockForm(f=>({...f,productId:e.target.value}))} required>
+                    <option value="">— Select product —</option>
+                    {(inventory?.products||[]).map(p=><option key={p._id} value={p._id}>{p.name} (stock: {p.stock})</option>)}
+                  </select>
+                </div>
+                <div><label>Quantity Added *</label><input required type="number" min="1" step="1" placeholder="e.g. 50" value={restockForm.quantity} onChange={e=>setRestockForm(f=>({...f,quantity:e.target.value}))} /></div>
+                <div><label>Cost Per Unit (R) *</label><input required type="number" min="0" step="0.01" placeholder="e.g. 45.00" value={restockForm.costPerUnit} onChange={e=>setRestockForm(f=>({...f,costPerUnit:e.target.value}))} /></div>
+                <div><label>Supplier</label>
+                  <select value={restockForm.supplier} onChange={e=>setRestockForm(f=>({...f,supplier:e.target.value}))}>
+                    <option value="">— Select or type below —</option>
+                    {suppliers.map(s=><option key={s._id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div><label>Invoice Ref</label><input placeholder="e.g. INV-2025-001" value={restockForm.invoiceRef} onChange={e=>setRestockForm(f=>({...f,invoiceRef:e.target.value}))} /></div>
+                <div style={{gridColumn:'1/-1'}}><label>Notes</label><textarea rows={2} placeholder="Optional notes" value={restockForm.notes} onChange={e=>setRestockForm(f=>({...f,notes:e.target.value}))} /></div>
+                <footer className="modal-actions" style={{gridColumn:'1/-1'}}><button type="button" onClick={()=>setShowRestock(false)}>Cancel</button><button type="submit" className="btn primary" disabled={isSubmitting}>{isSubmitting?'Saving…':'Record Restock'}</button></footer>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderDiscounts = () => {
     const discountCodesEndpoint = API_ENDPOINTS.discountCodes;
     const loadDiscounts = async () => { setDiscountLoading(true); try { const data = await apiRequest(discountCodesEndpoint); setDiscountCodes(data.data || []); } catch (e) { showToast(e.message, 'error'); } finally { setDiscountLoading(false); } };
-    if (discountCodes.length === 0 && !discountLoading) loadDiscounts();
     const handleDiscountSubmit = async (e) => { e.preventDefault(); setIsSubmitting(true); try { const payload = { code:discountForm.code.toUpperCase().trim(), type:discountForm.type, value:parseFloat(discountForm.value), description:discountForm.description, minOrderAmount:discountForm.minOrderAmount?parseFloat(discountForm.minOrderAmount):0, usageLimit:discountForm.usageLimit?parseInt(discountForm.usageLimit):null, expiresAt:discountForm.expiresAt||null, isActive:discountForm.isActive }; const method = editingDiscount ? 'PUT' : 'POST'; const endpoint = editingDiscount ? `${discountCodesEndpoint}/${editingDiscount._id}` : discountCodesEndpoint; await apiRequest(endpoint, { method, body:JSON.stringify(payload) }); showToast(`Code ${editingDiscount?'updated':'created'}.`); setShowDiscountForm(false); setEditingDiscount(null); setDiscountForm({code:'',type:'percentage',value:'',description:'',minOrderAmount:'',usageLimit:'',expiresAt:'',isActive:true}); loadDiscounts(); } catch (e) { showToast(e.message, 'error'); } finally { setIsSubmitting(false); } };
     const handleToggleDiscount = async (dc) => { try { await apiRequest(`${discountCodesEndpoint}/${dc._id}`, { method:'PUT', body:JSON.stringify({isActive:!dc.isActive}) }); showToast(`Code ${dc.isActive?'deactivated':'activated'}.`); loadDiscounts(); } catch (e) { showToast(e.message, 'error'); } };
     const handleDeleteDiscount = async (dc) => { if (!window.confirm(`Delete code "${dc.code}"?`)) return; try { await apiRequest(`${discountCodesEndpoint}/${dc._id}`, { method:'DELETE' }); showToast(`Code "${dc.code}" deleted.`); loadDiscounts(); } catch (e) { showToast(e.message, 'error'); } };
@@ -1089,6 +1677,7 @@ function AdminDashboard() {
 
   const sectionRenderer = () => {
     switch (activeSection) {
+      case 'schedule':      return <section className="panel"><header><h3>Staff Schedule</h3></header><StaffSchedule staff={staff} services={services} /></section>;
       case 'appointments':  return renderAppointments();
       case 'services':      return renderServices();
       case 'staff':         return renderStaff();
@@ -1099,8 +1688,10 @@ function AdminDashboard() {
       case 'gallery':       return renderGallery();
       case 'shop-products': return renderProducts();
       case 'shop-orders':   return renderShopOrders();
+      case 'inventory':     return renderInventory();
       case 'discounts':     return renderDiscounts();
       case 'shop-revenue':  return renderShopRevenue();
+      case 'analytics':     return renderAnalytics();
       default:              return renderOverview();
     }
   };
@@ -1117,6 +1708,7 @@ function AdminDashboard() {
         <nav>
           <SidebarBtn icon="🏠" label="Overview"      section="overview"      active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="📅" label="Appointments"  section="appointments"  active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} badge={unpaidAppointments.length||null} />
+          <SidebarBtn icon="🗓️" label="Schedule"       section="schedule"      active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="💅" label="Services"      section="services"      active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="👩‍💼" label="Staff"         section="staff"         active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="🧑‍🤝‍🧑" label="Clients"      section="clients"       active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
@@ -1127,7 +1719,9 @@ function AdminDashboard() {
           <SidebarBtn icon="🛍️" label="Products"      section="shop-products" active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="📦" label="Shop Orders"   section="shop-orders"   active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="🏷️" label="Discounts"     section="discounts"     active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
+          <SidebarBtn icon="📦" label="Inventory"     section="inventory"     active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="📊" label="Shop Revenue"  section="shop-revenue"  active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
+          <SidebarBtn icon="📈" label="Analytics"     section="analytics"     active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
         </nav>
         <footer>
           <button className="btn ghost" onClick={()=>{localStorage.removeItem('adminActiveSection');navigate('/dashboard');}}>← User View</button>
@@ -1141,6 +1735,16 @@ function AdminDashboard() {
             <div><h1>{SECTION_TITLES[activeSection]}</h1><p>NXL Beauty Bar · Admin Panel</p></div>
           </div>
           <div className="admin-header-right">
+            {notifPermission !== 'granted' && notifPermission !== 'unsupported' && (
+              <button
+                className="btn ghost"
+                onClick={handleEnableNotifications}
+                title="Get browser notifications for new bookings"
+                style={{ fontSize:'0.78rem', gap:'0.3rem' }}
+              >
+                🔔 Enable Alerts
+              </button>
+            )}
             {unpaidAppointments.length>0&&<button className="unpaid-alert-btn" onClick={()=>{setFilters(f=>({...f,status:'pending'}));setActiveSection('appointments');}}>⚠️ {unpaidAppointments.length} Unpaid</button>}
             <div className="admin-user"><span>{user?.firstName} {user?.lastName}</span><small>{user?.email}</small></div>
           </div>
@@ -1160,6 +1764,7 @@ function AdminDashboard() {
 const SECTION_TITLES = {
   overview:       'Dashboard Overview',
   appointments:   'Appointments',
+  schedule:       'Staff Schedule',
   services:       'Services',
   staff:          'Staff Management',
   clients:        'Clients',
@@ -1170,7 +1775,9 @@ const SECTION_TITLES = {
   'shop-products':'Shop — Products',
   'shop-orders':  'Shop — Orders',
   'discounts':    'Discount Codes',
+  'inventory':    'Inventory Management',
   'shop-revenue': 'Shop — Revenue',
+  'analytics':    'Business Analytics',
 };
 
 const COLOR_MAP = {

@@ -44,10 +44,46 @@ export default function CheckoutPage() {
   const [discountError,  setDiscountError]  = useState('');
   const [discountLoading,setDiscountLoading]= useState(false);
 
+  // ── Loyalty points state ────────────────────────────────────────────────
+  const [loyalty,        setLoyalty]        = useState(null);
+  const [loyaltyRedeem,  setLoyaltyRedeem]  = useState(0);
+  const [loyaltyApplied, setLoyaltyApplied] = useState(null);
+  const [loyaltyError,   setLoyaltyError]   = useState('');
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${API_BASE_URL}/loyalty/me`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (d.success) setLoyalty(d.data); })
+      .catch(() => {});
+  }, []);
+
+  const applyLoyaltyPoints = async () => {
+    if (!loyaltyRedeem || loyaltyRedeem < (loyalty?.config?.minRedemption || 100)) {
+      setLoyaltyError(`Minimum ${loyalty?.config?.minRedemption || 100} points to redeem.`); return;
+    }
+    setLoyaltyError('');
+    const token = localStorage.getItem('token');
+    try {
+      const res  = await fetch(`${API_BASE_URL}/loyalty/redeem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ pointsToRedeem: loyaltyRedeem, orderSubtotal: subtotal }),
+      });
+      const data = await res.json();
+      if (data.success) setLoyaltyApplied(data.data);
+      else setLoyaltyError(data.error || 'Could not apply points.');
+    } catch { setLoyaltyError('Network error.'); }
+  };
+
+  const loyaltyDiscountAmt = loyaltyApplied?.discountAmount || 0;
+  // ─────────────────────────────────────────────────────────────────────
+
   const discountAmount     = discountResult?.discountAmount || 0;
-  const discountedSubtotal = subtotal - discountAmount;
+  const discountedSubtotal = subtotal - discountAmount - loyaltyDiscountAmt;
   const effectiveShipping  = isPickup ? 0 : (discountedSubtotal >= 500 ? 0 : shippingFee);
-  const effectiveTotal     = discountedSubtotal + effectiveShipping;
+  const effectiveTotal     = Math.max(0, discountedSubtotal + effectiveShipping);
   // ─────────────────────────────────────────────────────────────────────
 
   // Redirect if cart is empty
@@ -145,7 +181,8 @@ export default function CheckoutPage() {
             postalCode: form.postalCode.trim(),
           },
           notes:        form.notes.trim(),
-          discountCode: discountResult?.code || undefined,
+          discountCode:          discountResult?.code || undefined,
+          loyaltyPointsToRedeem: loyaltyApplied?.pointsRedeemed || undefined,
         }),
       });
 
@@ -400,6 +437,12 @@ export default function CheckoutPage() {
                 <span className="chk-discount-value">−R{discountAmount.toFixed(2)}</span>
               </div>
             )}
+            {loyaltyDiscountAmt > 0 && (
+              <div className="chk-summary-row chk-discount-row">
+                <span>⭐ Loyalty ({loyaltyApplied.pointsRedeemed} pts)</span>
+                <span className="chk-discount-value">−R{loyaltyDiscountAmt.toFixed(2)}</span>
+              </div>
+            )}
             <div className="chk-summary-row">
               <span>Shipping</span>
               <span className={effectiveShipping === 0 ? 'chk-free' : ''}>
@@ -452,6 +495,49 @@ export default function CheckoutPage() {
             )}
             {discountError && <p className="chk-discount-error">{discountError}</p>}
           </div>
+
+          {/* ── Loyalty points redemption ── */}
+          {loyalty && loyalty.points >= (loyalty.config?.minRedemption || 100) && (
+            <div className="chk-loyalty-section">
+              <div className="chk-loyalty-header">
+                <span className="chk-loyalty-label">⭐ Loyalty Points</span>
+                <span className="chk-loyalty-balance">{loyalty.points.toLocaleString()} pts available ≈ R{parseFloat(loyalty.randValue).toFixed(2)}</span>
+              </div>
+              {loyaltyApplied ? (
+                <div className="chk-discount-applied">
+                  <span className="chk-discount-badge">
+                    ⭐ {loyaltyApplied.pointsRedeemed} pts applied — R{loyaltyApplied.discountAmount.toFixed(2)} off
+                  </span>
+                  <button className="chk-discount-remove" onClick={() => { setLoyaltyApplied(null); setLoyaltyRedeem(0); setLoyaltyError(''); }}>
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="chk-discount-input-row">
+                  <input
+                    type="number"
+                    placeholder={`Min ${loyalty.config?.minRedemption || 100} pts`}
+                    value={loyaltyRedeem || ''}
+                    onChange={e => { setLoyaltyRedeem(Math.min(loyalty.points, parseInt(e.target.value) || 0)); setLoyaltyError(''); }}
+                    className="chk-discount-input"
+                    min={loyalty.config?.minRedemption || 100}
+                    max={loyalty.points}
+                    step={100}
+                  />
+                  <button
+                    type="button"
+                    onClick={applyLoyaltyPoints}
+                    disabled={!loyaltyRedeem}
+                    className="chk-discount-apply-btn"
+                  >
+                    Redeem
+                  </button>
+                </div>
+              )}
+              {loyaltyError && <p className="chk-discount-error">{loyaltyError}</p>}
+              <p className="chk-loyalty-hint">100 points = R10 · Max {loyalty.config?.maxRedemptionPct || 50}% of order value</p>
+            </div>
+          )}
 
           {/* Trust badges */}
           <div className="chk-trust">

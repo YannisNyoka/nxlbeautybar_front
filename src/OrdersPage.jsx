@@ -207,6 +207,7 @@ function OrderCard({ order, expanded, onToggle }) {
 
           {/* Footer actions */}
           <div className="op-card-actions">
+            <Link to={`/track/${order._id}`} className="op-btn-track">📦 Track Order</Link>
             <a
               href={`https://wa.me/27685113394?text=Hi NXL Beauty Bar! I need help with order %23${shortId}`}
               target="_blank"

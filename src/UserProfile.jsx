@@ -2,6 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { useNavigate } from 'react-router-dom';
 import './UserProfile.css';
+import LoyaltyWidget from './LoyaltyWidget';
+import ReferralWidget from './ReferralWidget';
+import NotificationBell from './NotificationBell';
+import SubscriptionStatus from './SubscriptionStatus';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
@@ -185,7 +189,48 @@ export default function UserProfile() {
         method: 'POST',
         body: JSON.stringify({ appointmentId: appt._id }),
       });
-      if (payData.checkoutUrl) window.location.href = payData.checkoutUrl;
+      if (payData.checkoutUrl) {
+        // ── Save booking details BEFORE redirect — PaymentSuccess reads this ──
+        const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+
+        // Extract service names robustly — handle both populated and unpopulated
+        const serviceNames = (appt.services || [])
+          .map(s => (typeof s === 'object' ? s.name : null))
+          .filter(Boolean);
+
+        // If services weren't populated, try to resolve from the serviceIds
+        // using the already-loaded appointments list (which may have them enriched)
+        const fullAppt = appointments.find(a => String(a._id) === String(appt._id)) || appt;
+        const resolvedServiceNames = serviceNames.length > 0
+          ? serviceNames
+          : (fullAppt.services || []).map(s => typeof s === 'object' ? s.name : s).filter(s => s && typeof s === 'string' && !s.match(/^[a-f0-9]{24}$/i));
+
+        // Employee name
+        const employeeName = appt.employee?.name
+          || fullAppt.employee?.name
+          || (typeof appt.employeeId === 'object' ? appt.employeeId?.name : '')
+          || '';
+
+        // Duration — sum of service durations, or fall back to totalDuration
+        const totalDuration = appt.totalDuration
+          || fullAppt.totalDuration
+          || (fullAppt.services || []).reduce((sum, s) => sum + (s.durationMinutes || 0), 0)
+          || 60;
+
+        localStorage.setItem('pendingBooking', JSON.stringify({
+          appointmentId:    String(appt._id),
+          name:             `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() || 'Client',
+          email:            userInfo.email || '',
+          appointmentDate:  appt.date || '',
+          appointmentTime:  appt.time || '',
+          selectedServices: resolvedServiceNames,
+          selectedEmployee: employeeName,
+          totalPrice:       parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0),
+          totalDuration,
+        }));
+        // ──────────────────────────────────────────────────────────────────────
+        window.location.href = payData.checkoutUrl;
+      }
     } catch (e) {
       setApptError(e.message || 'Payment failed. Please try again.');
     } finally {
@@ -433,6 +478,7 @@ export default function UserProfile() {
           </div>
         </div>
         <div className="nxl-up-header-actions">
+          <NotificationBell />
           <button className="nxl-btn nxl-btn-book" onClick={() => navigate('/dashboard')}>
             ＋ Book Appointment
           </button>
@@ -446,6 +492,9 @@ export default function UserProfile() {
       <div className="nxl-up-tabs">
         {[
           { key: 'appointments', label: '📅 My Bookings' },
+          { key: 'loyalty',      label: '⭐ Loyalty Points' },
+          { key: 'referral',     label: '🎁 Refer Friends' },
+          { key: 'subscription', label: '💅 My Plan' },
           { key: 'profile',      label: '👤 Edit Profile' },
           { key: 'password',     label: '🔒 Password' },
         ].map(t => (
@@ -523,6 +572,30 @@ export default function UserProfile() {
               </>
             )}
           </>
+        )}
+
+        {/* ── SUBSCRIPTION TAB ────────────────────────────────────────── */}
+        {activeTab === 'subscription' && (
+          <div className="nxl-up-section">
+            <h2 className="nxl-up-section-title">💅 My Plan</h2>
+            <SubscriptionStatus />
+          </div>
+        )}
+
+        {/* ── REFERRAL TAB ────────────────────────────────────────────── */}
+        {activeTab === 'referral' && (
+          <div className="nxl-up-section">
+            <h2 className="nxl-up-section-title">🎁 Refer Friends</h2>
+            <ReferralWidget />
+          </div>
+        )}
+
+        {/* ── LOYALTY TAB ─────────────────────────────────────────────── */}
+        {activeTab === 'loyalty' && (
+          <div className="nxl-up-section">
+            <h2 className="nxl-up-section-title">⭐ Loyalty Points</h2>
+            <LoyaltyWidget />
+          </div>
         )}
 
         {/* ── EDIT PROFILE TAB ────────────────────────────────────────── */}

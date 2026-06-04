@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import './Signup.css';
 
@@ -27,6 +27,7 @@ async function signupApi(form) {
 function SignupForm() {
   const { login }  = useAuth();
   const navigate   = useNavigate();
+  const [searchParams] = useSearchParams();
 
   const [form, setForm] = useState({
     email: '', password: '', confirmPassword: '', firstName: '', lastName: '',
@@ -35,6 +36,35 @@ function SignupForm() {
   const [loading,    setLoading]    = useState(false);
   const [apiError,   setApiError]   = useState('');
   const [apiSuccess, setApiSuccess] = useState('');
+
+  // ── Referral code state ─────────────────────────────────────────────────
+  const [refCode,    setRefCode]    = useState(searchParams.get('ref') || '');
+  const [refInfo,    setRefInfo]    = useState(null);   // { referrerName, discount, message }
+  const [refLoading, setRefLoading] = useState(false);
+  const [refError,   setRefError]   = useState('');
+
+  // Auto-validate referral code from URL
+  useEffect(() => {
+    const code = searchParams.get('ref');
+    if (code) validateRefCode(code);
+  }, []);
+
+  const validateRefCode = async (code) => {
+    if (!code?.trim()) return;
+    setRefLoading(true); setRefError('');
+    try {
+      const res  = await fetch(`${API_BASE_URL}/referrals/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: code.trim().toUpperCase() }),
+      });
+      const data = await res.json();
+      if (data.success) setRefInfo(data.data);
+      else { setRefInfo(null); setRefError('Invalid referral code.'); }
+    } catch { setRefError('Could not validate code.'); }
+    finally { setRefLoading(false); }
+  };
+  // ───────────────────────────────────────────────────────────────────────
 
   const validate = () => {
     const e = {};
@@ -68,7 +98,7 @@ function SignupForm() {
 
     setLoading(true);
     try {
-      const result = await signupApi(form);
+      const result = await signupApi({ ...form, referralCode: refCode?.trim().toUpperCase() || undefined });
       if (result.success) {
         localStorage.setItem('token',        result.token);
         if (result.refreshToken) localStorage.setItem('refreshToken', result.refreshToken);
@@ -108,7 +138,7 @@ function SignupForm() {
       <div className="nxl-signup-card">
 
         <div className="nxl-signup-brand">
-          <div className="nxl-signup-dot-ring"></div>
+          <div className="nxl-signup-dot-ring">✨</div>
           <h1>Join NXL Beauty Bar</h1>
           <p>Create your account to start booking your nail appointments</p>
         </div>
@@ -154,6 +184,36 @@ function SignupForm() {
                 placeholder="Confirm your password" />
               {errors.confirmPassword && <span className="nxl-signup-error-inline">{errors.confirmPassword}</span>}
             </div>
+
+            {/* ── Referral code ── */}
+            {refInfo ? (
+              <div style={{background:'rgba(16,185,129,0.12)',border:'1px solid rgba(16,185,129,0.3)',borderRadius:'10px',padding:'0.75rem 1rem',display:'flex',alignItems:'center',gap:'0.75rem'}}>
+                <span style={{fontSize:'1.2rem'}}>🎁</span>
+                <div>
+                  <p style={{margin:0,fontSize:'0.82rem',fontWeight:700,color:'#7dca9e'}}>{refInfo.message}</p>
+                  <p style={{margin:'0.1rem 0 0',fontSize:'0.72rem',color:'rgba(255,232,214,0.5)'}}>Code: <strong style={{color:'rgba(255,232,214,0.8)'}}>{refCode.toUpperCase()}</strong></p>
+                </div>
+                <button type="button" onClick={() => { setRefCode(''); setRefInfo(null); }} style={{marginLeft:'auto',background:'none',border:'none',color:'rgba(255,232,214,0.4)',cursor:'pointer',fontSize:'0.9rem'}}>✕</button>
+              </div>
+            ) : (
+              <div className="nxl-signup-field">
+                <label>Referral Code <span style={{opacity:0.5,fontWeight:400}}>(optional)</span></label>
+                <div style={{display:'flex',gap:'0.5rem'}}>
+                  <input
+                    type="text"
+                    value={refCode}
+                    onChange={e => { setRefCode(e.target.value.toUpperCase()); setRefError(''); setRefInfo(null); }}
+                    placeholder="e.g. NXLAB12CD34"
+                    style={{flex:1,padding:'0.7rem 0.9rem',background:'rgba(255,255,255,0.08)',border:'1.5px solid rgba(255,232,214,0.2)',borderRadius:'10px',color:'#ffe8d6',fontFamily:'DM Sans, sans-serif',fontSize:'0.88rem',outline:'none',fontFamily:'monospace',letterSpacing:'0.08em'}}
+                  />
+                  <button type="button" onClick={() => validateRefCode(refCode)} disabled={!refCode.trim() || refLoading}
+                    style={{padding:'0 1rem',background:'rgba(255,255,255,0.1)',border:'1px solid rgba(255,232,214,0.2)',borderRadius:'10px',color:'rgba(255,232,214,0.7)',cursor:'pointer',fontSize:'0.8rem',fontWeight:600,whiteSpace:'nowrap'}}>
+                    {refLoading ? '…' : 'Apply'}
+                  </button>
+                </div>
+                {refError && <span className="nxl-signup-error-inline">{refError}</span>}
+              </div>
+            )}
 
             <button type="submit" className="nxl-signup-submit" disabled={loading}>
               {loading ? 'Creating Account…' : 'Create Account'}

@@ -228,7 +228,8 @@ export default function OrderSuccessPage() {
 
       {/* Actions */}
       <div className="osp-actions">
-        <Link to="/orders" className="osp-btn-gold">View All My Orders</Link>
+        <Link to={order ? `/track/${order._id}` : '/orders'} className="osp-btn-gold">📦 Track My Order</Link>
+        <Link to="/orders" className="osp-btn-outline">View All Orders</Link>
         <Link to="/shop"   className="osp-btn-outline">Continue Shopping</Link>
         <a
           href={`https://wa.me/27685113394?text=Hi NXL Beauty Bar! My order reference is %23${shortId}`}

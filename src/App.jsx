@@ -29,6 +29,10 @@ import CartPage          from './CartPage';
 import CheckoutPage      from './CheckoutPage';
 import OrderSuccessPage  from './OrderSuccessPage';
 import OrdersPage        from './OrdersPage';
+import OrderTrackingPage from './OrderTrackingPage';
+import BookingPage       from './BookingPage';
+import ClientGallery     from './ClientGallery';
+import SubscriptionsPage from './SubscriptionsPage';
 
 // ── Loading screen ─────────────────────────────────────────────────────────
 const LoadingScreen = () => (
@@ -123,6 +127,12 @@ function App() {
           <Route path="/checkout"            element={<CheckoutPage />} />
           <Route path="/shop/order-success"  element={<OrderSuccessPage />} />
           <Route path="/orders"              element={<OrdersPage />} />
+          <Route path="/track/:id"           element={<OrderTrackingPage />} />
+          <Route path="/track"               element={<OrderTrackingPage />} />
+          <Route path="/book"                element={<BookingPage />} />
+          <Route path="/gallery"             element={<ClientGallery />} />
+          <Route path="/subscriptions"       element={<SubscriptionsPage />} />
+          <Route path="/subscriptions/success" element={<SubscriptionsPage />} />
 
           {/* ── Protected user pages ───────────────────────────────────── */}
           <Route
