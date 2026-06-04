@@ -153,7 +153,7 @@ export default function SubscriptionsPage() {
           </div>
         ) : plans.length === 0 ? (
           <div className="sp-empty">
-            <span>💅</span>
+            <span></span>
             <p>No subscription plans available yet. Check back soon!</p>
           </div>
         ) : (
