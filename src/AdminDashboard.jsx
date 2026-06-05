@@ -214,6 +214,48 @@ function confirmHardDelete(appt) {
   return window.confirm(`⚠️  PERMANENTLY DELETE APPOINTMENT\n\nClient : ${appt.userName||appt.clientName||'Unknown client'}\nDate   : ${appt.date}  ${appt.time}\nStatus : ${appt.paymentStatus||'unpaid'}\n\nThis removes the appointment AND any associated payment records from the database.\nThis action CANNOT be undone.\n\nAre you absolutely sure?`);
 }
 
+const SECTION_TITLES = {
+  overview:       'Dashboard Overview',
+  appointments:   'Appointments',
+  schedule:       'Staff Schedule',
+  services:       'Services',
+  staff:          'Staff Management',
+  clients:        'Clients',
+  availability:   'Availability',
+  payments:       'Payments & Reports',
+  notifications:  'Activity Log',
+  gallery:        'Gallery Management',
+  'shop-products':'Shop — Products',
+  'shop-orders':  'Shop — Orders',
+  'discounts':     'Discount Codes',
+  'subscriptions': 'Subscription Plans',
+  'inventory':     'Inventory Management',
+  'shop-revenue': 'Shop — Revenue',
+  'analytics':    'Business Analytics',
+};
+
+const COLOR_MAP = {
+  rose:    'linear-gradient(135deg,#f87171,#ef4444)',
+  sky:     'linear-gradient(135deg,#38bdf8,#0ea5e9)',
+  emerald: 'linear-gradient(135deg,#34d399,#10b981)',
+  violet:  'linear-gradient(135deg,#a78bfa,#7c3aed)',
+  amber:   'linear-gradient(135deg,#fbbf24,#d97706)',
+  slate:   'linear-gradient(135deg,#94a3b8,#64748b)',
+  danger:  'linear-gradient(135deg,#f87171,#dc2626)',
+};
+
+function StatCard({ label, value, icon, color='slate', onClick, clickable }) {
+  return <div className={`stat-card${clickable?' stat-card-clickable':''}`} style={{background:COLOR_MAP[color]||COLOR_MAP.slate,cursor:clickable?'pointer':'default'}} onClick={onClick}><div className="icon">{icon}</div><div><p>{label}</p><h3>{value}</h3></div></div>;
+}
+
+function SidebarBtn({ icon, label, section, active, onClick, badge, onNavigate }) {
+  return <button className={`sidebar-btn ${active===section?'active':''}`} onClick={()=>{onClick(section);if(onNavigate)onNavigate();}}><span className="sb-icon">{icon}</span><span className="sb-label">{label}</span>{badge?<span className="sb-badge">{badge}</span>:null}</button>;
+}
+
+function Modal({ title, onClose, children }) {
+  return <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><header><h3>{title}</h3><button onClick={onClose}>✕</button></header>{children}</div></div>;
+}
+
 function AdminDashboard() {
   const navigate = useNavigate();
   const { user, isAuthenticated, loading: authLoading, logout } = useAuth();
@@ -269,6 +311,14 @@ function AdminDashboard() {
   const [editingDiscount,  setEditingDiscount] = useState(null);
 
   // ── Analytics state ───────────────────────────────────────────────────
+  // ── Subscription state ────────────────────────────────────────────────
+  const [subPlans,      setSubPlans]      = useState([]);
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [subStats,      setSubStats]      = useState(null);
+  const [subLoading,    setSubLoading]    = useState(false);
+  const [showPlanForm,  setShowPlanForm]  = useState(false);
+  const [planForm,      setPlanForm]      = useState({ name:'', description:'', price:'', bookingsPerMonth:'', discountPct:'', features:'', color:'#6366f1', isPopular:false, sortOrder:'0' });
+
   const [analyticsData,  setAnalyticsData]  = useState(null);
   const [analyticsRange, setAnalyticsRange] = useState('30');
   const [analyticsLoad,  setAnalyticsLoad]  = useState(false);
@@ -1275,6 +1325,164 @@ function AdminDashboard() {
     );
   };
 
+  useEffect(() => {
+    if (activeSection === 'subscriptions' && !subStats && !subLoading) {
+      setSubLoading(true);
+      Promise.all([
+        apiRequest(`${API_BASE_URL}/subscription-plans`),
+        apiRequest(`${API_BASE_URL}/subscriptions/admin?limit=50`),
+      ]).then(([plans, subs]) => {
+        setSubPlans(plans.data || []);
+        setSubscriptions(subs.data || []);
+        setSubStats(subs.stats);
+      }).catch(e => showToast(e.message, 'error'))
+        .finally(() => setSubLoading(false));
+    }
+  }, [activeSection]);
+
+  const renderSubscriptions = () => {
+    const loadSubs = async () => {
+      setSubLoading(true);
+      try {
+        const [plans, subs] = await Promise.all([
+          apiRequest(`${API_BASE_URL}/subscription-plans`),
+          apiRequest(`${API_BASE_URL}/subscriptions/admin?limit=50`),
+        ]);
+        setSubPlans(plans.data || []);
+        setSubscriptions(subs.data || []);
+        setSubStats(subs.stats);
+      } catch (e) { showToast(e.message, 'error'); }
+      finally { setSubLoading(false); }
+    };
+
+    const handleCreatePlan = async (e) => {
+      e.preventDefault();
+      setIsSubmitting(true);
+      try {
+        const features = planForm.features.split('\n').map(f => f.trim()).filter(Boolean);
+        await apiRequest(`${API_BASE_URL}/subscription-plans`, {
+          method: 'POST',
+          body: JSON.stringify({ ...planForm, price: parseFloat(planForm.price), bookingsPerMonth: parseInt(planForm.bookingsPerMonth), discountPct: parseInt(planForm.discountPct || '0'), features, sortOrder: parseInt(planForm.sortOrder || '0') }),
+        });
+        showToast('Plan created.');
+        setShowPlanForm(false);
+        setPlanForm({ name:'', description:'', price:'', bookingsPerMonth:'', discountPct:'', features:'', color:'#6366f1', isPopular:false, sortOrder:'0' });
+        loadSubs();
+      } catch (e) { showToast(e.message, 'error'); }
+      finally { setIsSubmitting(false); }
+    };
+
+    const STATUS_STYLE = {
+      active:          { bg:'#f0fdf4', color:'#15803d', border:'#bbf7d0' },
+      cancelled:       { bg:'#f8fafc', color:'#64748b', border:'#e2e8f0' },
+      pending_payment: { bg:'#fffbeb', color:'#92400e', border:'#fde68a' },
+      past_due:        { bg:'#fef2f2', color:'#dc2626', border:'#fecaca' },
+    };
+
+    return (
+      <div style={{ display:'flex', flexDirection:'column', gap:'1.5rem' }}>
+
+        {/* MRR stats */}
+        {subStats && (
+          <section className="panel">
+            <header><h3>💅 Subscription Overview</h3><div className="button-row">
+              <button className="btn ghost" onClick={loadSubs}>↻ Refresh</button>
+              <button className="btn primary" onClick={() => setShowPlanForm(true)}>➕ Create Plan</button>
+            </div></header>
+            <div className="grid grid-responsive">
+              {[
+                {icon:'👥',label:'Active Subscribers',value:subStats.active,color:'#10b981'},
+                {icon:'💰',label:'Monthly Revenue (MRR)',value:`R${Number(subStats.mrr).toFixed(0)}`,color:'#6366f1'},
+                {icon:'📋',label:'Total Subscriptions',value:subStats.total,color:'#3b82f6'},
+                {icon:'❌',label:'Cancelled',value:subStats.cancelled,color:subStats.cancelled>0?'#ef4444':'#94a3b8'},
+              ].map((c,i) => (
+                <div key={i} style={{background:`linear-gradient(135deg,${c.color}22,${c.color}11)`,border:`1px solid ${c.color}44`,borderRadius:'14px',padding:'1.25rem 1.5rem',display:'flex',alignItems:'center',gap:'1rem'}}>
+                  <span style={{fontSize:'1.75rem'}}>{c.icon}</span>
+                  <div><p style={{margin:0,fontSize:'0.72rem',color:'#64748b',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.06em'}}>{c.label}</p><h3 style={{margin:'0.1rem 0 0',fontSize:'1.4rem',fontWeight:800,color:c.color}}>{c.value}</h3></div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Plans list */}
+        <section className="panel">
+          <header><h3>Plans <span className="count-chip">{subPlans.length}</span></h3></header>
+          {subLoading ? <div style={{textAlign:'center',padding:'2rem',color:'#94a3b8'}}>Loading…</div> : (
+            <div className="table-responsive"><table>
+              <thead><tr><th>Name</th><th>Price</th><th>Bookings/mo</th><th>Discount</th><th>Subscribers</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                {subPlans.map(p => (
+                  <tr key={p._id}>
+                    <td><div style={{fontWeight:700}}>{p.name}{p.isPopular&&<span style={{marginLeft:6,fontSize:'0.68rem',background:'#eef2ff',color:'#4f46e5',padding:'0.1rem 0.4rem',borderRadius:4,fontWeight:700}}>Popular</span>}</div></td>
+                    <td style={{fontWeight:700}}>R{parseFloat(p.price||0).toFixed(0)}/mo</td>
+                    <td>{p.bookingsPerMonth}</td>
+                    <td>{p.discountPct > 0 ? `${p.discountPct}%` : '—'}</td>
+                    <td><span style={{fontWeight:700,color:'#10b981'}}>{p.subscriberCount||0}</span></td>
+                    <td><span className={`status ${p.isActive?'booked':'cancelled'}`}>{p.isActive?'Active':'Inactive'}</span></td>
+                    <td className="row-actions">
+                      <button className="action-btn" onClick={async()=>{await apiRequest(`${API_BASE_URL}/subscription-plans/${p._id}`,{method:'PUT',body:JSON.stringify({isActive:!p.isActive})});showToast(`Plan ${p.isActive?'deactivated':'activated'}.`);loadSubs();}}>{p.isActive?'Deactivate':'Activate'}</button>
+                      <button className="action-btn delete-btn" onClick={async()=>{if(!window.confirm(`Delete "${p.name}"?`))return;try{await apiRequest(`${API_BASE_URL}/subscription-plans/${p._id}`,{method:'DELETE'});showToast('Plan deleted.');loadSubs();}catch(e){showToast(e.message,'error');}}} >Delete</button>
+                    </td>
+                  </tr>
+                ))}
+                {!subPlans.length&&<tr><td colSpan="7" className="empty-row">No plans yet. Create your first plan!</td></tr>}
+              </tbody>
+            </table></div>
+          )}
+        </section>
+
+        {/* Subscribers list */}
+        <section className="panel">
+          <header><h3>Subscribers <span className="count-chip">{subscriptions.length}</span></h3></header>
+          <div className="table-responsive"><table>
+            <thead><tr><th>Client</th><th>Plan</th><th>Credits Left</th><th>Renews</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody>
+              {subscriptions.map(sub => {
+                const ss = STATUS_STYLE[sub.status] || STATUS_STYLE.cancelled;
+                return (
+                  <tr key={sub._id}>
+                    <td><div style={{fontWeight:600}}>{sub.user?`${sub.user.firstName} ${sub.user.lastName}`:'—'}</div><div style={{fontSize:'0.72rem',color:'#94a3b8'}}>{sub.user?.email}</div></td>
+                    <td style={{fontWeight:600}}>{sub.planName}</td>
+                    <td><span style={{fontWeight:700,color:sub.bookingsRemaining===0?'#ef4444':'#10b981'}}>{sub.bookingsRemaining}</span> / {sub.bookingsPerMonth}</td>
+                    <td style={{fontSize:'0.8rem',color:'#64748b'}}>{sub.renewalDate?new Date(sub.renewalDate).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'}):'—'}</td>
+                    <td><span style={{background:ss.bg,color:ss.color,border:`1px solid ${ss.border}`,padding:'0.2rem 0.6rem',borderRadius:'50px',fontSize:'0.72rem',fontWeight:700}}>{sub.status.replace('_',' ')}</span></td>
+                    <td className="row-actions">
+                      {sub.status==='active'&&<button className="action-btn delete-btn" style={{fontSize:'0.72rem'}} onClick={async()=>{if(!window.confirm(`Cancel ${sub.user?.firstName}'s subscription?`))return;await apiRequest(`${API_BASE_URL}/subscriptions/${sub._id}/cancel`,{method:'POST'});showToast('Subscription cancelled.');loadSubs();}}>Cancel</button>}
+                    </td>
+                  </tr>
+                );
+              })}
+              {!subscriptions.length&&<tr><td colSpan="6" className="empty-row">No subscriptions yet.</td></tr>}
+            </tbody>
+          </table></div>
+        </section>
+
+        {/* Create plan modal */}
+        {showPlanForm && (
+          <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&setShowPlanForm(false)}>
+            <div className="modal" style={{maxWidth:560,maxHeight:'90vh',overflowY:'auto'}}>
+              <header><h3>➕ Create Subscription Plan</h3><button onClick={()=>setShowPlanForm(false)}>✕</button></header>
+              <form onSubmit={handleCreatePlan} className="form-grid">
+                <div style={{gridColumn:'1/-1'}}><label>Plan Name *</label><input required placeholder="e.g. Basic Plan" value={planForm.name} onChange={e=>setPlanForm(f=>({...f,name:e.target.value}))} /></div>
+                <div style={{gridColumn:'1/-1'}}><label>Description</label><input placeholder="Short description of the plan" value={planForm.description} onChange={e=>setPlanForm(f=>({...f,description:e.target.value}))} /></div>
+                <div><label>Monthly Price (R) *</label><input required type="number" min="0.01" step="0.01" placeholder="e.g. 299" value={planForm.price} onChange={e=>setPlanForm(f=>({...f,price:e.target.value}))} /></div>
+                <div><label>Bookings per Month *</label><input required type="number" min="1" step="1" placeholder="e.g. 2" value={planForm.bookingsPerMonth} onChange={e=>setPlanForm(f=>({...f,bookingsPerMonth:e.target.value}))} /></div>
+                <div><label>Service Discount (%)</label><input type="number" min="0" max="100" step="1" placeholder="e.g. 10" value={planForm.discountPct} onChange={e=>setPlanForm(f=>({...f,discountPct:e.target.value}))} /></div>
+                <div><label>Accent Color</label><input type="color" value={planForm.color} onChange={e=>setPlanForm(f=>({...f,color:e.target.value}))} style={{padding:'0.25rem',height:'42px',width:'100%',borderRadius:8,border:'1px solid #e2e8f0',cursor:'pointer'}} /></div>
+                <div style={{gridColumn:'1/-1'}}><label>Extra Features (one per line)</label><textarea rows={4} placeholder="e.g. Free nail art design&#10;Priority WhatsApp booking&#10;10% off nail products" value={planForm.features} onChange={e=>setPlanForm(f=>({...f,features:e.target.value}))} /></div>
+                <div style={{gridColumn:'1/-1',display:'flex',gap:'1.5rem'}}>
+                  <label style={{display:'flex',alignItems:'center',gap:'0.5rem',cursor:'pointer',fontSize:'0.88rem',fontWeight:500}}><input type="checkbox" checked={planForm.isPopular} onChange={e=>setPlanForm(f=>({...f,isPopular:e.target.checked}))} />⭐ Mark as Most Popular</label>
+                </div>
+                <footer className="modal-actions" style={{gridColumn:'1/-1'}}><button type="button" onClick={()=>setShowPlanForm(false)}>Cancel</button><button type="submit" className="btn primary" disabled={isSubmitting}>{isSubmitting?'Creating…':'Create Plan'}</button></footer>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderAnalytics = () => {
     const d = analyticsData;
 
@@ -1461,6 +1669,23 @@ function AdminDashboard() {
                   {!d.clients.top.length && <tr><td colSpan="4" className="empty-row">No data yet.</td></tr>}
                 </tbody>
               </table></div>
+            </section>
+
+            {/* Referral config card */}
+            <section className="panel">
+              <header><h3>🎁 Referral Program Config</h3></header>
+              <div className="grid grid-responsive">
+                {[
+                  {icon:'👥',label:'Referrer reward (1st booking)',value:'+200 pts',color:'#6366f1'},
+                  {icon:'🎁',label:'Friend welcome discount',value:'R50 off 1st order',color:'#10b981'},
+                  {icon:'⭐',label:'Signup bonus (referrer)',value:'+50 pts',color:'#f59e0b'},
+                ].map((c,i) => (
+                  <div key={i} style={{background:`linear-gradient(135deg,${c.color}22,${c.color}11)`,border:`1px solid ${c.color}44`,borderRadius:'12px',padding:'1rem',display:'flex',alignItems:'center',gap:'0.75rem'}}>
+                    <span style={{fontSize:'1.5rem'}}>{c.icon}</span>
+                    <div><p style={{margin:0,fontSize:'0.68rem',color:'#64748b',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.06em'}}>{c.label}</p><h3 style={{margin:'0.1rem 0 0',fontSize:'1rem',fontWeight:800,color:c.color}}>{c.value}</h3></div>
+                  </div>
+                ))}
+              </div>
             </section>
           </>
         )}
@@ -1688,6 +1913,7 @@ function AdminDashboard() {
       case 'gallery':       return renderGallery();
       case 'shop-products': return renderProducts();
       case 'shop-orders':   return renderShopOrders();
+      case 'subscriptions':  return renderSubscriptions();
       case 'inventory':     return renderInventory();
       case 'discounts':     return renderDiscounts();
       case 'shop-revenue':  return renderShopRevenue();
@@ -1719,6 +1945,7 @@ function AdminDashboard() {
           <SidebarBtn icon="🛍️" label="Products"      section="shop-products" active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="📦" label="Shop Orders"   section="shop-orders"   active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="🏷️" label="Discounts"     section="discounts"     active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
+          <SidebarBtn icon="💅" label="Subscriptions"  section="subscriptions"  active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="📦" label="Inventory"     section="inventory"     active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="📊" label="Shop Revenue"  section="shop-revenue"  active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
           <SidebarBtn icon="📈" label="Analytics"     section="analytics"     active={activeSection} onClick={setActiveSection} onNavigate={()=>setSidebarOpen(false)} />
@@ -1761,45 +1988,5 @@ function AdminDashboard() {
   );
 }
 
-const SECTION_TITLES = {
-  overview:       'Dashboard Overview',
-  appointments:   'Appointments',
-  schedule:       'Staff Schedule',
-  services:       'Services',
-  staff:          'Staff Management',
-  clients:        'Clients',
-  availability:   'Availability',
-  payments:       'Payments & Reports',
-  notifications:  'Activity Log',
-  gallery:        'Gallery Management',
-  'shop-products':'Shop — Products',
-  'shop-orders':  'Shop — Orders',
-  'discounts':    'Discount Codes',
-  'inventory':    'Inventory Management',
-  'shop-revenue': 'Shop — Revenue',
-  'analytics':    'Business Analytics',
-};
-
-const COLOR_MAP = {
-  rose:    'linear-gradient(135deg,#f87171,#ef4444)',
-  sky:     'linear-gradient(135deg,#38bdf8,#0ea5e9)',
-  emerald: 'linear-gradient(135deg,#34d399,#10b981)',
-  violet:  'linear-gradient(135deg,#a78bfa,#7c3aed)',
-  amber:   'linear-gradient(135deg,#fbbf24,#d97706)',
-  slate:   'linear-gradient(135deg,#94a3b8,#64748b)',
-  danger:  'linear-gradient(135deg,#f87171,#dc2626)',
-};
-
-function StatCard({ label, value, icon, color='slate', onClick, clickable }) {
-  return <div className={`stat-card${clickable?' stat-card-clickable':''}`} style={{background:COLOR_MAP[color]||COLOR_MAP.slate,cursor:clickable?'pointer':'default'}} onClick={onClick}><div className="icon">{icon}</div><div><p>{label}</p><h3>{value}</h3></div></div>;
-}
-
-function SidebarBtn({ icon, label, section, active, onClick, badge, onNavigate }) {
-  return <button className={`sidebar-btn ${active===section?'active':''}`} onClick={()=>{onClick(section);if(onNavigate)onNavigate();}}><span className="sb-icon">{icon}</span><span className="sb-label">{label}</span>{badge?<span className="sb-badge">{badge}</span>:null}</button>;
-}
-
-function Modal({ title, onClose, children }) {
-  return <div className="modal-backdrop" onClick={e=>e.target===e.currentTarget&&onClose()}><div className="modal"><header><h3>{title}</h3><button onClick={onClose}>✕</button></header>{children}</div></div>;
-}
 
 export default AdminDashboard;
