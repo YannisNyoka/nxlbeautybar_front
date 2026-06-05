@@ -1,103 +1,159 @@
+/**
+ * InstallPrompt — PWA install banner
+ *
+ * Shows a polished bottom sheet on mobile when the browser fires
+ * `beforeinstallprompt`. Dismissed state is persisted so it doesn't
+ * re-appear for 7 days. Also handles iOS Safari which doesn't fire
+ * the event — shows a manual "Add to Home Screen" guide instead.
+ */
 import { useState, useEffect } from 'react';
+import './InstallPrompt.css';
+
+const DISMISS_KEY    = 'nxl-pwa-dismissed';
+const DISMISS_DAYS   = 7;
+
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+function isInStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || window.navigator.standalone === true;
+}
+function wasDismissedRecently() {
+  try {
+    const ts = localStorage.getItem(DISMISS_KEY);
+    if (!ts) return false;
+    return (Date.now() - parseInt(ts)) < DISMISS_DAYS * 24 * 60 * 60 * 1000;
+  } catch { return false; }
+}
 
 export default function InstallPrompt() {
-  const [prompt,  setPrompt]  = useState(null);
-  const [visible, setVisible] = useState(false);
-  const [ios,     setIos]     = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [visible,        setVisible]        = useState(false);
+  const [isIOSDevice,    setIsIOSDevice]     = useState(false);
+  const [installing,     setInstalling]      = useState(false);
+  const [installed,      setInstalled]       = useState(false);
 
   useEffect(() => {
-    // Detect iOS (Safari doesn't fire beforeinstallprompt)
-    const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent)
-      && !window.matchMedia('(display-mode: standalone)').matches;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
-      || window.navigator.standalone;
+    // Already installed or dismissed recently → don't show
+    if (isInStandaloneMode() || wasDismissedRecently()) return;
 
-    if (isStandalone) return; // already installed
-    if (sessionStorage.getItem('nxl_install_dismissed')) return;
-
-    if (isIos) {
-      // Show iOS instructions after 10s
-      setTimeout(() => { setIos(true); setVisible(true); }, 10000);
-      return;
+    // iOS Safari — no beforeinstallprompt, show manual guide
+    if (isIOS()) {
+      setIsIOSDevice(true);
+      // Show after a short delay so the page has loaded
+      const timer = setTimeout(() => setVisible(true), 3500);
+      return () => clearTimeout(timer);
     }
 
-    // Android/Chrome — listen for the native prompt
+    // Chrome / Edge / Android
     const handler = (e) => {
       e.preventDefault();
-      setPrompt(e);
-      setTimeout(() => setVisible(true), 5000);
+      setDeferredPrompt(e);
+      setTimeout(() => setVisible(true), 3500);
     };
     window.addEventListener('beforeinstallprompt', handler);
+
+    // If already installed via a different path
+    window.addEventListener('appinstalled', () => {
+      setVisible(false);
+      setInstalled(true);
+    });
+
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
 
-  const dismiss = () => {
-    sessionStorage.setItem('nxl_install_dismissed', '1');
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    setInstalling(true);
+    try {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setInstalled(true);
+        setVisible(false);
+      }
+    } catch {}
+    setInstalling(false);
+    setDeferredPrompt(null);
+  };
+
+  const handleDismiss = () => {
     setVisible(false);
+    try { localStorage.setItem(DISMISS_KEY, String(Date.now())); } catch {}
   };
 
-  const install = async () => {
-    if (!prompt) return;
-    prompt.prompt();
-    const { outcome } = await prompt.userChoice;
-    if (outcome === 'accepted') setVisible(false);
-    setPrompt(null);
-  };
+  if (!visible && !installed) return null;
 
-  if (!visible) return null;
+  if (installed) return (
+    <div className="ip-toast" role="status">
+      ✅ NXL Beauty Bar added to your home screen!
+    </div>
+  );
 
   return (
-    <div style={{
-      position: 'fixed', bottom: '5.5rem', left: '1.25rem', right: '1.25rem',
-      maxWidth: '400px', margin: '0 auto',
-      background: 'linear-gradient(135deg, #3d1f15, #6b3528)',
-      border: '1px solid rgba(201,169,110,0.3)',
-      borderRadius: '16px',
-      padding: '1.1rem 1.25rem',
-      display: 'flex', alignItems: 'center', gap: '0.875rem',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.35)',
-      zIndex: 8000,
-      animation: 'ip-slide-up 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
-    }}>
-      <style>{`
-        @keyframes ip-slide-up {
-          from { opacity: 0; transform: translateY(20px); }
-          to   { opacity: 1; transform: none; }
-        }
-      `}</style>
+    <div className="ip-backdrop" role="dialog" aria-modal="true" aria-label="Install NXL Beauty Bar app">
+      <div className="ip-sheet" onClick={(e) => e.stopPropagation()}>
 
-      <img src="/android-chrome-192x192.png" alt="NXL Beauty Bar" style={{ width: 44, height: 44, borderRadius: '10px', objectFit: 'cover', flexShrink: 0, border: '2px solid rgba(201,169,110,0.4)' }} />
+        {/* Handle */}
+        <div className="ip-handle" />
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ margin: '0 0 0.2rem', fontFamily: "'DM Sans', sans-serif", fontSize: '0.85rem', fontWeight: 700, color: '#fdf6f0' }}>
-          Add to Home Screen
-        </p>
-        <p style={{ margin: 0, fontFamily: "'DM Sans', sans-serif", fontSize: '0.72rem', color: 'rgba(255,220,190,0.65)', lineHeight: 1.45 }}>
-          {ios
-            ? "Tap the Share button, then 'Add to Home Screen'"
-            : 'Install NXL Beauty Bar for quick access'}
-        </p>
-      </div>
+        {/* App info */}
+        <div className="ip-app-row">
+          <img src="/android-chrome-192x192.png" alt="NXL Beauty Bar" className="ip-app-icon" />
+          <div className="ip-app-info">
+            <p className="ip-app-name">NXL Beauty Bar</p>
+            <p className="ip-app-url">nxlbeautybar.co.za</p>
+            <div className="ip-app-stars">{'★'.repeat(5)}</div>
+          </div>
+          <button className="ip-close" onClick={handleDismiss} aria-label="Close">✕</button>
+        </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', flexShrink: 0 }}>
-        {!ios && (
-          <button onClick={install} style={{
-            background: '#c9a96e', color: '#3d1f15', border: 'none',
-            borderRadius: '8px', padding: '0.4rem 0.875rem',
-            fontFamily: "'DM Sans', sans-serif", fontSize: '0.75rem', fontWeight: 700,
-            cursor: 'pointer', whiteSpace: 'nowrap',
-          }}>
-            Install
-          </button>
+        <p className="ip-tagline">Book appointments, shop products & track orders — all from your home screen, even offline.</p>
+
+        {/* Benefits */}
+        <div className="ip-benefits">
+          <div className="ip-benefit"><span>⚡</span> Faster than the browser</div>
+          <div className="ip-benefit"><span>📵</span> Works offline</div>
+          <div className="ip-benefit"><span>🔔</span> Booking reminders</div>
+          <div className="ip-benefit"><span>📲</span> No app store needed</div>
+        </div>
+
+        {isIOSDevice ? (
+          /* iOS manual guide */
+          <div className="ip-ios-guide">
+            <p className="ip-ios-title">Add to Home Screen:</p>
+            <div className="ip-ios-steps">
+              <div className="ip-ios-step">
+                <span className="ip-ios-num">1</span>
+                <span>Tap the <strong>Share</strong> button <span style={{fontSize:'1.1em'}}>⎏</span> at the bottom of Safari</span>
+              </div>
+              <div className="ip-ios-step">
+                <span className="ip-ios-num">2</span>
+                <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+              </div>
+              <div className="ip-ios-step">
+                <span className="ip-ios-num">3</span>
+                <span>Tap <strong>Add</strong> in the top right</span>
+              </div>
+            </div>
+            <button className="ip-btn-secondary" onClick={handleDismiss}>Got it, thanks</button>
+          </div>
+        ) : (
+          /* Standard install */
+          <div className="ip-actions">
+            <button className="ip-btn-primary" onClick={handleInstall} disabled={installing}>
+              {installing ? (
+                <><span className="ip-spinner" /> Installing…</>
+              ) : (
+                <><span>📲</span> Add to Home Screen</>
+              )}
+            </button>
+            <button className="ip-btn-secondary" onClick={handleDismiss}>
+              Not now
+            </button>
+          </div>
         )}
-        <button onClick={dismiss} style={{
-          background: 'rgba(255,255,255,0.08)', color: 'rgba(255,220,190,0.6)',
-          border: '1px solid rgba(255,220,190,0.15)', borderRadius: '8px',
-          padding: '0.4rem 0.875rem', fontFamily: "'DM Sans', sans-serif",
-          fontSize: '0.72rem', cursor: 'pointer', whiteSpace: 'nowrap',
-        }}>
-          Not now
-        </button>
       </div>
     </div>
   );

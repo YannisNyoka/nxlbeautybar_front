@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useSEO } from './useSEO';
+import { useSEO, faqSchema } from './useSEO';
+
+const SUBSCRIPTION_FAQS = [
+  { question: 'Can I cancel my NXL Beauty Bar subscription anytime?', answer: 'Yes! You can cancel anytime from your profile. Your remaining bookings stay valid until the end of your billing period.' },
+  { question: 'Do unused bookings roll over each month?', answer: 'Bookings reset each month on your renewal date. We recommend booking regularly to get full value from your plan.' },
+  { question: 'How do I use my monthly subscription booking credits?', answer: 'When booking an appointment on our app or website, select "Use subscription credit" and your booking will be deducted from your monthly credits at no extra charge.' },
+  { question: 'What happens when my subscription renews?', answer: 'Your plan automatically renews each month and your booking credits reset. You\'ll receive an in-app notification and email reminder before renewal.' },
+];
 import './SubscriptionsPage.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
@@ -23,6 +30,8 @@ export default function SubscriptionsPage() {
     title:       'Monthly Nail Care Plans — NXL Beauty Bar',
     description: 'Subscribe to a monthly nail care plan at NXL Beauty Bar. Get regular appointments, priority booking and exclusive member discounts.',
     url:         '/subscriptions',
+    schema:      faqSchema(SUBSCRIPTION_FAQS),
+    keywords:    'nail subscription Soweto, monthly nail plan, nail care plan South Africa, NXL Beauty Bar subscription',
   });
 
   useEffect(() => {
@@ -153,7 +162,7 @@ export default function SubscriptionsPage() {
           </div>
         ) : plans.length === 0 ? (
           <div className="sp-empty">
-            <span></span>
+            <span>💅</span>
             <p>No subscription plans available yet. Check back soon!</p>
           </div>
         ) : (
