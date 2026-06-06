@@ -292,6 +292,9 @@ function AdminDashboard() {
   const [galleryForm, setGalleryForm] = useState({ imageUrl:'', clientName:'', caption:'' });
   const [galleryLoading, setGalleryLoading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
+  const [clientPosts,        setClientPosts]        = useState([]);
+  const [clientPostsLoading, setClientPostsLoading] = useState(false);
+  const [galleryTab,         setGalleryTab]         = useState('admin');
   const [shopProducts,     setShopProducts]    = useState([]);
   const [shopOrders,       setShopOrders]      = useState([]);
   const [shopStats,        setShopStats]       = useState(null);
@@ -842,10 +845,6 @@ function AdminDashboard() {
   };
 
   const renderGallery = () => {
-    const [clientPosts, setClientPosts] = useState([]);
-    const [clientPostsLoading, setClientPostsLoading] = useState(false);
-    const [galleryTab, setGalleryTab] = useState('admin'); // 'admin' | 'client'
-
     const loadClientPosts = async (status = 'pending') => {
       setClientPostsLoading(true);
       try { const data = await apiRequest(`${API_BASE_URL}/client-gallery/admin?status=${status}`); setClientPosts(data.data || []); }
