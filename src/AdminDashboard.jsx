@@ -98,99 +98,275 @@ function AvailabilityModal({ staff = [], onClose, onAllSubmitted }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const year = calMonth.getFullYear(); const month = calMonth.getMonth();
+  const [step, setStep] = useState('date'); // 'date' | 'slots' on mobile
+
+  const year = calMonth.getFullYear();
+  const month = calMonth.getMonth();
   const days = getAvDaysInMonth(year, month);
-  const monthName = calMonth.toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' });
+  const monthName = calMonth.toLocaleDateString('en-ZA', { month:'long', year:'numeric' });
   const todayISO = toAvISO(today.getFullYear(), today.getMonth(), today.getDate());
+
   function isDayPast(day) { return day ? toAvISO(year, month, day) < todayISO : false; }
-  function handleDateClick(day) { if (!day || isDayPast(day)) return; setSelectedDate(toAvISO(year, month, day)); setSelectedSlots([]); setError(''); }
-  function toggleSlot(slot) { setSelectedSlots(prev => prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot]); setError(''); }
+
+  function handleDateClick(day) {
+    if (!day || isDayPast(day)) return;
+    setSelectedDate(toAvISO(year, month, day));
+    setSelectedSlots([]);
+    setError('');
+    setStep('slots');
+  }
+
+  function toggleSlot(slot) {
+    setSelectedSlots(prev => prev.includes(slot) ? prev.filter(s => s !== slot) : [...prev, slot]);
+    setError('');
+  }
+
   function selectRange(range) {
-    if (range === 'morning') setSelectedSlots(ALL_SLOTS.filter(s => parseInt(s.split(':')[0], 10) < 12));
+    if (range === 'morning')   setSelectedSlots(ALL_SLOTS.filter(s => parseInt(s.split(':')[0], 10) < 12));
     else if (range === 'afternoon') setSelectedSlots(ALL_SLOTS.filter(s => parseInt(s.split(':')[0], 10) >= 12));
     else if (range === 'full') setSelectedSlots([...ALL_SLOTS]);
   }
+
   async function handleSubmit() {
-    if (!selectedDate) { setError('Please select a date.'); return; }
-    if (selectedSlots.length === 0) { setError('Please select at least one time slot.'); return; }
-    if (!reason.trim()) { setError('Please enter a reason for blocking.'); return; }
-    setBusy(true); setError(''); let successCount = 0; let skippedCount = 0;
+    if (!selectedDate)           { setError('Please select a date.'); return; }
+    if (selectedSlots.length===0){ setError('Please select at least one time slot.'); return; }
+    if (!reason.trim())          { setError('Please enter a reason.'); return; }
+    setBusy(true); setError('');
+    let successCount = 0; let skippedCount = 0;
     for (const slot of selectedSlots) {
       try {
-        await apiRequest(API_ENDPOINTS.availability, { method:'POST', body:JSON.stringify({ date:selectedDate, time:slot, employeeId:employeeId==='ALL'?'ALL':employeeId, reason:reason.trim() }) });
+        await apiRequest(API_ENDPOINTS.availability, {
+          method:'POST',
+          body: JSON.stringify({ date:selectedDate, time:slot, employeeId:employeeId==='ALL'?'ALL':employeeId, reason:reason.trim() }),
+        });
         successCount++;
       } catch (e) {
         if (e.message?.toLowerCase().includes('duplicate') || e.message?.includes('409') || e.message?.includes('11000')) skippedCount++;
         else { setError(`Failed on slot ${slot}: ${e.message}`); setBusy(false); return; }
       }
     }
-    setBusy(false); if (onAllSubmitted) await onAllSubmitted(successCount, skippedCount);
+    setBusy(false);
+    if (onAllSubmitted) await onAllSubmitted(successCount, skippedCount);
   }
-  const slotsByHour = useMemo(() => { const groups = {}; ALL_SLOTS.forEach(slot => { const h = slot.split(':')[0]; if (!groups[h]) groups[h] = []; groups[h].push(slot); }); return groups; }, []);
-  function formatHour(h) { const n = parseInt(h, 10); if (n===0) return '12 AM'; if (n<12) return `${n} AM`; if (n===12) return '12 PM'; return `${n-12} PM`; }
+
+  const slotsByHour = useMemo(() => {
+    const groups = {};
+    ALL_SLOTS.forEach(slot => {
+      const h = slot.split(':')[0];
+      if (!groups[h]) groups[h] = [];
+      groups[h].push(slot);
+    });
+    return groups;
+  }, []);
+
+  function formatHour(h) {
+    const n = parseInt(h, 10);
+    if (n===0) return '12 AM'; if (n<12) return `${n} AM`;
+    if (n===12) return '12 PM'; return `${n-12} PM`;
+  }
+
+  const selectedDateLabel = selectedDate
+    ? new Date(selectedDate+'T00:00:00').toLocaleDateString('en-ZA',{ weekday:'short', day:'numeric', month:'short' })
+    : null;
+
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(15,15,25,0.65)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'1rem' }} onClick={e => e.target===e.currentTarget && onClose()}>
-      <div style={{ background:'#fff', borderRadius:'16px', width:'100%', maxWidth:'780px', maxHeight:'90vh', overflow:'hidden', display:'flex', flexDirection:'column', boxShadow:'0 25px 60px rgba(0,0,0,0.25)' }}>
-        <div style={{ padding:'1.25rem 1.5rem', borderBottom:'1px solid #f0f0f0', display:'flex', alignItems:'center', justifyContent:'space-between', background:'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' }}>
-          <div><h3 style={{ margin:0, color:'#fff', fontSize:'1.1rem', fontWeight:700 }}>🚫 Block Time Slots</h3><p style={{ margin:'0.2rem 0 0', color:'rgba(255,255,255,0.6)', fontSize:'0.78rem' }}>Select a date, choose time slots, then block them</p></div>
-          <button onClick={onClose} style={{ background:'rgba(255,255,255,0.1)', border:'none', color:'#fff', width:'32px', height:'32px', borderRadius:'8px', cursor:'pointer', fontSize:'1rem', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
-        </div>
-        <div style={{ display:'flex', flex:1, overflow:'hidden', minHeight:0 }}>
-          <div style={{ width:'260px', minWidth:'260px', borderRight:'1px solid #f0f0f0', padding:'1.25rem', overflowY:'auto', display:'flex', flexDirection:'column', gap:'1rem' }}>
-            <div>
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.75rem' }}>
-                <button onClick={() => setCalMonth(new Date(year,month-1,1))} disabled={year===today.getFullYear()&&month<=today.getMonth()} style={{ background:'none', border:'1px solid #e2e8f0', borderRadius:'6px', width:'28px', height:'28px', cursor:'pointer', fontSize:'0.9rem', color:'#64748b', display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
-                <span style={{ fontSize:'0.82rem', fontWeight:600, color:'#1e293b' }}>{monthName}</span>
-                <button onClick={() => setCalMonth(new Date(year,month+1,1))} style={{ background:'none', border:'1px solid #e2e8f0', borderRadius:'6px', width:'28px', height:'28px', cursor:'pointer', fontSize:'0.9rem', color:'#64748b', display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:'2px', marginBottom:'4px' }}>{['M','T','W','T','F','S','S'].map((d,i) => <div key={i} style={{ textAlign:'center', fontSize:'0.65rem', color:'#94a3b8', fontWeight:600, padding:'2px 0' }}>{d}</div>)}</div>
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(7, 1fr)', gap:'2px' }}>
-                {days.map((day,i) => { const iso=day?toAvISO(year,month,day):null; const isPast=day&&isDayPast(day); const isSel=iso===selectedDate; const isToday=iso===todayISO; return <div key={i} onClick={() => handleDateClick(day)} style={{ height:'30px', display:'flex', alignItems:'center', justifyContent:'center', borderRadius:'6px', fontSize:'0.75rem', fontWeight:isToday?700:400, cursor:day&&!isPast?'pointer':'default', background:isSel?'linear-gradient(135deg, #1a1a2e, #4f46e5)':isToday?'#eff6ff':'transparent', color:isSel?'#fff':isPast?'#cbd5e1':isToday?'#4f46e5':'#374151', opacity:isPast?0.4:1, textDecoration:isPast?'line-through':'none', transition:'all 0.15s' }}>{day||''}</div>; })}
-              </div>
-            </div>
-            <div>
-              <label style={{ fontSize:'0.75rem', fontWeight:600, color:'#374151', display:'block', marginBottom:'0.4rem' }}>Block for</label>
-              <select value={employeeId} onChange={e => setEmployeeId(e.target.value)} style={{ width:'100%', padding:'0.5rem 0.75rem', border:'1px solid #e2e8f0', borderRadius:'8px', fontSize:'0.82rem', color:'#374151', background:'#fff', cursor:'pointer' }}>
-                <option value="ALL">🏠 Entire Salon</option>{staff.filter(s => s.isActive!==false).map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ fontSize:'0.75rem', fontWeight:600, color:'#374151', display:'block', marginBottom:'0.4rem' }}>Reason *</label>
-              <input type="text" placeholder="e.g. Public holiday, Training..." value={reason} onChange={e => { setReason(e.target.value); setError(''); }} style={{ width:'100%', padding:'0.5rem 0.75rem', border:`1px solid ${error&&!reason.trim()?'#fca5a5':'#e2e8f0'}`, borderRadius:'8px', fontSize:'0.82rem', color:'#374151', boxSizing:'border-box' }} />
-            </div>
-            {selectedDate && <div style={{ padding:'0.75rem', background:'#f8fafc', borderRadius:'8px', border:'1px solid #e2e8f0', fontSize:'0.75rem', color:'#64748b' }}><div style={{ fontWeight:600, color:'#374151', marginBottom:'0.25rem' }}>📅 {new Date(selectedDate+'T00:00:00').toLocaleDateString('en-ZA',{ weekday:'long', day:'numeric', month:'long' })}</div><div>{selectedSlots.length===0?'No slots selected':selectedSlots.length===ALL_SLOTS.length?'🚫 Full day blocked':`${selectedSlots.length} slot${selectedSlots.length>1?'s':''} selected`}</div></div>}
+    <div style={{
+      position:'fixed', inset:0,
+      background:'rgba(15,15,25,0.7)',
+      backdropFilter:'blur(4px)',
+      display:'flex', alignItems:'flex-end', justifyContent:'center',
+      zIndex:1000, padding:0,
+    }} onClick={e => e.target===e.currentTarget && onClose()}>
+
+      <div style={{
+        background:'#fff',
+        borderRadius:'20px 20px 0 0',
+        width:'100%',
+        maxWidth:'600px',
+        maxHeight:'95vh',
+        overflow:'hidden',
+        display:'flex',
+        flexDirection:'column',
+        boxShadow:'0 -8px 40px rgba(0,0,0,0.25)',
+      }}>
+
+        {/* Header */}
+        <div style={{
+          padding:'1rem 1.25rem',
+          borderBottom:'1px solid #f0f0f0',
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+          background:'linear-gradient(135deg,#1a1a2e,#16213e)',
+          flexShrink:0,
+        }}>
+          <div>
+            <h3 style={{ margin:0, color:'#fff', fontSize:'1rem', fontWeight:700 }}>🚫 Block Time Slots</h3>
+            <p style={{ margin:'0.15rem 0 0', color:'rgba(255,255,255,0.55)', fontSize:'0.75rem' }}>
+              Select a date, choose time slots, then block them
+            </p>
           </div>
-          <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-            <div style={{ padding:'0.75rem 1.25rem', borderBottom:'1px solid #f0f0f0', display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap', background:'#fafafa' }}>
-              <span style={{ fontSize:'0.75rem', fontWeight:600, color:'#64748b', marginRight:'0.25rem' }}>Quick select:</span>
-              {[{label:'🌅 Morning',range:'morning'},{label:'☀️ Afternoon',range:'afternoon'},{label:'📅 Full Day',range:'full'}].map(({label,range}) => (
-                <button key={range} onClick={() => { if(selectedDate) selectRange(range); }} disabled={!selectedDate} style={{ padding:'0.3rem 0.7rem', fontSize:'0.72rem', fontWeight:600, border:'1px solid #e2e8f0', borderRadius:'20px', cursor:selectedDate?'pointer':'not-allowed', background:'#fff', color:'#374151', opacity:selectedDate?1:0.4, transition:'all 0.15s' }} onMouseEnter={e => { if(selectedDate) e.currentTarget.style.background='#f1f5f9'; }} onMouseLeave={e => { e.currentTarget.style.background='#fff'; }}>{label}</button>
-              ))}
-              {selectedSlots.length>0 && <button onClick={() => setSelectedSlots([])} style={{ padding:'0.3rem 0.7rem', fontSize:'0.72rem', fontWeight:600, border:'1px solid #fca5a5', borderRadius:'20px', cursor:'pointer', background:'#fff5f5', color:'#dc2626', marginLeft:'auto' }}>✕ Clear</button>}
-            </div>
-            <div style={{ flex:1, overflowY:'auto', padding:'1rem 1.25rem' }}>
-              {!selectedDate ? (
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8', gap:'0.75rem' }}><span style={{ fontSize:'2.5rem' }}>📅</span><p style={{ margin:0, fontSize:'0.85rem', fontWeight:500 }}>Select a date to choose time slots</p></div>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-                  {Object.entries(slotsByHour).map(([hour,slots]) => (
-                    <div key={hour}>
-                      <div style={{ fontSize:'0.7rem', fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'0.35rem' }}>{formatHour(hour)}</div>
-                      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'0.35rem' }}>
-                        {slots.map(slot => { const isSel=selectedSlots.includes(slot); return <button key={slot} onClick={() => toggleSlot(slot)} style={{ padding:'0.45rem 0.25rem', fontSize:'0.75rem', fontWeight:isSel?700:500, border:`2px solid ${isSel?'#4f46e5':'#e2e8f0'}`, borderRadius:'8px', cursor:'pointer', transition:'all 0.12s', background:isSel?'linear-gradient(135deg, #4f46e5, #7c3aed)':'#fff', color:isSel?'#fff':'#374151', boxShadow:isSel?'0 2px 8px rgba(79,70,229,0.3)':'none' }}>{slot}</button>; })}
-                      </div>
-                    </div>
+          <button onClick={onClose} style={{ background:'rgba(255,255,255,0.12)', border:'none', color:'#fff', width:32, height:32, borderRadius:8, cursor:'pointer', fontSize:'1rem', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>✕</button>
+        </div>
+
+        {/* Mobile step tabs */}
+        <div style={{ display:'flex', borderBottom:'1px solid #f0f0f0', flexShrink:0 }}>
+          <button onClick={() => setStep('date')} style={{ flex:1, padding:'0.65rem', fontSize:'0.8rem', fontWeight:700, border:'none', background:'none', cursor:'pointer', borderBottom:`2px solid ${step==='date'?'#4f46e5':'transparent'}`, color:step==='date'?'#4f46e5':'#94a3b8', transition:'all 0.15s' }}>
+            📅 {selectedDateLabel || 'Pick Date'}
+          </button>
+          <button onClick={() => selectedDate && setStep('slots')} style={{ flex:1, padding:'0.65rem', fontSize:'0.8rem', fontWeight:700, border:'none', background:'none', cursor:selectedDate?'pointer':'not-allowed', borderBottom:`2px solid ${step==='slots'?'#4f46e5':'transparent'}`, color:step==='slots'?'#4f46e5':selectedDate?'#94a3b8':'#cbd5e1', transition:'all 0.15s', opacity:selectedDate?1:0.5 }}>
+            ⏰ {selectedSlots.length > 0 ? `${selectedSlots.length} Slots` : 'Time Slots'}
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{ flex:1, overflowY:'auto', minHeight:0 }}>
+
+          {/* DATE STEP */}
+          {step === 'date' && (
+            <div style={{ padding:'1rem 1.25rem', display:'flex', flexDirection:'column', gap:'1rem' }}>
+
+              {/* Calendar */}
+              <div>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'0.75rem' }}>
+                  <button onClick={() => setCalMonth(new Date(year,month-1,1))}
+                    disabled={year===today.getFullYear() && month<=today.getMonth()}
+                    style={{ background:'none', border:'1px solid #e2e8f0', borderRadius:6, width:32, height:32, cursor:'pointer', fontSize:'1rem', color:'#64748b', display:'flex', alignItems:'center', justifyContent:'center' }}>‹</button>
+                  <span style={{ fontSize:'0.9rem', fontWeight:700, color:'#1e293b' }}>{monthName}</span>
+                  <button onClick={() => setCalMonth(new Date(year,month+1,1))}
+                    style={{ background:'none', border:'1px solid #e2e8f0', borderRadius:6, width:32, height:32, cursor:'pointer', fontSize:'1rem', color:'#64748b', display:'flex', alignItems:'center', justifyContent:'center' }}>›</button>
+                </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2, marginBottom:4 }}>
+                  {['M','T','W','T','F','S','S'].map((d,i) => (
+                    <div key={i} style={{ textAlign:'center', fontSize:'0.65rem', color:'#94a3b8', fontWeight:600, padding:'4px 0' }}>{d}</div>
                   ))}
                 </div>
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', gap:2 }}>
+                  {days.map((day,i) => {
+                    const iso = day ? toAvISO(year,month,day) : null;
+                    const isPast = day && isDayPast(day);
+                    const isSel = iso === selectedDate;
+                    const isToday = iso === todayISO;
+                    return (
+                      <div key={i} onClick={() => handleDateClick(day)} style={{
+                        height:36, display:'flex', alignItems:'center', justifyContent:'center',
+                        borderRadius:8, fontSize:'0.82rem', fontWeight:isToday?700:400,
+                        cursor:day&&!isPast?'pointer':'default',
+                        background:isSel?'linear-gradient(135deg,#1a1a2e,#4f46e5)':isToday?'#eff6ff':'transparent',
+                        color:isSel?'#fff':isPast?'#cbd5e1':isToday?'#4f46e5':'#374151',
+                        opacity:isPast?0.35:1,
+                        transition:'all 0.12s',
+                        border:isSel?'none':'2px solid transparent',
+                      }}>{day||''}</div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Employee */}
+              <div>
+                <label style={{ fontSize:'0.75rem', fontWeight:600, color:'#374151', display:'block', marginBottom:'0.4rem' }}>Block for</label>
+                <select value={employeeId} onChange={e => setEmployeeId(e.target.value)}
+                  style={{ width:'100%', padding:'0.65rem 0.875rem', border:'1px solid #e2e8f0', borderRadius:8, fontSize:'0.85rem', color:'#374151', background:'#fff' }}>
+                  <option value="ALL">🏠 Entire Salon</option>
+                  {staff.filter(s => s.isActive!==false).map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                </select>
+              </div>
+
+              {/* Reason */}
+              <div>
+                <label style={{ fontSize:'0.75rem', fontWeight:600, color:'#374151', display:'block', marginBottom:'0.4rem' }}>Reason *</label>
+                <input type="text" placeholder="e.g. Public holiday, Training..."
+                  value={reason} onChange={e => { setReason(e.target.value); setError(''); }}
+                  style={{ width:'100%', padding:'0.65rem 0.875rem', border:`1px solid ${error&&!reason.trim()?'#fca5a5':'#e2e8f0'}`, borderRadius:8, fontSize:'0.85rem', color:'#374151', boxSizing:'border-box' }} />
+              </div>
+
+              {selectedDate && (
+                <button onClick={() => setStep('slots')} style={{ width:'100%', padding:'0.8rem', background:'linear-gradient(135deg,#1a1a2e,#4f46e5)', color:'#fff', border:'none', borderRadius:10, fontWeight:700, fontSize:'0.9rem', cursor:'pointer' }}>
+                  Next: Choose Time Slots →
+                </button>
               )}
             </div>
-            <div style={{ padding:'1rem 1.25rem', borderTop:'1px solid #f0f0f0', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem', background:'#fafafa' }}>
-              {error ? <div style={{ flex:1, padding:'0.5rem 0.75rem', background:'#fff5f5', border:'1px solid #fca5a5', borderRadius:'8px', fontSize:'0.78rem', color:'#dc2626', fontWeight:500 }}>⚠️ {error}</div> : <div style={{ flex:1 }} />}
-              <button onClick={onClose} disabled={busy} style={{ padding:'0.6rem 1.2rem', fontSize:'0.82rem', fontWeight:600, border:'1px solid #e2e8f0', borderRadius:'8px', cursor:busy?'not-allowed':'pointer', background:'#fff', color:'#64748b', opacity:busy?0.6:1 }}>Cancel</button>
-              <button onClick={handleSubmit} disabled={busy||!selectedDate||selectedSlots.length===0} style={{ padding:'0.6rem 1.4rem', fontSize:'0.82rem', fontWeight:700, border:'none', borderRadius:'8px', cursor:busy||!selectedDate||selectedSlots.length===0?'not-allowed':'pointer', background:busy||!selectedDate||selectedSlots.length===0?'#e2e8f0':'linear-gradient(135deg, #1a1a2e, #4f46e5)', color:busy||!selectedDate||selectedSlots.length===0?'#94a3b8':'#fff', transition:'all 0.15s', minWidth:'140px' }}>
-                {busy?'Blocking...':selectedSlots.length>0?`🚫 Block ${selectedSlots.length} Slot${selectedSlots.length>1?'s':''}` :'Block Slots'}
-              </button>
+          )}
+
+          {/* SLOTS STEP */}
+          {step === 'slots' && (
+            <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+              {/* Quick select bar */}
+              <div style={{ padding:'0.75rem 1.25rem', borderBottom:'1px solid #f0f0f0', display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap', background:'#fafafa', flexShrink:0 }}>
+                <span style={{ fontSize:'0.72rem', fontWeight:600, color:'#64748b' }}>Quick:</span>
+                {[{label:'🌅 Morning',range:'morning'},{label:'☀️ Afternoon',range:'afternoon'},{label:'📅 Full Day',range:'full'}].map(({label,range}) => (
+                  <button key={range} onClick={() => selectRange(range)}
+                    style={{ padding:'0.3rem 0.65rem', fontSize:'0.72rem', fontWeight:600, border:'1px solid #e2e8f0', borderRadius:20, cursor:'pointer', background:'#fff', color:'#374151' }}>
+                    {label}
+                  </button>
+                ))}
+                {selectedSlots.length > 0 && (
+                  <button onClick={() => setSelectedSlots([])}
+                    style={{ padding:'0.3rem 0.65rem', fontSize:'0.72rem', fontWeight:600, border:'1px solid #fca5a5', borderRadius:20, cursor:'pointer', background:'#fff5f5', color:'#dc2626', marginLeft:'auto' }}>
+                    ✕ Clear
+                  </button>
+                )}
+              </div>
+
+              {/* Time slots grid */}
+              <div style={{ padding:'0.875rem 1.25rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+                {Object.entries(slotsByHour).map(([hour,slots]) => (
+                  <div key={hour}>
+                    <div style={{ fontSize:'0.68rem', fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'0.35rem' }}>{formatHour(hour)}</div>
+                    <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'0.35rem' }}>
+                      {slots.map(slot => {
+                        const isSel = selectedSlots.includes(slot);
+                        return (
+                          <button key={slot} onClick={() => toggleSlot(slot)} style={{
+                            padding:'0.5rem 0.25rem', fontSize:'0.78rem', fontWeight:isSel?700:500,
+                            border:`2px solid ${isSel?'#4f46e5':'#e2e8f0'}`, borderRadius:8,
+                            cursor:'pointer', transition:'all 0.1s',
+                            background:isSel?'linear-gradient(135deg,#4f46e5,#7c3aed)':'#fff',
+                            color:isSel?'#fff':'#374151',
+                          }}>{slot}</button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{
+          padding:'0.875rem 1.25rem',
+          borderTop:'1px solid #f0f0f0',
+          background:'#fafafa',
+          flexShrink:0,
+          display:'flex', flexDirection:'column', gap:'0.5rem',
+        }}>
+          {error && (
+            <div style={{ padding:'0.5rem 0.75rem', background:'#fff5f5', border:'1px solid #fca5a5', borderRadius:8, fontSize:'0.78rem', color:'#dc2626', fontWeight:500 }}>
+              ⚠️ {error}
+            </div>
+          )}
+          {selectedDate && selectedSlots.length > 0 && (
+            <div style={{ fontSize:'0.75rem', color:'#64748b', textAlign:'center' }}>
+              📅 {selectedDateLabel} · {selectedSlots.length === ALL_SLOTS.length ? '🚫 Full day' : `${selectedSlots.length} slot${selectedSlots.length>1?'s':''}`}
+            </div>
+          )}
+          <div style={{ display:'flex', gap:'0.625rem' }}>
+            <button onClick={onClose} disabled={busy}
+              style={{ flex:1, padding:'0.75rem', fontSize:'0.85rem', fontWeight:600, border:'1px solid #e2e8f0', borderRadius:10, cursor:busy?'not-allowed':'pointer', background:'#fff', color:'#64748b', opacity:busy?0.6:1 }}>
+              Cancel
+            </button>
+            <button onClick={handleSubmit}
+              disabled={busy || !selectedDate || selectedSlots.length===0 || !reason.trim()}
+              style={{
+                flex:2, padding:'0.75rem', fontSize:'0.85rem', fontWeight:700, border:'none', borderRadius:10,
+                cursor:busy||!selectedDate||selectedSlots.length===0||!reason.trim()?'not-allowed':'pointer',
+                background:busy||!selectedDate||selectedSlots.length===0||!reason.trim()?'#e2e8f0':'linear-gradient(135deg,#1a1a2e,#4f46e5)',
+                color:busy||!selectedDate||selectedSlots.length===0||!reason.trim()?'#94a3b8':'#fff',
+                transition:'all 0.15s',
+              }}>
+              {busy ? 'Blocking…' : selectedSlots.length > 0 ? `🚫 Block ${selectedSlots.length} Slot${selectedSlots.length>1?'s':''}` : 'Block Slots'}
+            </button>
           </div>
         </div>
       </div>
