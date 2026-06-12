@@ -227,6 +227,42 @@ const PaymentSuccess = () => {
 
     const final = data || {};
     setDetails(final);
+    
+    // ────────────────────────────────────────────────────────────────────────────
+    // ── REDEEM LOYALTY POINTS HERE (ON PAYMENT SUCCESS PAGE) ──────────────────
+    // ────────────────────────────────────────────────────────────────────────────
+    if (final.loyaltyPointsRedeemed && final.loyaltyPointsRedeemed > 0) {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) throw new Error('No auth token');
+        
+        console.log('[PAYMENT SUCCESS] Redeeming loyalty points:', final.loyaltyPointsRedeemed);
+        
+        const redeemRes = await fetch(`${API_BASE_URL}/loyalty/redeem-on-payment`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            appointmentId: final.appointmentId,
+            pointsToRedeem: final.loyaltyPointsRedeemed
+          })
+        });
+
+        const redeemData = await redeemRes.json();
+        
+        if (redeemRes.ok && redeemData.success) {
+          console.log('[PAYMENT SUCCESS] ✅ Points redeemed successfully!', redeemData.data);
+        } else {
+          console.error('[PAYMENT SUCCESS] Points redemption failed:', redeemData.error);
+        }
+      } catch (err) {
+        console.error('[PAYMENT SUCCESS] Loyalty redemption error:', err);
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+    
     setLoading(false);
 
     // ── Fire verify in background ─────────────────────────────────────────────────
@@ -271,6 +307,10 @@ const PaymentSuccess = () => {
         totalDuration:    appt.totalDuration
                             || (appt.services || []).reduce((sum, s) => sum + (s?.durationMinutes || 0), 0)
                             || 60,
+        loyaltyPointsRedeemed:  appt.loyaltyPointsRedeemed || 0,
+        loyaltyBalanceDiscount: parseFloat(appt.loyaltyBalanceDiscount?.toString() || 0),
+        discountCode:           appt.discountCode || null,
+        discountAmount:         parseFloat(appt.discountAmount?.toString() || 0),
       };
     } catch {
       return null;
@@ -405,13 +445,31 @@ const PaymentSuccess = () => {
 
           <div className="cp-pricing">
             <div className="cp-pricing-row">
-              <span className="cp-pricing-label">Booking Fee Paid</span>
+              <span className="cp-pricing-label">Total Service Price</span>
+              <span style={{ fontSize:'0.88rem', color:'#6b3528', fontWeight:600 }}>R{Number(d.totalPrice || 0).toFixed(2)}</span>
+            </div>
+            <div className="cp-pricing-row">
+              <span className="cp-pricing-label">Deposit Paid</span>
               <span className="cp-pricing-paid">R100.00 ✓</span>
             </div>
-            {Number(d.totalPrice) > 100 && (
+            {Number(d.loyaltyBalanceDiscount) > 0 && (
               <div className="cp-pricing-row">
-                <span className="cp-pricing-label">Balance Due at Salon</span>
-                <span className="cp-pricing-balance">R{(Number(d.totalPrice) - 100).toFixed(2)}</span>
+                <span className="cp-pricing-label" style={{ color:'#15803d' }}>⭐ Loyalty Discount ({d.loyaltyPointsRedeemed} pts)</span>
+                <span className="cp-pricing-paid" style={{ color:'#15803d' }}>−R{Number(d.loyaltyBalanceDiscount).toFixed(2)} ✓</span>
+              </div>
+            )}
+            {d.discountCode && Number(d.discountAmount) > 0 && (
+              <div className="cp-pricing-row">
+                <span className="cp-pricing-label" style={{ color:'#15803d' }}>🎟️ Discount ({d.discountCode})</span>
+                <span className="cp-pricing-paid" style={{ color:'#15803d' }}>−R{Number(d.discountAmount).toFixed(2)} ✓</span>
+              </div>
+            )}
+            {Number(d.totalPrice) > 0 && (
+              <div className="cp-pricing-row" style={{ borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:'0.5rem', marginTop:'0.25rem' }}>
+                <span className="cp-pricing-label"><strong>Balance Due at Salon</strong></span>
+                <span className="cp-pricing-balance">
+                  <strong>R{Math.max(0, Number(d.totalPrice) - 100 - Number(d.loyaltyBalanceDiscount || 0) - Number(d.discountAmount || 0)).toFixed(2)}</strong>
+                </span>
               </div>
             )}
           </div>

@@ -477,6 +477,142 @@
   color: #5c2e1e;
 }
 
+/* =============================================
+   Payment Breakdown (loyalty + discount)
+   ============================================= */
+.pp-breakdown {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 232, 214, 0.18);
+}
+.pp-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 0.65rem 0.9rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  color: rgba(255, 232, 214, 0.85);
+  border-bottom: 1px solid rgba(255, 232, 214, 0.1);
+}
+.pp-breakdown-row:last-child { border-bottom: none; }
+.pp-green { color: #7dca9e; font-weight: 700; }
+.pp-breakdown-total {
+  background: rgba(255, 232, 214, 0.08);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #ffe8d6;
+}
+.pp-saving {
+  font-size: 0.72rem;
+  color: #7dca9e;
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+/* =============================================
+   Discount Code (right panel)
+   ============================================= */
+.pp-discount-row {
+  display: flex;
+  gap: 0.5rem;
+}
+.pp-discount-row .pp-input {
+  flex: 1;
+  letter-spacing: 0.05em;
+  margin-bottom: 0;
+}
+.pp-discount-btn {
+  padding: 0 1.25rem;
+  background: linear-gradient(135deg, #6b3528, #a0502e);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 0.88rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+.pp-discount-btn:disabled { background: #e0ccc4; color: #b08070; cursor: not-allowed; }
+.pp-discount-btn:hover:not(:disabled) { opacity: 0.88; }
+.pp-discount-applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #f0fdf4;
+  border: 1.5px solid #86efac;
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #15803d;
+}
+.pp-discount-applied button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  font-size: 0.9rem;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* =============================================
+   Loyalty Points Toggle (right panel)
+   ============================================= */
+.pp-loyalty-toggle {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  cursor: pointer;
+  background: #fafafa;
+  transition: all 0.15s;
+  user-select: none;
+}
+.pp-loyalty-toggle.active { border-color: #10b981; background: #f0fdf4; }
+.pp-toggle-switch {
+  width: 46px; height: 26px; border-radius: 50px;
+  background: #cbd5e1; position: relative; flex-shrink: 0;
+  transition: background 0.2s;
+}
+.pp-toggle-switch.on { background: #10b981; }
+.pp-toggle-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  transition: left 0.2s;
+}
+.pp-toggle-switch.on .pp-toggle-thumb { left: 23px; }
+.pp-loyalty-info { flex: 1; }
+.pp-loyalty-title {
+  margin: 0; font-family: 'DM Sans', sans-serif;
+  font-size: 0.88rem; font-weight: 700; color: #3d1f15;
+}
+.pp-loyalty-sub {
+  margin: 0.15rem 0 0; font-family: 'DM Sans', sans-serif;
+  font-size: 0.75rem; color: #64748b;
+}
+.pp-loyalty-tip {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.8rem; color: #b08070;
+  text-align: center; margin: 0 0 1.2rem;
+}
+
+/* ---- Secure payment icon block ---- */
+.pp-secure-icon {
+  font-size: 2.2rem;
+  margin-bottom: 0.75rem;
+}
+
 /* ---- Mobile ---- */
 @media (max-width: 520px) {
   .pp-form-card {

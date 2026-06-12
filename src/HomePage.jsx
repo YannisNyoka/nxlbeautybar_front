@@ -308,7 +308,6 @@ export default function HomePage() {
             <button onClick={() => scrollTo('hp-our-work')}>Gallery</button>
             <button onClick={() => scrollTo('hp-services')}>Services</button>
             <Link to="/shop" className="hp-nav-shop">🛍️ Shop</Link>
-            <Link to="/subscriptions" className="hp-nav-shop"> Plans</Link>
             <button onClick={() => scrollTo('hp-contact')}>Contact</button>
           </div>
 

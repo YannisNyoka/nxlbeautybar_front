@@ -149,7 +149,7 @@ export default function ReferralWidget() {
             <div className="rw-step-num">3</div>
             <div>
               <p className="rw-step-title">You earn points</p>
-              <p className="rw-step-desc"><strong>{config.signupBonus} pts</strong> when they sign up + <strong>{config.referrerPoints} pts</strong> when they book</p>
+              <p className="rw-step-desc">Earn <strong>{config.referrerPoints} pts</strong> when they complete their first booking</p>
             </div>
           </div>
         </div>

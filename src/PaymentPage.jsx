@@ -3,13 +3,30 @@ import './PaymentPage.css';
 import { useAuth } from './AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+const DEPOSIT = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
+
+const LOYALTY_CONFIG = {
+  minRedemption: 100,
+  pointValue: 0.10,
+  maxRedemptionPct: 50,
+};
+
 const PaymentPage = () => {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(false);
+  const [loading,  setLoading]  = useState(false);
   const [apiError, setApiError] = useState('');
+
+  // ── Loyalty + discount state ─────────────────────────────────────────────
+  const [loyaltyData,    setLoyaltyData]    = useState(null); // from /loyalty/booking-preview
+  const [loyaltyLoading, setLoyaltyLoading] = useState(true);
+  const [usePoints,      setUsePoints]      = useState(false);
+  const [discountInput,  setDiscountInput]  = useState('');
+  const [discountResult, setDiscountResult] = useState(null);
+  const [discountError,  setDiscountError]  = useState('');
+  const [discountBusy,   setDiscountBusy]   = useState(false);
 
   // Guard: redirect if no appointmentId
   useEffect(() => {
@@ -18,7 +35,7 @@ const PaymentPage = () => {
     }
   }, [location.state, navigate]);
 
-  // Booking info from navigation state (set by BookingSummary via handleBookingConfirmed)
+  // Booking info from navigation state
   const name             = location.state?.name             || (user ? `${user.firstName} ${user.lastName}` : '');
   const email            = user?.email                      || '';
   const dateTime         = location.state?.dateTime         || '';
@@ -30,7 +47,6 @@ const PaymentPage = () => {
   const appointmentDate  = location.state?.appointmentDate  ?? '';
   const appointmentTime  = location.state?.appointmentTime  ?? '';
   const contactNumber    = location.state?.contactNumber    ?? '';
-  const BOOKING_FEE      = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
 
   const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
   const API_ROOT = RAW_API_BASE
@@ -38,13 +54,12 @@ const PaymentPage = () => {
     : '/api';
 
   const refreshAccessToken = async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) return null;
+    const rt = localStorage.getItem('refreshToken');
+    if (!rt) return null;
     try {
       const res = await fetch(`${API_ROOT}/auth/refresh-token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken: rt }),
       });
       const result = await res.json();
       if (result.success && result.token) {
@@ -73,7 +88,64 @@ const PaymentPage = () => {
     return res;
   };
 
-  // Submit: POST /payments with appointmentId → server creates Yoco checkout → redirect
+  // ── Load loyalty preview for this appointment ────────────────────────────
+  useEffect(() => {
+    if (!appointmentId) return;
+    (async () => {
+      try {
+        const res = await fetchWithAuth(`${API_ROOT}/loyalty/booking-preview/${appointmentId}`);
+        if (!res.ok) { 
+          console.log('[LOYALTY] Endpoint returned', res.status, '— hiding loyalty section');
+          setLoyaltyData(null); 
+          return; 
+        }
+        const data = await res.json();
+        console.log('[LOYALTY] Preview loaded:', data.data);
+        setLoyaltyData(data.success ? data.data : null);
+      } catch (err) {
+        console.error('[LOYALTY] Load error:', err);
+        setLoyaltyData(null);
+      } finally {
+        setLoyaltyLoading(false);
+      }
+    })();
+  }, [appointmentId]);
+
+  // ── Apply discount code ───────────────────────────────────────────────────
+  const applyDiscount = async () => {
+    if (!discountInput.trim()) return;
+    setDiscountBusy(true); setDiscountError(''); setDiscountResult(null);
+    try {
+      const res = await fetchWithAuth(`${API_ROOT}/discount-codes/validate-booking`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: discountInput.trim().toUpperCase(), appointmentId }),
+      });
+      if (!res.ok) {
+        setDiscountError(res.status === 404 ? 'Discount codes are not available right now.' : 'Invalid or expired code.');
+        return;
+      }
+      const data = await res.json();
+      if (data.success) setDiscountResult(data.data);
+      else setDiscountError(data.error || 'Invalid or expired code.');
+    } catch {
+      setDiscountError('Could not validate code. Try again.');
+    } finally {
+      setDiscountBusy(false);
+    }
+  };
+
+  const removeDiscount = () => {
+    setDiscountResult(null); setDiscountInput(''); setDiscountError('');
+  };
+
+  // ── Calculated breakdown ───────────────────────────────────────────────────
+  const balance    = Math.max(0, Number(totalPrice || 0) - DEPOSIT);
+  const loyaltyOff = usePoints && loyaltyData?.canRedeem ? (loyaltyData.discountAmount || 0) : 0;
+  const codeOff    = discountResult ? discountResult.discountAmount : 0;
+  const balanceDue = Math.max(0, balance - loyaltyOff - codeOff);
+  const totalSaved = loyaltyOff + codeOff;
+
+  // ── Submit: POST /payments → Yoco checkout ────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -91,26 +163,38 @@ const PaymentPage = () => {
         return;
       }
 
-      // Save booking details so PaymentSuccess can send confirmation email
+      const pts  = usePoints && loyaltyData?.canRedeem ? loyaltyData.maxPointsUsable : 0;
+      const code = discountResult?.code || null;
+
+      // Save booking details + loyalty/discount info so PaymentSuccess can show them
       localStorage.setItem('pendingBooking', JSON.stringify({
-        name, email, dateTime,
+        appointmentId, name, email, dateTime,
         appointmentDate, appointmentTime,
         selectedServices, selectedEmployee,
         totalPrice, totalDuration, contactNumber,
+        loyaltyPointsRedeemed:   pts,
+        loyaltyBalanceDiscount:  pts ? parseFloat((pts * (loyaltyData?.pointValue || 0.10)).toFixed(2)) : 0,
+        discountCode:            code,
+        discountAmount:          discountResult?.discountAmount || 0,
       }));
 
-      // POST /payments — server looks up appointment and creates Yoco checkout
+      // POST /payments — pass loyalty + discount selections
+      // Points will be redeemed by POST /payments/verify after Yoco confirms payment
       const res = await fetchWithAuth(`${API_ROOT}/payments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId }),
+        body: JSON.stringify({
+          appointmentId,
+          loyaltyPointsToRedeem: pts || undefined,
+          discountCode:          code || undefined,
+        }),
       });
 
       const result = await res.json();
 
       if (result.success && result.checkoutUrl) {
         localStorage.setItem('yocoCheckoutId', result.checkoutId || '');
-        // Redirect to Yoco hosted page — keep loading so button stays in "Redirecting..."
+        console.log('[PAYMENT] Redirecting to Yoco for payment...');
         window.location.href = result.checkoutUrl;
       } else {
         setApiError(result.error || 'Could not initiate payment. Please try again.');
@@ -140,8 +224,8 @@ const PaymentPage = () => {
               <h2>NXL Beauty Bar</h2>
             </div>
             <div className="pp-summary-amount">
-              <span className="pp-amount-label">Booking Fee (non-refundable)</span>
-              <span className="pp-amount-value">R{BOOKING_FEE.toFixed(2)}</span>
+              <span className="pp-amount-label">Deposit (Pay Now)</span>
+              <span className="pp-amount-value">R{DEPOSIT.toFixed(2)}</span>
             </div>
             <div className="pp-divider" />
             <div className="pp-summary-details">
@@ -181,19 +265,49 @@ const PaymentPage = () => {
                   </div>
                 </div>
               )}
-              {totalPrice > 0 && (
-                <div className="pp-detail-row">
-                  <span className="pp-detail-icon">💰</span>
-                  <div>
-                    <div className="pp-detail-label">Total Service Price</div>
-                    <div className="pp-detail-value">R{totalPrice}</div>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="pp-divider" />
+
+            {/* ── Payment breakdown ── */}
+            <div className="pp-breakdown">
+              <div className="pp-breakdown-row">
+                <span>Service Total</span>
+                <span>R{Number(totalPrice || 0).toFixed(2)}</span>
+              </div>
+              <div className="pp-breakdown-row">
+                <span>Deposit (pay now)</span>
+                <span className="pp-green">R{DEPOSIT.toFixed(2)}</span>
+              </div>
+              {codeOff > 0 && (
+                <div className="pp-breakdown-row">
+                  <span>🎟️ Code: {discountResult.code}</span>
+                  <span className="pp-green">− R{codeOff.toFixed(2)}</span>
+                </div>
+              )}
+              {loyaltyOff > 0 && (
+                <div className="pp-breakdown-row">
+                  <span>⭐ Using {loyaltyData.maxPointsUsable} pts</span>
+                  <span className="pp-green">− R{loyaltyOff.toFixed(2)}</span>
+                </div>
+              )}
+              {loyaltyOff > 0 && (
+                <div className="pp-breakdown-row" style={{ fontSize: '0.85rem', opacity: 0.7 }}>
+                  <span>Remaining pts after</span>
+                  <span>{(loyaltyData.currentPoints - loyaltyData.maxPointsUsable).toLocaleString()}</span>
+                </div>
+              )}
+              <div className="pp-breakdown-row pp-breakdown-total">
+                <div>
+                  <span>Balance due at salon</span>
+                  {totalSaved > 0 && <div className="pp-saving">You save R{totalSaved.toFixed(2)}! 🎉</div>}
+                </div>
+                <span>R{balanceDue.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="pp-divider" />
             <div className="pp-summary-note">
-              The R{BOOKING_FEE} booking fee secures your appointment.
+              The R{DEPOSIT.toFixed(2)} deposit secures your appointment and is paid online now.
               The remaining balance is payable at the salon.
             </div>
           </div>
@@ -202,11 +316,67 @@ const PaymentPage = () => {
           <div className="pp-form-card">
             <h3 className="pp-form-title">Payment Details</h3>
 
+            {/* ── Discount code ── */}
+            <div className="pp-field" style={{ marginBottom: '1.2rem' }}>
+              <label className="pp-label">🎟️ Have a discount code?</label>
+              {discountResult ? (
+                <div className="pp-discount-applied">
+                  <span>✅ {discountResult.code} — R{discountResult.discountAmount.toFixed(2)} off your balance</span>
+                  <button type="button" onClick={removeDiscount}>✕</button>
+                </div>
+              ) : (
+                <>
+                  <div className="pp-discount-row">
+                    <input
+                      type="text"
+                      className={`pp-input ${discountError ? 'pp-input-error' : ''}`}
+                      placeholder="Enter code e.g. REFAB1234"
+                      value={discountInput}
+                      onChange={e => { setDiscountInput(e.target.value.toUpperCase()); setDiscountError(''); }}
+                      onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), applyDiscount())}
+                      style={{ marginBottom: 0 }}
+                    />
+                    <button
+                      type="button"
+                      className="pp-discount-btn"
+                      onClick={applyDiscount}
+                      disabled={discountBusy || !discountInput.trim()}>
+                      {discountBusy ? '…' : 'Apply'}
+                    </button>
+                  </div>
+                  {discountError && <p className="pp-field-error">⚠️ {discountError}</p>}
+                </>
+              )}
+            </div>
+
+            {/* ── Loyalty points toggle ── */}
+            {!loyaltyLoading && loyaltyData?.canRedeem && loyaltyData.maxPointsUsable > 0 && (
+              <div className="pp-field" style={{ marginBottom: '1.2rem' }}>
+                <label className="pp-label">⭐ Loyalty Points</label>
+                <div className={`pp-loyalty-toggle ${usePoints ? 'active' : ''}`} onClick={() => {
+                  setUsePoints(u => !u);
+                  console.log('[LOYALTY] Toggled usePoints to', !usePoints, '— discountAmount:', loyaltyData.discountAmount);
+                }}>
+                  <div className={`pp-toggle-switch ${usePoints ? 'on' : ''}`}>
+                    <div className="pp-toggle-thumb" />
+                  </div>
+                  <div className="pp-loyalty-info">
+                    <p className="pp-loyalty-title">
+                      Use {loyaltyData.maxPointsUsable} pts — save R{loyaltyData.discountAmount.toFixed(2)} off balance
+                    </p>
+                    <p className="pp-loyalty-sub">
+                      You have {loyaltyData.currentPoints.toLocaleString()} pts · 100 pts = R10
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!loyaltyLoading && !loyaltyData?.canRedeem && (
+              <p className="pp-loyalty-tip">💡 Earn 1 pt per R1 spent on every booking.</p>
+            )}
+
             <div className="pp-methods">
-              <div
-                className="pp-method-btn pp-method-active"
-                style={{ cursor: 'default', flex: 1, justifyContent: 'center' }}
-              >
+              <div className="pp-method-btn pp-method-active" style={{ cursor: 'default', flex: 1, justifyContent: 'center' }}>
                 <span>💳</span> Pay with Yoco
               </div>
             </div>
@@ -214,10 +384,8 @@ const PaymentPage = () => {
             <form onSubmit={handleSubmit} className="pp-form">
 
               <div className="pp-paypal-notice">
-                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🇿🇦</div>
-                <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>
-                  Secure Payment via Yoco
-                </p>
+                <div className="pp-secure-icon">🔒</div>
+                <p style={{ fontWeight: 600, marginBottom: '0.4rem' }}>Secure Payment via Yoco</p>
                 <p style={{ fontSize: '0.85rem', opacity: 0.75 }}>
                   Clicking Pay below will redirect you to Yoco's secure hosted
                   payment page. Your card details are entered directly on Yoco —
@@ -246,18 +414,16 @@ const PaymentPage = () => {
 
               <button type="submit" className="pp-submit-btn" disabled={loading}>
                 {loading ? (
-                  <span className="pp-spinner-wrap">
-                    <span className="pp-spinner" /> Redirecting to Yoco...
-                  </span>
+                  <span className="pp-spinner-wrap"><span className="pp-spinner" /> Redirecting to Yoco...</span>
                 ) : (
-                  `Pay R${BOOKING_FEE.toFixed(2)} to Secure Booking`
+                  `Pay R${DEPOSIT.toFixed(2)} Deposit →`
                 )}
               </button>
 
               <p className="pp-terms">
                 By completing this payment you agree to our{' '}
                 <a href="#">Terms & Conditions</a>.
-                This booking fee is non-refundable.
+                This deposit is non-refundable.
               </p>
             </form>
           </div>

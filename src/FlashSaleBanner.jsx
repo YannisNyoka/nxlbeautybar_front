@@ -4,7 +4,7 @@ import './FlashSaleBanner.css';
 
 // ── Config — edit these to change the active promo ────────────────────────
 const PROMO = {
-  enabled:    true,
+  enabled:    false,
   code:       'BEAUTY10',
   message:    'Use code BEAUTY10 for 10% off your first order',
   cta:        'Shop Now',
@@ -12,7 +12,7 @@ const PROMO = {
   bgFrom:     '#3d1f15',
   bgTo:       '#6b3528',
   accent:     '#c9a96e',
-  storageKey: 'nxl_flash_dismissed_v1', // bump version to force re-show
+  storageKey: 'nxl_flash_dismissed_v1',
 };
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ export default function FlashSaleBanner() {
   return (
     <div className="fsb-root" style={{ background: `linear-gradient(135deg, ${PROMO.bgFrom}, ${PROMO.bgTo})` }}>
       <div className="fsb-inner">
-        <span className="fsb-icon"></span>
+        <span className="fsb-icon">✨</span>
         <p className="fsb-message">{PROMO.message}</p>
         <button className="fsb-code" onClick={copyCode} title="Click to copy"
           style={{ borderColor: PROMO.accent, color: PROMO.accent }}>

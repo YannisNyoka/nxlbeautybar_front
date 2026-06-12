@@ -5,7 +5,6 @@ import './UserProfile.css';
 import LoyaltyWidget from './LoyaltyWidget';
 import ReferralWidget from './ReferralWidget';
 import NotificationBell from './NotificationBell';
-import SubscriptionStatus from './SubscriptionStatus';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
@@ -101,6 +100,7 @@ export default function UserProfile() {
 
   // ── Edit profile state ──────────────────────────────────────────────────
   const [activeTab,      setActiveTab]      = useState('appointments'); // 'appointments' | 'profile' | 'password'
+  const [loyaltyRefreshKey, setLoyaltyRefreshKey] = useState(0); // Force LoyaltyWidget to remount
   const [profileForm,    setProfileForm]    = useState({ firstName: '', lastName: '', email: '' });
   const [profileSaving,  setProfileSaving]  = useState(false);
   const [profileMsg,     setProfileMsg]     = useState({ type: '', text: '' });
@@ -170,6 +170,74 @@ export default function UserProfile() {
     })
     .sort((a, b) => getApptDateTime(b) - getApptDateTime(a));
 
+  // ── Loyalty redemption for bookings ─────────────────────────────────────
+  const [loyaltyPreview,   setLoyaltyPreview]   = useState(null); // { apptId, data }
+  const [loyaltyRedeeming, setLoyaltyRedeeming] = useState(false);
+  const [usePoints,        setUsePoints]        = useState(false);
+  const [discountInput,    setDiscountInput]    = useState('');
+  const [discountResult,   setDiscountResult]   = useState(null);
+  const [discountError,    setDiscountError]    = useState('');
+  const [discountLoading,  setDiscountLoading]  = useState(false);
+
+  const validateBookingDiscount = async (code, apptId) => {
+    if (!code?.trim()) return;
+    setDiscountLoading(true); setDiscountError(''); setDiscountResult(null);
+    try {
+      const data = await apiFetch('/discount-codes/validate-booking', {
+        method: 'POST',
+        body: JSON.stringify({ code: code.trim().toUpperCase(), appointmentId: apptId }),
+      });
+      if (data.success) setDiscountResult(data.data);
+      else setDiscountError(data.error || 'Invalid code.');
+    } catch (e) { setDiscountError(e.message || 'Could not validate code.'); }
+    finally { setDiscountLoading(false); }
+  };
+
+  const loadLoyaltyPreview = async (appt) => {
+    try {
+      const data = await apiFetch(`/loyalty/booking-preview/${appt._id}`);
+      // Always show the modal — even if no points, customer may have a discount code
+      setLoyaltyPreview({
+        apptId: appt._id,
+        data: data.success ? data.data : {
+          currentPoints:   0,
+          maxPointsUsable: 0,
+          discountAmount:  0,
+          depositAmount:   100,
+          totalPrice:      parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0),
+          balance:         Math.max(0, parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0) - 100),
+          newBalance:      Math.max(0, parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0) - 100),
+          pointValue:      0.10,
+          minRedemption:   100,
+          canRedeem:       false,
+        },
+      });
+      setUsePoints(false);
+      setDiscountInput('');
+      setDiscountResult(null);
+      setDiscountError('');
+    } catch {
+      // Even on error — show the modal so discount codes still work
+      setLoyaltyPreview({
+        apptId: appt._id,
+        data: {
+          currentPoints:   0,
+          maxPointsUsable: 0,
+          discountAmount:  0,
+          depositAmount:   100,
+          totalPrice:      parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0),
+          balance:         Math.max(0, parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0) - 100),
+          newBalance:      Math.max(0, parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0) - 100),
+          pointValue:      0.10,
+          minRedemption:   100,
+          canRedeem:       false,
+        },
+      });
+      setUsePoints(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
   // ── Pay Now ─────────────────────────────────────────────────────────────
   const handlePayNow = async (appt) => {
     setPayingId(appt._id);
@@ -183,11 +251,23 @@ export default function UserProfile() {
           appointmentId: appt._id,
         }),
       });
-      if (!checkData.available) { setSlotTakenId(appt._id); return; }
+      if (!checkData.available) { setSlotTakenId(appt._id); setPayingId(null); return; }
 
+      // Check if client has points to redeem before going to Yoco
+      await loadLoyaltyPreview(appt);
+    } catch (e) {
+      setApptError(e.message || 'Payment failed. Please try again.');
+    } finally {
+      setPayingId(null);
+    }
+  };
+
+  const proceedToPayment = async (appt, pointsToRedeem = 0, appliedDiscountCode = null) => {
+    setLoyaltyRedeeming(true);
+    try {
       const payData = await apiFetch('/payments', {
         method: 'POST',
-        body: JSON.stringify({ appointmentId: appt._id }),
+        body: JSON.stringify({ appointmentId: appt._id, loyaltyPointsToRedeem: pointsToRedeem || undefined }),
       });
       if (payData.checkoutUrl) {
         // ── Save booking details BEFORE redirect — PaymentSuccess reads this ──
@@ -218,15 +298,19 @@ export default function UserProfile() {
           || 60;
 
         localStorage.setItem('pendingBooking', JSON.stringify({
-          appointmentId:    String(appt._id),
-          name:             `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() || 'Client',
-          email:            userInfo.email || '',
-          appointmentDate:  appt.date || '',
-          appointmentTime:  appt.time || '',
-          selectedServices: resolvedServiceNames,
-          selectedEmployee: employeeName,
-          totalPrice:       parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0),
+          appointmentId:        String(appt._id),
+          name:                 `${userInfo.firstName || ''} ${userInfo.lastName || ''}`.trim() || 'Client',
+          email:                userInfo.email || '',
+          appointmentDate:      appt.date || '',
+          appointmentTime:      appt.time || '',
+          selectedServices:     resolvedServiceNames,
+          selectedEmployee:     employeeName,
+          totalPrice:           parseFloat(appt.totalPrice?.$numberDecimal || appt.totalPrice || 0),
           totalDuration,
+          loyaltyPointsRedeemed: pointsToRedeem || 0,
+          loyaltyBalanceDiscount: pointsToRedeem ? parseFloat((pointsToRedeem * 0.10).toFixed(2)) : 0,
+          discountCode:          appliedDiscountCode || null,
+          discountAmount:        appliedDiscountCode && discountResult ? discountResult.discountAmount : 0,
         }));
         // ──────────────────────────────────────────────────────────────────────
         window.location.href = payData.checkoutUrl;
@@ -234,7 +318,11 @@ export default function UserProfile() {
     } catch (e) {
       setApptError(e.message || 'Payment failed. Please try again.');
     } finally {
-      setPayingId(null);
+      setLoyaltyRedeeming(false);
+      setLoyaltyPreview(null);
+      setDiscountInput('');
+      setDiscountResult(null);
+      setDiscountError('');
     }
   };
 
@@ -494,13 +582,15 @@ export default function UserProfile() {
           { key: 'appointments', label: '📅 My Bookings' },
           { key: 'loyalty',      label: '⭐ Loyalty Points' },
           { key: 'referral',     label: '🎁 Refer Friends' },
-          { key: 'subscription', label: '💅 My Plan' },
           { key: 'profile',      label: '👤 Edit Profile' },
           { key: 'password',     label: '🔒 Password' },
         ].map(t => (
           <button key={t.key}
             className={`nxl-up-tab ${activeTab === t.key ? 'active' : ''}`}
-            onClick={() => setActiveTab(t.key)}>
+            onClick={() => {
+              setActiveTab(t.key);
+              if (t.key === 'loyalty') setLoyaltyRefreshKey(k => k + 1);
+            }}>
             {t.label}
           </button>
         ))}
@@ -574,14 +664,6 @@ export default function UserProfile() {
           </>
         )}
 
-        {/* ── SUBSCRIPTION TAB ────────────────────────────────────────── */}
-        {activeTab === 'subscription' && (
-          <div className="nxl-up-section">
-            <h2 className="nxl-up-section-title">💅 My Plan</h2>
-            <SubscriptionStatus />
-          </div>
-        )}
-
         {/* ── REFERRAL TAB ────────────────────────────────────────────── */}
         {activeTab === 'referral' && (
           <div className="nxl-up-section">
@@ -594,7 +676,7 @@ export default function UserProfile() {
         {activeTab === 'loyalty' && (
           <div className="nxl-up-section">
             <h2 className="nxl-up-section-title">⭐ Loyalty Points</h2>
-            <LoyaltyWidget />
+            <LoyaltyWidget key={loyaltyRefreshKey} activeTab={activeTab} />
           </div>
         )}
 
@@ -758,6 +840,159 @@ export default function UserProfile() {
           </div>
         </div>
       )}
+
+      {/* ── Pre-Payment Modal — always shown before Yoco ─────────────────── */}
+      {loyaltyPreview && (() => {
+        const d              = loyaltyPreview.data;
+        const loyaltyOff     = usePoints ? (d.discountAmount || 0) : 0;
+        const codeOff        = discountResult ? discountResult.discountAmount : 0;
+        const balanceDue     = Math.max(0, (d.balance || 0) - loyaltyOff - codeOff);
+        const totalSaving    = loyaltyOff + codeOff;
+
+        return (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', backdropFilter:'blur(5px)', zIndex:1000, display:'flex', alignItems:'flex-end', justifyContent:'center' }}
+            onClick={e => e.target === e.currentTarget && setLoyaltyPreview(null)}>
+
+            <div style={{ background:'#fff', borderRadius:'20px 20px 0 0', width:'100%', maxWidth:'500px', maxHeight:'90vh', overflowY:'auto', display:'flex', flexDirection:'column', boxShadow:'0 -8px 40px rgba(0,0,0,0.25)' }}>
+
+              {/* ── Header ── */}
+              <div style={{ padding:'0.75rem 1.5rem 0', display:'flex', justifyContent:'center' }}>
+                <div style={{ width:40, height:4, borderRadius:2, background:'#e0ccc4' }} />
+              </div>
+              <div style={{ padding:'1rem 1.5rem 0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <h3 style={{ margin:0, fontFamily:"'Cormorant Garamond', serif", fontSize:'1.25rem', fontWeight:700, color:'#3d1f15' }}>
+                  Confirm & Pay Deposit
+                </h3>
+                <button onClick={() => { setLoyaltyPreview(null); setUsePoints(false); setDiscountInput(''); setDiscountResult(null); setDiscountError(''); }}
+                  style={{ background:'#f1f5f9', border:'none', width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:'0.8rem', color:'#64748b', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+              </div>
+
+              <div style={{ padding:'1rem 1.5rem 1.5rem', display:'flex', flexDirection:'column', gap:'1rem' }}>
+
+                {/* ── Price Breakdown ── */}
+                <div style={{ background:'#fff8f3', border:'1px solid #e0ccc4', borderRadius:12, overflow:'hidden' }}>
+                  <div style={{ padding:'0.75rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                    <span style={{ fontSize:'0.85rem', color:'#6b3528' }}>Service Total</span>
+                    <span style={{ fontSize:'0.9rem', fontWeight:700, color:'#3d1f15' }}>R{(d.totalPrice || 0).toFixed(2)}</span>
+                  </div>
+                  <div style={{ padding:'0.75rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid #f0e8e0' }}>
+                    <span style={{ fontSize:'0.85rem', color:'#6b3528' }}>Deposit (pay online now)</span>
+                    <span style={{ fontSize:'0.9rem', fontWeight:700, color:'#10b981' }}>R{(d.depositAmount || 100).toFixed(2)}</span>
+                  </div>
+                  {codeOff > 0 && (
+                    <div style={{ padding:'0.75rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid #f0e8e0', background:'#f0fdf4' }}>
+                      <span style={{ fontSize:'0.85rem', color:'#15803d' }}>🎟️ Code: {discountResult.code}</span>
+                      <span style={{ fontSize:'0.9rem', fontWeight:700, color:'#15803d' }}>− R{codeOff.toFixed(2)}</span>
+                    </div>
+                  )}
+                  {loyaltyOff > 0 && (
+                    <div style={{ padding:'0.75rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid #f0e8e0', background:'#f0fdf4' }}>
+                      <span style={{ fontSize:'0.85rem', color:'#15803d' }}>⭐ {d.maxPointsUsable} loyalty pts</span>
+                      <span style={{ fontSize:'0.9rem', fontWeight:700, color:'#15803d' }}>− R{loyaltyOff.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div style={{ padding:'0.875rem 1rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'2px solid #e0ccc4', background:'linear-gradient(135deg,#fff8f3,#fdf6f0)' }}>
+                    <div>
+                      <span style={{ fontSize:'0.78rem', color:'#9e7060', display:'block' }}>Balance due at salon</span>
+                      {totalSaving > 0 && <span style={{ fontSize:'0.7rem', color:'#10b981', fontWeight:600 }}>You save R{totalSaving.toFixed(2)}!</span>}
+                    </div>
+                    <span style={{ fontSize:'1.2rem', fontWeight:800, color:'#3d1f15' }}>R{balanceDue.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {/* ── Discount Code ── */}
+                <div>
+                  <p style={{ margin:'0 0 0.5rem', fontSize:'0.75rem', fontWeight:700, color:'#374151', textTransform:'uppercase', letterSpacing:'0.07em' }}>
+                    🎟️ Have a discount code?
+                  </p>
+                  {discountResult ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'#f0fdf4', border:'1.5px solid #86efac', borderRadius:10, padding:'0.7rem 1rem' }}>
+                      <span style={{ flex:1, fontSize:'0.88rem', fontWeight:700, color:'#15803d' }}>
+                        ✅ {discountResult.code} — R{discountResult.discountAmount.toFixed(2)} off your balance
+                      </span>
+                      <button onClick={() => { setDiscountResult(null); setDiscountInput(''); setDiscountError(''); }}
+                        style={{ background:'none', border:'none', cursor:'pointer', color:'#94a3b8', padding:0, fontSize:'0.9rem' }}>✕</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display:'flex', gap:'0.5rem' }}>
+                        <input
+                          type="text"
+                          placeholder="Enter code e.g. REFAB1234"
+                          value={discountInput}
+                          onChange={e => { setDiscountInput(e.target.value.toUpperCase()); setDiscountError(''); }}
+                          onKeyDown={e => e.key === 'Enter' && validateBookingDiscount(discountInput, loyaltyPreview.apptId)}
+                          style={{ flex:1, padding:'0.7rem 0.875rem', border:`1.5px solid ${discountError ? '#fca5a5' : '#e2e8f0'}`, borderRadius:10, fontSize:'0.88rem', fontFamily:"'DM Sans', sans-serif", outline:'none' }}
+                        />
+                        <button
+                          onClick={() => validateBookingDiscount(discountInput, loyaltyPreview.apptId)}
+                          disabled={discountLoading || !discountInput.trim()}
+                          style={{ padding:'0 1.25rem', background: discountLoading || !discountInput.trim() ? '#e2e8f0' : 'linear-gradient(135deg,#3d1f15,#6b3528)', color: discountLoading || !discountInput.trim() ? '#94a3b8' : '#ffe8d6', border:'none', borderRadius:10, fontFamily:"'DM Sans', sans-serif", fontWeight:700, fontSize:'0.85rem', cursor: discountLoading || !discountInput.trim() ? 'not-allowed' : 'pointer' }}>
+                          {discountLoading ? '…' : 'Apply'}
+                        </button>
+                      </div>
+                      {discountError && <p style={{ margin:'0.4rem 0 0', fontSize:'0.78rem', color:'#dc2626' }}>⚠️ {discountError}</p>}
+                    </>
+                  )}
+                </div>
+
+                {/* ── Loyalty Points Toggle (only if they have redeemable points) ── */}
+                {d.canRedeem && d.maxPointsUsable > 0 && (
+                  <div>
+                    <p style={{ margin:'0 0 0.5rem', fontSize:'0.75rem', fontWeight:700, color:'#374151', textTransform:'uppercase', letterSpacing:'0.07em' }}>
+                      ⭐ Loyalty Points
+                    </p>
+                    <div
+                      onClick={() => setUsePoints(u => !u)}
+                      style={{ display:'flex', alignItems:'center', gap:'1rem', padding:'0.875rem 1rem', border:`1.5px solid ${usePoints ? '#10b981' : '#e2e8f0'}`, borderRadius:12, cursor:'pointer', background: usePoints ? '#f0fdf4' : '#fafafa', transition:'all 0.15s' }}>
+                      {/* Toggle switch */}
+                      <div style={{ width:46, height:26, borderRadius:50, background: usePoints ? '#10b981' : '#cbd5e1', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+                        <div style={{ position:'absolute', top:3, left: usePoints ? 23 : 3, width:20, height:20, borderRadius:'50%', background:'#fff', boxShadow:'0 1px 4px rgba(0,0,0,0.2)', transition:'left 0.2s' }} />
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <p style={{ margin:0, fontSize:'0.88rem', fontWeight:700, color: usePoints ? '#15803d' : '#3d1f15' }}>
+                          Use {d.maxPointsUsable} pts — save R{(d.discountAmount || 0).toFixed(2)} at salon
+                        </p>
+                        <p style={{ margin:'0.1rem 0 0', fontSize:'0.75rem', color:'#64748b' }}>
+                          You have {d.currentPoints.toLocaleString()} pts · 100 pts = R10 off balance
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── No points info (when they have none) ── */}
+                {!d.canRedeem && (
+                  <p style={{ margin:0, fontSize:'0.75rem', color:'#b0a090', textAlign:'center' }}>
+                    💡 Earn points on every booking — 1 pt per R1 spent
+                  </p>
+                )}
+
+                {/* ── Action Buttons ── */}
+                <div style={{ display:'flex', gap:'0.75rem', paddingTop:'0.25rem' }}>
+                  <button
+                    onClick={() => { setLoyaltyPreview(null); setUsePoints(false); setDiscountInput(''); setDiscountResult(null); setDiscountError(''); }}
+                    style={{ flex:1, padding:'0.875rem', border:'1.5px solid #e0ccc4', borderRadius:12, background:'#fff', fontFamily:"'DM Sans', sans-serif", fontSize:'0.88rem', fontWeight:600, color:'#64748b', cursor:'pointer' }}>
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const pts  = usePoints ? d.maxPointsUsable : 0;
+                      const code = discountResult?.code || null;
+                      const appt = appointments.find(a => String(a._id) === loyaltyPreview.apptId);
+                      if (appt) proceedToPayment(appt, pts, code);
+                    }}
+                    disabled={loyaltyRedeeming}
+                    style={{ flex:2, padding:'0.875rem', border:'none', borderRadius:12, background: loyaltyRedeeming ? '#e2e8f0' : 'linear-gradient(135deg,#3d1f15,#a0502e)', color: loyaltyRedeeming ? '#94a3b8' : '#ffe8d6', fontFamily:"'DM Sans', sans-serif", fontSize:'0.9rem', fontWeight:700, cursor: loyaltyRedeeming ? 'not-allowed' : 'pointer', transition:'all 0.15s' }}>
+                    {loyaltyRedeeming ? 'Processing…' : `Pay R${(d.depositAmount || 100).toFixed(2)} Deposit →`}
+                  </button>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <div className="nxl-up-footer">NXL Beauty Bar</div>
     </div>

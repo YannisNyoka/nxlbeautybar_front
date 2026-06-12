@@ -10,7 +10,7 @@ const TIER_CONFIG = {
   platinum: { label: 'Platinum', color: '#6366f1', bg: '#eef2ff', icon: '💎', next: null,  nextLabel: null     },
 };
 
-export default function LoyaltyWidget() {
+export default function LoyaltyWidget({ activeTab = 'loyalty' }) {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -19,6 +19,8 @@ export default function LoyaltyWidget() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) { setLoading(false); return; }
+    setLoading(true);
+    setError('');
     fetch(`${API_BASE_URL}/loyalty/me`, {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -26,7 +28,7 @@ export default function LoyaltyWidget() {
       .then(d => { if (d.success) setData(d.data); else setError(d.error); })
       .catch(() => setError('Could not load loyalty data.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [activeTab]); // Refetch whenever activeTab changes
 
   if (loading) return <div className="lw-skeleton" />;
   if (error || !data) return null;
@@ -73,9 +75,7 @@ export default function LoyaltyWidget() {
         <p className="lw-how-title">How to earn points</p>
         <div className="lw-earn-items">
           <div className="lw-earn-item"><span>💅</span><span>1 pt per R1 spent on bookings</span></div>
-          <div className="lw-earn-item"><span>🛍️</span><span>1 pt per R1 spent in the shop</span></div>
-          <div className="lw-earn-item"><span>🎉</span><span>+50 bonus pts per booking completed</span></div>
-          <div className="lw-earn-item"><span>✨</span><span>100 pts welcome bonus (already earned!)</span></div>
+          <div className="lw-earn-item"><span>🎁</span><span>Refer a friend — earn 200 pts when they book</span></div>
         </div>
         <p className="lw-redeem-note">Redeem at checkout — 100 points = R10 discount</p>
       </div>

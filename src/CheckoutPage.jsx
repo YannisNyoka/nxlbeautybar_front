@@ -1,5 +1,5 @@
 import nxlLogo from './assets/images/Logo.jpeg';
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from './hooks/useCart';
 import './CheckoutPage.css';

@@ -32,7 +32,6 @@ import OrdersPage        from './OrdersPage';
 import OrderTrackingPage from './OrderTrackingPage';
 import BookingPage       from './BookingPage';
 import ClientGallery     from './ClientGallery';
-import SubscriptionsPage from './SubscriptionsPage';
 
 // ── Loading screen ─────────────────────────────────────────────────────────
 const LoadingScreen = () => (
@@ -131,8 +130,6 @@ function App() {
           <Route path="/track"               element={<OrderTrackingPage />} />
           <Route path="/book"                element={<BookingPage />} />
           <Route path="/gallery"             element={<ClientGallery />} />
-          <Route path="/subscriptions"       element={<SubscriptionsPage />} />
-          <Route path="/subscriptions/success" element={<SubscriptionsPage />} />
 
           {/* ── Protected user pages ───────────────────────────────────── */}
           <Route
