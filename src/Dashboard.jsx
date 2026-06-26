@@ -111,7 +111,7 @@ function Dashboard() {
     return slots;
   };
 
-  const allTimeSlots = generateTimeSlots('07:00', '19:00', 30);
+  const allTimeSlots = generateTimeSlots('07:00', '18:00', 30); // Cutoff at 6 PM (18:00)
   const timeSlots = {
     morning:   allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('am') && h < 12; }),
     afternoon: allTimeSlots.filter(t => t.includes('pm')),
@@ -174,40 +174,78 @@ function Dashboard() {
       if (!response) return; // redirected due to auth failure
       const result = await response.json();
       if (result.success) {
-        const formattedSlots = result.data.map(appointment => {
-          if (
-            appointment.status === 'cancelled' ||
-            appointment.status === 'pending' ||
-            appointment.paymentStatus === 'unpaid'
-          ) return null;
-          const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/) ? appointment.date : new Date(appointment.date).toISOString().split('T')[0];
-          const time12Hour = convertTo12Hour(appointment.time);
+        const formattedSlots = result.data
+          .map(appointment => {
+            // Accept ANY booked appointment, regardless of userName
+            if (
+              appointment.status === 'cancelled' ||
+              appointment.status === 'pending' ||
+              appointment.paymentStatus === 'unpaid'
+            ) return null;
+            
+            const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/) 
+              ? appointment.date 
+              : new Date(appointment.date).toISOString().split('T')[0];
+            const time12Hour = convertTo12Hour(appointment.time);
 
-          // Use populated services array from API response first
-          let totalDuration = 0;
-          if (Array.isArray(appointment.services) && appointment.services.length > 0) {
-            totalDuration = appointment.services.reduce(
-              (sum, svc) => sum + (svc?.durationMinutes || 0), 0
-            );
-          }
-          // Fallback: match by stringified _id
-          if (!totalDuration && Array.isArray(appointment.serviceIds)) {
-            totalDuration = appointment.serviceIds.reduce((sum, serviceId) => {
-              const idStr = typeof serviceId === 'object'
-                ? (serviceId.$oid || String(serviceId))
-                : String(serviceId);
-              const service = services.find(s => String(s._id) === idStr);
-              return sum + (service ? service.duration : 0);
-            }, 0);
-          }
-          // Final fallback
-          if (!totalDuration) totalDuration = appointment.totalDuration || 60;
+            // Use populated services array from API response first
+            let totalDuration = 0;
+            if (Array.isArray(appointment.services) && appointment.services.length > 0) {
+              totalDuration = appointment.services.reduce(
+                (sum, svc) => sum + (svc?.durationMinutes || 0), 0
+              );
+            }
+            // Fallback: match by stringified _id
+            if (!totalDuration && Array.isArray(appointment.serviceIds)) {
+              totalDuration = appointment.serviceIds.reduce((sum, serviceId) => {
+                const idStr = typeof serviceId === 'object'
+                  ? (serviceId.$oid || String(serviceId))
+                  : String(serviceId);
+                const service = services.find(s => String(s._id) === idStr);
+                return sum + (service ? service.duration : 0);
+              }, 0);
+            }
+            // Final fallback
+            if (!totalDuration) totalDuration = appointment.totalDuration || 60;
 
-          return { date: isoDate, time: time12Hour, userName: appointment.userName || 'Booked', serviceType: 'Service', appointmentId: appointment._id, duration: totalDuration };
-        }).filter(slot => slot !== null && slot.time);
+            // Better fallback for userName - handle all undefined cases
+            let displayName = 'Booked'; // default fallback
+            
+            // Try userName first
+            if (appointment.userName && 
+                appointment.userName !== 'undefined' && 
+                appointment.userName !== 'undefined undefined' &&
+                appointment.userName.trim() !== '') {
+              displayName = appointment.userName;
+            }
+            // Try user object
+            else if (appointment.user?.firstName && appointment.user?.lastName) {
+              displayName = `${appointment.user.firstName} ${appointment.user.lastName}`;
+            }
+            // Try services
+            else if (Array.isArray(appointment.services) && appointment.services.length > 0) {
+              displayName = appointment.services.map(s => s.name).join(', ');
+            }
+
+            return { 
+              date: isoDate, 
+              time: time12Hour, 
+              userName: displayName, 
+              serviceType: 'Service', 
+              appointmentId: appointment._id, 
+              duration: totalDuration 
+            };
+          })
+          .filter(slot => slot !== null && slot.time); // Remove null but keep slots regardless of userName
         setBookedSlots(formattedSlots);
-      } else { setBookedSlots([]); }
-    } catch { setBookedSlots([]); } finally { setLoadingAppointments(false); }
+      } else { 
+        setBookedSlots([]); 
+      }
+    } catch { 
+      setBookedSlots([]); 
+    } finally { 
+      setLoadingAppointments(false); 
+    }
   };
 
   useEffect(() => {
@@ -342,6 +380,18 @@ function Dashboard() {
     const isoDate = dayToISO(day);
     const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
     const selectedEmp = employees.find(e => e.name === selectedEmployee);
+    
+    // Check if appointment extends beyond 18:00 (6 PM)
+    // Slots are in 30-min increments: 05:30pm, 06:00pm, 06:30pm, etc.
+    // If any required slot is AFTER 18:00, block it
+    if (requiredSlots.length > 0) {
+      const lastSlot = requiredSlots[requiredSlots.length - 1];
+      const lastSlot24 = convertTo24Hour(lastSlot);
+      const [lastHour, lastMin] = lastSlot24.split(':').map(Number);
+      // Block if last slot is after 18:00 (6 PM)
+      if (lastHour > 18 || (lastHour === 18 && lastMin > 0)) return true;
+    }
+    
     return requiredSlots.some(slot => {
       const slot24 = convertTo24Hour(slot);
       return unavailableSlots.some(s => {
