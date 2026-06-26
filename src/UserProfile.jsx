@@ -97,6 +97,7 @@ export default function UserProfile() {
   const [rescheduleForm, setRescheduleForm] = useState({ date: '', time: '' });
   const [savingReschedule, setSavingReschedule] = useState(false);
   const [rescheduleError,  setRescheduleError]  = useState('');
+  const [rescheduleBlockedMsg, setRescheduleBlockedMsg] = useState(null); // { appt, hoursUntil }
 
   // ── Edit profile state ──────────────────────────────────────────────────
   const [activeTab,      setActiveTab]      = useState('appointments'); // 'appointments' | 'profile' | 'password'
@@ -357,6 +358,21 @@ export default function UserProfile() {
 
   // ── Reschedule ───────────────────────────────────────────────────────────
   const openReschedule = (appt) => {
+    // Check if appointment is within 36 hours
+    const apptDT = getApptDateTime(appt);
+    if (apptDT) {
+      const now = new Date();
+      const msUntil = apptDT.getTime() - now.getTime();
+      const hoursUntil = msUntil / (1000 * 60 * 60);
+      
+      if (hoursUntil < 36) {
+        // Show blocked message instead of opening reschedule form
+        setRescheduleBlockedMsg({ appt, hoursUntil: Math.round(hoursUntil) });
+        return;
+      }
+    }
+
+    // Safe to reschedule
     setRescheduleAppt(appt);
     setRescheduleForm({ date: toDateInput(appt.date), time: appt.time || '' });
     setRescheduleError('');
@@ -808,6 +824,33 @@ export default function UserProfile() {
                 onClick={saveReschedule} disabled={savingReschedule}>
                 {savingReschedule ? 'Saving…' : 'Save Changes'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reschedule Blocked Modal (within 36 hours) ──────────────────────── */}
+      {rescheduleBlockedMsg && (
+        <div className="nxl-modal-overlay" onClick={e => e.target === e.currentTarget && setRescheduleBlockedMsg(null)}>
+          <div className="nxl-modal nxl-modal-sm">
+            <div className="nxl-modal-header">
+              <h3>⏰ Cannot Reschedule</h3>
+              <button className="nxl-modal-close" onClick={() => setRescheduleBlockedMsg(null)}>✕</button>
+            </div>
+            <p className="nxl-modal-body-text">
+              Your appointment is in <strong>{rescheduleBlockedMsg.hoursUntil} hours</strong>. We require <strong>36 hours notice</strong> for rescheduling.
+            </p>
+            <div className="nxl-up-alert nxl-alert-warn" style={{ marginBottom: '1rem' }}>
+              📞 To reschedule or cancel, please contact NXL Beauty Bar at <strong>068 511 3394</strong> or WhatsApp us.
+            </div>
+            <div className="nxl-modal-actions">
+              <button className="nxl-btn nxl-btn-outline" style={{ flex: 1 }} onClick={() => setRescheduleBlockedMsg(null)}>
+                Close
+              </button>
+              <a href="https://wa.me/27685113394?text=I need to reschedule my appointment at NXL Beauty Bar" target="_blank" rel="noreferrer" 
+                className="nxl-btn nxl-btn-save" style={{ flex: 1, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                💬 WhatsApp
+              </a>
             </div>
           </div>
         </div>
