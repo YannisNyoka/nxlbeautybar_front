@@ -14,8 +14,7 @@
 
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { API_BASE_URL } from '../lib/api';
 
 // ─── Web Audio chime (C6→E6 + G5 harmony) ────────────────────────────────────
 function playChime(audioCtxRef) {

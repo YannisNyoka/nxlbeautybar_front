@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { useCart } from './hooks/useCart';
 import './CartPage.css';
 import { useSEO } from './useSEO';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './lib/api';
+import LazyImage from './LazyImage';
 
 export default function CartPage() {
   const { items, subtotal, updateQuantity, removeItem, itemCount } = useCart();
@@ -33,10 +33,8 @@ export default function CartPage() {
     setDiscountError('');
     setDiscountLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/discount-codes/validate`, {
+      const res = await authFetch('/discount-codes/validate', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body:    JSON.stringify({ code: discountInput.trim(), subtotal }),
       });
       const data = await res.json();
@@ -120,7 +118,7 @@ export default function CartPage() {
               {/* Image */}
               <div className="cp-item-img-wrap">
                 {item.image
-                  ? <img src={item.image} alt={item.name} className="cp-item-img" />
+                  ? <LazyImage src={item.image} alt={item.name} className="cp-item-img" />
                   : <div className="cp-item-img-ph">💅</div>
                 }
                 {item.stock === 0 && <div className="cp-item-oos-badge">Out of Stock</div>}

@@ -8,8 +8,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import './NotificationBell.css';
+import { authFetch } from './lib/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const POLL_INTERVAL = 30_000; // 30 seconds
 
 const TYPE_COLORS = {
@@ -48,16 +48,11 @@ export default function NotificationBell() {
 
   const token = localStorage.getItem('token');
 
-  const authHeaders = useCallback(() => ({
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  }), [token]);
-
   // Poll unread count
   const pollUnread = useCallback(async () => {
     if (!token) return;
     try {
-      const res  = await fetch(`${API_BASE_URL}/client-notifications/unread-count`, { headers: authHeaders() });
+      const res  = await authFetch('/client-notifications/unread-count');
       const data = await res.json();
       if (data.success) {
         const count = data.data.count;
@@ -77,14 +72,14 @@ export default function NotificationBell() {
         setUnread(count);
       }
     } catch {}
-  }, [token, authHeaders]);
+  }, [token]);
 
   // Load notifications
   const loadNotifs = useCallback(async (p = 1, append = false) => {
     if (!token) return;
     setLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/client-notifications?page=${p}&limit=15`, { headers: authHeaders() });
+      const res  = await authFetch(`/client-notifications?page=${p}&limit=15`);
       const data = await res.json();
       if (data.success) {
         setNotifs(prev => append ? [...prev, ...data.data] : data.data);
@@ -94,22 +89,22 @@ export default function NotificationBell() {
       }
     } catch {}
     finally { setLoading(false); }
-  }, [token, authHeaders]);
+  }, [token]);
 
   // Mark all read when drawer opens
   const markAllRead = useCallback(async () => {
     if (!token || unread === 0) return;
     try {
-      await fetch(`${API_BASE_URL}/client-notifications/mark-read`, { method:'POST', headers: authHeaders(), body: JSON.stringify({}) });
+      await authFetch('/client-notifications/mark-read', { method:'POST', body: JSON.stringify({}) });
       setNotifs(prev => prev.map(n => ({ ...n, read: true })));
       setUnread(0);
       prevUnread.current = 0;
     } catch {}
-  }, [token, unread, authHeaders]);
+  }, [token, unread]);
 
   const markOneRead = async (id) => {
     try {
-      await fetch(`${API_BASE_URL}/client-notifications/mark-read`, { method:'POST', headers: authHeaders(), body: JSON.stringify({ id }) });
+      await authFetch('/client-notifications/mark-read', { method:'POST', body: JSON.stringify({ id }) });
       setNotifs(prev => prev.map(n => n._id === id ? { ...n, read: true } : n));
       setUnread(prev => Math.max(0, prev - 1));
     } catch {}
@@ -117,7 +112,7 @@ export default function NotificationBell() {
 
   const deleteNotif = async (id) => {
     try {
-      await fetch(`${API_BASE_URL}/client-notifications/${id}`, { method:'DELETE', headers: authHeaders() });
+      await authFetch(`/client-notifications/${id}`, { method:'DELETE' });
       setNotifs(prev => prev.filter(n => n._id !== id));
     } catch {}
   };
@@ -125,7 +120,7 @@ export default function NotificationBell() {
   const clearAll = async () => {
     if (!window.confirm('Clear all notifications?')) return;
     try {
-      await fetch(`${API_BASE_URL}/client-notifications`, { method:'DELETE', headers: authHeaders() });
+      await authFetch('/client-notifications', { method:'DELETE' });
       setNotifs([]); setUnread(0); prevUnread.current = 0;
     } catch {}
   };

@@ -495,6 +495,10 @@ tr:hover > td    { background: #fafafa; }
   box-shadow: 0 20px 60px rgba(0,0,0,0.25);
   animation: modalIn 0.2s ease;
 }
+/* Wider variant for modals with more content (e.g. StaffModal, ClientDetailModal) */
+.modal.modal-large {
+  max-width: 760px;
+}
 @keyframes modalIn {
   from { transform: scale(0.95); opacity: 0; }
   to   { transform: scale(1);    opacity: 1; }
@@ -572,6 +576,29 @@ tr:hover > td    { background: #fafafa; }
 .rbc-event          { padding: 2px 5px; border-radius: 5px; font-size: 0.75rem; }
 .rbc-toolbar button { padding: 0.4rem 0.75rem; border: 1px solid #e5e7eb; background: #fff; border-radius: 6px; font-weight: 500; font-size: 0.8rem; }
 .rbc-toolbar button.rbc-active { background: #4f46e5; color: #fff; border-color: #4f46e5; }
+.nxl-calendar-wrap  { height: 600px; }
+
+/* Status color key above the calendar */
+.nxl-calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0 0.1rem 0.85rem;
+}
+.nxl-calendar-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+.nxl-calendar-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
 
 /* ── Notification feed ────────────────────────────────────────────────────── */
 .notification-feed { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
@@ -702,13 +729,25 @@ tr:hover > td    { background: #fafafa; }
 
   /* Modal slides up from bottom on mobile */
   .modal-backdrop { align-items: flex-end; padding: 0; }
-  .modal {
+  .modal,
+  .modal.modal-large {
     max-width: 100%;
     border-radius: 16px 16px 0 0;
     max-height: 85vh;
   }
 
   .toast { left: 0.75rem; right: 0.75rem; max-width: none; }
+
+  /* Calendar toolbar (view switch + nav + label) wraps instead of crowding */
+  .rbc-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  .rbc-toolbar .rbc-btn-group { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.25rem; }
+  .rbc-toolbar-label { order: -1; text-align: center; font-weight: 700; }
+  .nxl-calendar-wrap { height: 460px; }
 }
 
 /* Small mobile */

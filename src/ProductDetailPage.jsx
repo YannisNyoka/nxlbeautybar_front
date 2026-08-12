@@ -4,8 +4,8 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useCart } from './hooks/useCart';
 import './ProductDetailPage.css';
 import { useSEO, productSchema, breadcrumbSchema } from './useSEO';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { API_BASE_URL, authFetch } from './lib/api';
+import LazyImage from './LazyImage';
 
 function StarRating({ rating, interactive = false, onRate }) {
   const [hovered, setHovered] = useState(0);
@@ -103,13 +103,11 @@ export default function ProductDetailPage() {
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
     setReviewError(''); setReviewSuccess('');
-    const token = localStorage.getItem('token');
-    if (!token) { setReviewError('Please sign in to leave a review.'); return; }
+    if (!localStorage.getItem('token')) { setReviewError('Please sign in to leave a review.'); return; }
     setReviewLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/shop/products/${id}/reviews`, {
+      const res  = await authFetch(`/shop/products/${id}/reviews`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ rating: reviewRating, comment: reviewComment }),
       });
       const data = await res.json();
@@ -179,7 +177,7 @@ export default function ProductDetailPage() {
         <div className="pdp-gallery">
           <div className="pdp-main-img-wrap">
             {images.length > 0
-              ? <img src={images[activeImg]} alt={product.name} className="pdp-main-img" />
+              ? <LazyImage src={images[activeImg]} alt={product.name} className="pdp-main-img" />
               : <div className="pdp-img-placeholder">💅</div>
             }
             {discount && <span className="pdp-discount-badge">−{discount}%</span>}

@@ -65,39 +65,18 @@ function ProtectedRoute({ children, adminOnly = false }) {
   const { isAuthenticated, user, loading } = useAuth();
   const location = useLocation();
 
-  console.log('ProtectedRoute check:', {
-    path: location.pathname,
-    isAuthenticated,
-    user,
-    loading,
-    adminOnly,
-  });
-
   if (loading) return <LoadingScreen />;
 
   if (!isAuthenticated) {
-    console.log('Not authenticated, redirecting to /login');
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (adminOnly) {
-    const isOrgAdmin =
-      user?.role === 'admin' ||
-      user?.email?.toLowerCase().includes('@nxlbeautybar.com');
-
-    console.log('Admin check:', {
-      userRole: user?.role,
-      userEmail: user?.email,
-      isOrgAdmin,
-    });
-
-    if (!isOrgAdmin) {
-      console.log('Not admin, redirecting to /dashboard');
-      return <Navigate to="/dashboard" replace />;
-    }
+  // Trust ONLY the backend role — never infer admin from email domain
+  // (matches the same rule already enforced in SignIn.jsx).
+  if (adminOnly && user?.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
   }
 
-  console.log('Access granted to:', location.pathname);
   return children;
 }
 

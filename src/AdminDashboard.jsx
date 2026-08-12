@@ -13,8 +13,9 @@ import PaymentModal from './components/PaymentModal';
 import { usePushAlarm } from './hooks/UsePushAlarm';
 import { usePushNotifications, requestNotificationPermission } from './usePushNotifications';
 import StaffSchedule from './components/StaffSchedule';
+import ClientDetailModal from './components/ClientDetailModal';
+import { API_BASE_URL, apiRequest } from './lib/api';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 const API_ENDPOINTS = {
   appointments:      `${API_BASE_URL}/appointments`,
   services:          `${API_BASE_URL}/services`,
@@ -40,30 +41,6 @@ const decimalToFloat = value => {
   return isNaN(n) ? 0 : n;
 };
 
-const authHeaders = () => {
-  const token = localStorage.getItem('token');
-  return token
-    ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' }
-    : {};
-};
-
-async function apiRequest(endpoint, options = {}) {
-  const res = await fetch(endpoint, {
-    headers: { ...authHeaders(), ...(options.headers || {}) },
-    ...options,
-  });
-  if (res.status === 401 || res.status === 403) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    window.location.href = '/login';
-    return Promise.reject(new Error('Session expired. Please log in again.'));
-  }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Request failed (${res.status})`);
-  }
-  return res.json();
-}
 
 function generateTimeSlots(start = '07:00', end = '19:00', interval = 30) {
   const slots = [];
@@ -463,6 +440,7 @@ function AdminDashboard() {
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [viewingClientId, setViewingClientId] = useState(null);
   const [galleryItems, setGalleryItems] = useState([]);
   const [galleryForm, setGalleryForm] = useState({ imageUrl:'', clientName:'', caption:'' });
   const [galleryLoading, setGalleryLoading] = useState(false);
@@ -697,6 +675,7 @@ function AdminDashboard() {
   async function mutateStaff(id,payload,method='PUT') { const opts={method}; if(method!=='DELETE') opts.body=JSON.stringify(payload); await apiRequest(id?`${API_ENDPOINTS.staff}/${id}`:API_ENDPOINTS.staff,opts); const staffData=await apiRequest(API_ENDPOINTS.staff); setStaff(staffData.data||[]); }
   async function mutateAvailability(id,payload,method='PUT') { const opts={method}; if(method!=='DELETE') opts.body=JSON.stringify(payload); await apiRequest(id?`${API_ENDPOINTS.availability}/${id}`:API_ENDPOINTS.availability,opts); const availData=await apiRequest(API_ENDPOINTS.availability); setAvailability(availData.data||[]); }
   async function blockClient(clientId,block) { await apiRequest(`${API_BASE_URL}/users/${clientId}`,{method:'PUT',body:JSON.stringify({isActive:!block})}); const clientData=await apiRequest(API_ENDPOINTS.clients); setClients((clientData.data||[]).filter(c=>c.role!=='admin')); }
+  async function updateClientPhone(clientId,phone) { await apiRequest(`${API_BASE_URL}/users/${clientId}`,{method:'PUT',body:JSON.stringify({phone})}); const clientData=await apiRequest(API_ENDPOINTS.clients); setClients((clientData.data||[]).filter(c=>c.role!=='admin')); }
   async function addNotification(msg) {
     try { const data=await apiRequest(API_ENDPOINTS.notifications,{method:'POST',body:JSON.stringify({message:msg,target:'staff'})}); setNotifications(prev=>[data.data,...prev]); }
     catch { setNotifications(prev=>[{id:Date.now(),message:msg,createdAt:new Date(),read:false,readAt:null},...prev]); }
@@ -874,12 +853,28 @@ function AdminDashboard() {
     <section className="panel">
       <header><h3>Clients <span className="count-chip">{clients.length}</span></h3><input placeholder="Search clients…" value={filters.client} onChange={e=>setFilters({...filters,client:e.target.value})} style={{padding:'0.5rem 0.75rem',border:'1px solid #e2e8f0',borderRadius:'8px',fontSize:'0.875rem'}} /></header>
       <div className="table-responsive"><table>
-        <thead><tr><th>Name</th><th>Email</th><th>Bookings</th><th>Last Booking</th><th>Loyalty</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th className="hide-mobile">Phone</th><th>Bookings</th><th>Last Booking</th><th>Loyalty</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
           {clients.filter(c=>c.email?.toLowerCase().includes(filters.client.toLowerCase())||`${c.firstName} ${c.lastName}`.toLowerCase().includes(filters.client.toLowerCase())).map(client=>{
             const stats=clientStats[String(client._id)]||{total:0,last:null}; const active=client.isActive!==false;
             return (<tr key={client._id}>
-              <td style={{fontWeight:600}}>{client.firstName} {client.lastName}</td><td>{client.email}</td><td>{stats.total}</td>
+              <td style={{fontWeight:600,cursor:'pointer',color:'#a0502e'}} onClick={()=>setViewingClientId(client._id)} title="View full client profile">{client.firstName} {client.lastName}</td><td>{client.email}</td>
+              <td className="hide-mobile">
+                <button
+                  className="action-btn"
+                  style={client.phone?{background:'#f0fdf4',color:'#15803d',border:'1px solid #bbf7d0'}:{background:'#fef2f2',color:'#b91c1c',border:'1px solid #fca5a5'}}
+                  title="Click to edit phone number"
+                  onClick={async () => {
+                    const input = window.prompt(`Phone number for ${client.firstName} ${client.lastName}:`, client.phone || '');
+                    if (input === null) return;
+                    const digits = input.replace(/\D/g, '');
+                    if (digits.length < 9) { showToast('Enter a valid phone number (9+ digits).', 'error'); return; }
+                    try { await updateClientPhone(client._id, input.trim()); showToast('Phone number updated.'); }
+                    catch (e) { showToast(e.message || 'Network error.', 'error'); }
+                  }}
+                >{client.phone || '☎️ Add phone'}</button>
+              </td>
+              <td>{stats.total}</td>
               <td>{stats.last?stats.last.toISOString().split('T')[0]:'—'}</td>
               <td>
                 <button
@@ -892,22 +887,31 @@ function AdminDashboard() {
                     if (isNaN(parsed)) { showToast('Enter a valid number.', 'error'); return; }
                     const reason = window.prompt('Reason for adjustment:') || 'Admin adjustment';
                     try {
-                      const token = localStorage.getItem('token');
-                      const res = await fetch(`${API_BASE_URL}/loyalty/admin/adjust`, {
+                      const data = await apiRequest(`${API_BASE_URL}/loyalty/admin/adjust`, {
                         method: 'POST',
-                        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
                         body: JSON.stringify({ userId: client._id, points: parsed, reason }),
                       });
-                      const data = await res.json();
-                      if (data.success) showToast(`Points adjusted. New balance: ${data.data.points} pts`);
-                      else showToast(data.error || 'Adjustment failed.', 'error');
-                    } catch { showToast('Network error.', 'error'); }
+                      showToast(`Points adjusted. New balance: ${data.data.points} pts`);
+                    } catch (e) { showToast(e.message || 'Network error.', 'error'); }
                   }}
                 >⭐ Adjust Pts</button>
               </td>
               <td><span className={`status ${active?'booked':'cancelled'}`}>{active?'Active':'Blocked'}</span></td>
               <td className="row-actions">
-                <button className="action-btn" onClick={()=>{addNotification(`Reminder sent to ${client.email}`);showToast('Reminder sent.');}}>Notify</button>
+                <button className="action-btn" onClick={()=>setViewingClientId(client._id)}>👤 View</button>
+                <button className="action-btn" onClick={async () => {
+                    const title = window.prompt(`In-app notification title for ${client.firstName} ${client.lastName}:`, 'Reminder from NXL Beauty Bar');
+                    if (!title) return;
+                    const body = window.prompt('Message:', `Hi ${client.firstName}! Just a friendly reminder to book your next appointment with us 💅`);
+                    if (!body) return;
+                    try {
+                      await apiRequest(`${API_BASE_URL}/client-notifications/admin-send`, {
+                        method: 'POST',
+                        body: JSON.stringify({ title, body, type: 'system', userId: client._id }),
+                      });
+                      showToast(`Notification sent to ${client.firstName}.`);
+                    } catch (e) { showToast(e.message || 'Network error.', 'error'); }
+                  }}>🔔 Notify</button>
                 <button className="action-btn" style={{background:'#f0fdf4',color:'#15803d',border:'1px solid #bbf7d0'}}
                   onClick={async () => {
                     if (!client.phone) { showToast('No phone number on file for this client.', 'error'); return; }
@@ -915,24 +919,19 @@ function AdminDashboard() {
                       `Hi ${client.firstName}! This is NXL Beauty Bar. Book your next appointment at nxlbeautybar.co.za 💅`);
                     if (!msg) return;
                     try {
-                      const token = localStorage.getItem('token');
-                      const res = await fetch(`${API_BASE_URL}/sms/send`, {
+                      const data = await apiRequest(`${API_BASE_URL}/sms/send`, {
                         method: 'POST',
-                        headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
                         body: JSON.stringify({ phone: client.phone, message: msg }),
                       });
-                      const data = await res.json();
-                      if (data.success) {
-                        showToast(data.data?.sent ? `SMS sent to ${client.phone}` : `SMS queued (wa.me fallback)`);
-                        if (data.data?.waUrl) window.open(data.data.waUrl, '_blank');
-                      } else showToast(data.error || 'SMS failed.', 'error');
-                    } catch { showToast('Network error.', 'error'); }
+                      showToast(data.data?.sent ? `SMS sent to ${client.phone}` : `SMS queued (wa.me fallback)`);
+                      if (data.data?.waUrl) window.open(data.data.waUrl, '_blank');
+                    } catch (e) { showToast(e.message || 'Network error.', 'error'); }
                   }}>📱 SMS</button>
                 <button className={`action-btn ${active?'delete-btn':''}`} onClick={()=>blockClient(client._id,active).then(()=>showToast(`Client ${active?'blocked':'unblocked'}.`))}>{active?'Block':'Unblock'}</button>
               </td>
             </tr>);
           })}
-          {!clients.length&&<tr><td colSpan="7" className="empty-row">No clients registered yet.</td></tr>}
+          {!clients.length&&<tr><td colSpan="8" className="empty-row">No clients registered yet.</td></tr>}
         </tbody>
       </table></div>
     </section>
@@ -963,11 +962,11 @@ function AdminDashboard() {
         <button className="btn ghost" onClick={()=>{try{generateRevenueReportPDF(payments,`Last ${chartRange}`);}catch(e){alert(e.message);}}}>📄 PDF</button>
       </div></header>
       <div className="table-responsive"><table>
-        <thead><tr><th>Date</th><th>Amount</th><th>Type</th><th>Method</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Date</th><th>Amount</th><th className="hide-mobile">Type</th><th className="hide-mobile">Method</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
           {payments.map(pay=>(<tr key={pay._id}>
             <td>{new Date(pay.createdAt).toLocaleString()}</td><td style={{fontWeight:600}}>R{decimalToFloat(pay.amount).toFixed(2)}</td>
-            <td>{pay.type||'full'}</td><td>{pay.method}</td>
+            <td className="hide-mobile">{pay.type||'full'}</td><td className="hide-mobile">{pay.method}</td>
             <td><span className={`status ${pay.status==='paid'?'booked':pay.status==='refunded'?'no-show':'cancelled'}`}>{pay.status}</span></td>
             <td className="row-actions">
               {pay.status==='paid'&&<button className="action-btn" title="Issue Refund" onClick={async()=>{if(!window.confirm('Refund this payment?'))return;try{await apiRequest(`${API_ENDPOINTS.payments}/${pay._id}`,{method:'PUT',body:JSON.stringify({status:'refunded'})});await loadAll();showToast('Payment refunded.');}catch(e){alert(e.message);}}}>↩️ Refund</button>}
@@ -987,16 +986,12 @@ function AdminDashboard() {
       if (!body) return;
       const link  = window.prompt('Link (optional, e.g. /shop):') || null;
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/client-notifications/admin-send`, {
+        const data = await apiRequest(`${API_BASE_URL}/client-notifications/admin-send`, {
           method: 'POST',
-          headers: { 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
           body: JSON.stringify({ title, body, type:'promotion', link }),
         });
-        const data = await res.json();
-        if (data.success) showToast(`Notification sent to ${data.data.sent} clients.`);
-        else showToast(data.error || 'Failed.', 'error');
-      } catch { showToast('Network error.', 'error'); }
+        showToast(`Notification sent to ${data.data.sent} clients.`);
+      } catch (e) { showToast(e.message || 'Network error.', 'error'); }
     };
 
     return (
@@ -1781,7 +1776,7 @@ function AdminDashboard() {
           <header><h3>Stock Levels</h3></header>
           {invLoading ? <div style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>Loading…</div> : (
             <div className="table-responsive"><table>
-              <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Product</th><th className="hide-mobile">SKU</th><th className="hide-mobile">Category</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 {products.map(p => {
                   const ss = STATUS_STYLE[p.stockStatus] || STATUS_STYLE.ok;
@@ -1791,8 +1786,8 @@ function AdminDashboard() {
                         {p.images?.[0] ? <img src={p.images[0]} alt="" style={{width:36,height:36,objectFit:'cover',borderRadius:6,border:'1px solid #e2e8f0',flexShrink:0}} /> : <div style={{width:36,height:36,background:'#f1f5f9',borderRadius:6,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem'}}>💅</div>}
                         <span style={{fontWeight:600,fontSize:'0.88rem'}}>{p.name}</span>
                       </div></td>
-                      <td style={{fontFamily:'monospace',fontSize:'0.8rem',color:'#94a3b8'}}>{p.sku||'—'}</td>
-                      <td style={{textTransform:'capitalize'}}>{p.category}</td>
+                      <td className="hide-mobile" style={{fontFamily:'monospace',fontSize:'0.8rem',color:'#94a3b8'}}>{p.sku||'—'}</td>
+                      <td className="hide-mobile" style={{textTransform:'capitalize'}}>{p.category}</td>
                       <td><span style={{fontWeight:800,fontSize:'1rem',color:p.stock===0?'#dc2626':p.stock<=5?'#92400e':'#15803d'}}>{p.stock}</span></td>
                       <td><span style={{background:ss.bg,color:ss.color,border:`1px solid ${ss.border}`,padding:'0.2rem 0.6rem',borderRadius:'50px',fontSize:'0.72rem',fontWeight:700}}>{ss.label}</span></td>
                       <td className="row-actions">
@@ -1814,17 +1809,17 @@ function AdminDashboard() {
         <section className="panel">
           <header><h3>Restock History</h3><button className="btn ghost" onClick={() => apiRequest(`${API_BASE_URL}/inventory/history`).then(d => setInvHistory(d.data||[]))}>↻</button></header>
           <div className="table-responsive"><table>
-            <thead><tr><th>Date</th><th>Product</th><th>Qty Added</th><th>Cost/Unit</th><th>Total Cost</th><th>Invoice</th><th>Supplier</th></tr></thead>
+            <thead><tr><th>Date</th><th>Product</th><th>Qty Added</th><th className="hide-mobile">Cost/Unit</th><th>Total Cost</th><th className="hide-mobile">Invoice</th><th className="hide-mobile">Supplier</th></tr></thead>
             <tbody>
               {invHistory.map(h => (
                 <tr key={h._id}>
                   <td style={{color:'#94a3b8',fontSize:'0.8rem',whiteSpace:'nowrap'}}>{new Date(h.createdAt).toLocaleDateString('en-ZA',{day:'numeric',month:'short',year:'numeric'})}</td>
                   <td style={{fontWeight:600}}>{h.productName}</td>
                   <td><span style={{color:'#15803d',fontWeight:700}}>+{h.quantity}</span></td>
-                  <td>R{h.costPerUnit?.toFixed(2)}</td>
+                  <td className="hide-mobile">R{h.costPerUnit?.toFixed(2)}</td>
                   <td style={{fontWeight:700}}>R{h.totalCost?.toFixed(2)}</td>
-                  <td style={{fontFamily:'monospace',fontSize:'0.8rem',color:'#64748b'}}>{h.invoiceRef||'—'}</td>
-                  <td>{h.supplier||'—'}</td>
+                  <td className="hide-mobile" style={{fontFamily:'monospace',fontSize:'0.8rem',color:'#64748b'}}>{h.invoiceRef||'—'}</td>
+                  <td className="hide-mobile">{h.supplier||'—'}</td>
                 </tr>
               ))}
               {!invHistory.length && <tr><td colSpan="7" className="empty-row">No restock records yet.</td></tr>}
@@ -1877,16 +1872,16 @@ function AdminDashboard() {
         <header><h3>Discount Codes <span className="count-chip">{discountCodes.length}</span></h3><div className="button-row"><button className="btn ghost" onClick={loadDiscounts}>↻ Refresh</button><button className="btn primary" onClick={()=>{ setEditingDiscount(null); setDiscountForm({code:'',type:'percentage',value:'',description:'',minOrderAmount:'',usageLimit:'',expiresAt:'',isActive:true}); setShowDiscountForm(true); }}>➕ Add Code</button></div></header>
         {discountLoading ? <div style={{textAlign:'center',padding:'3rem',color:'#94a3b8'}}>Loading…</div> : (
           <div className="table-responsive"><table>
-            <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Used / Limit</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Code</th><th>Type</th><th>Value</th><th className="hide-mobile">Min Order</th><th>Used / Limit</th><th className="hide-mobile">Expires</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {discountCodes.map(dc => (
                 <tr key={dc._id} style={{opacity:(!dc.isActive||isExpired(dc)||isLimitReached(dc))?0.5:1}}>
                   <td><span style={{fontFamily:'monospace',fontWeight:700,fontSize:'0.9rem',letterSpacing:'0.08em',color:'#c9a96e'}}>{dc.code}</span>{dc.description&&<div style={{fontSize:'0.72rem',color:'#94a3b8',marginTop:'0.1rem'}}>{dc.description}</div>}</td>
                   <td style={{textTransform:'capitalize'}}>{dc.type}</td>
                   <td style={{fontWeight:700}}>{dc.type==='percentage'?`${dc.value}%`:`R${dc.value}`}</td>
-                  <td>{dc.minOrderAmount>0?`R${dc.minOrderAmount}`:'—'}</td>
+                  <td className="hide-mobile">{dc.minOrderAmount>0?`R${dc.minOrderAmount}`:'—'}</td>
                   <td><span style={{fontWeight:600,color:isLimitReached(dc)?'#dc2626':'inherit'}}>{dc.usedCount||0}</span>{dc.usageLimit?` / ${dc.usageLimit}`:' / ∞'}</td>
-                  <td>{dc.expiresAt?<span style={{color:isExpired(dc)?'#dc2626':'#94a3b8',fontSize:'0.8rem'}}>{new Date(dc.expiresAt).toLocaleDateString('en-ZA')}{isExpired(dc)&&' (Expired)'}</span>:<span style={{color:'#94a3b8'}}>Never</span>}</td>
+                  <td className="hide-mobile">{dc.expiresAt?<span style={{color:isExpired(dc)?'#dc2626':'#94a3b8',fontSize:'0.8rem'}}>{new Date(dc.expiresAt).toLocaleDateString('en-ZA')}{isExpired(dc)&&' (Expired)'}</span>:<span style={{color:'#94a3b8'}}>Never</span>}</td>
                   <td><span className={`status ${dc.isActive&&!isExpired(dc)&&!isLimitReached(dc)?'booked':'cancelled'}`}>{isExpired(dc)?'Expired':isLimitReached(dc)?'Limit Reached':dc.isActive?'Active':'Inactive'}</span></td>
                   <td className="row-actions"><button className="action-btn" onClick={()=>openEdit(dc)}>Edit</button><button className="action-btn" onClick={()=>handleToggleDiscount(dc)}>{dc.isActive?'Deactivate':'Activate'}</button><button className="action-btn delete-btn" onClick={()=>handleDeleteDiscount(dc)}>Delete</button></td>
                 </tr>
@@ -1996,9 +1991,10 @@ function AdminDashboard() {
 
       {showAppointmentModal&&<AppointmentModal services={services} staff={staff} clients={clients} onClose={()=>setShowAppointmentModal(false)} onSubmit={async fd=>{setIsSubmitting(true);try{await apiRequest(API_ENDPOINTS.appointments,{method:'POST',body:JSON.stringify({userId:fd.clientId,employeeId:fd.employeeId,serviceIds:fd.serviceIds,date:fd.date,time:fd.time,notes:fd.notes,paymentStatus:fd.paymentStatus,paymentMethod:fd.paymentMethod})});await loadAll();setShowAppointmentModal(false);showToast('Appointment created.');}catch(e){alert(e.message);}finally{setIsSubmitting(false);}}} isSubmitting={isSubmitting} />}
       {showEditAppointmentModal&&<EditAppointmentModal appointment={editingAppointment} services={services} staff={staff} clients={clients} onClose={()=>{setShowEditAppointmentModal(false);setEditingAppointment(null);}} onSubmit={async fd=>{setIsSubmitting(true);try{await apiRequest(`${API_ENDPOINTS.appointments}/${editingAppointment._id}`,{method:'PUT',body:JSON.stringify({employeeId:fd.employeeId,serviceIds:fd.serviceIds,date:fd.date,time:fd.time,notes:fd.notes,status:fd.status,paymentStatus:fd.paymentStatus,paymentMethod:fd.paymentMethod})});await loadAll();setShowEditAppointmentModal(false);setEditingAppointment(null);showToast('Appointment updated.');}catch(e){alert(e.message);}finally{setIsSubmitting(false);}}} isSubmitting={isSubmitting} />}
-      {showPaymentModal&&<PaymentModal appointment={selectedAppointment} onClose={()=>{setShowPaymentModal(false);setSelectedAppointment(null);}} onSubmit={async fd=>{setIsSubmitting(true);try{await apiRequest(API_ENDPOINTS.payments,{method:'POST',body:JSON.stringify(fd)});await loadAll();setShowPaymentModal(false);setSelectedAppointment(null);showToast('Payment recorded.');}catch(e){alert(e.message);}finally{setIsSubmitting(false);}}} isSubmitting={isSubmitting} />}
+      {showPaymentModal&&<PaymentModal appointment={selectedAppointment} onClose={()=>{setShowPaymentModal(false);setSelectedAppointment(null);}} onSubmit={async fd=>{setIsSubmitting(true);try{await apiRequest(`${API_BASE_URL}/payments/manual`,{method:'POST',body:JSON.stringify(fd)});await loadAll();setShowPaymentModal(false);setSelectedAppointment(null);showToast('Payment recorded.');}catch(e){alert(e.message);}finally{setIsSubmitting(false);}}} isSubmitting={isSubmitting} />}
       {showStaffModal&&<StaffModal staff={editingStaff} services={services} onClose={()=>{setShowStaffModal(false);setEditingStaff(null);}} onSubmit={async fd=>{setIsSubmitting(true);try{const method=editingStaff?'PUT':'POST';const endpoint=editingStaff?`${API_ENDPOINTS.staff}/${editingStaff._id}`:API_ENDPOINTS.staff;await apiRequest(endpoint,{method,body:JSON.stringify(fd)});const staffData=await apiRequest(API_ENDPOINTS.staff);setStaff(staffData.data||[]);setShowStaffModal(false);setEditingStaff(null);showToast(`Staff member ${editingStaff?'updated':'added'}.`);}catch(e){alert(e.message);}finally{setIsSubmitting(false);}}} isSubmitting={isSubmitting} />}
       {showAvailabilityModal&&<AvailabilityModal staff={staff} onClose={()=>setShowAvailabilityModal(false)} onAllSubmitted={async(successCount,skippedCount)=>{const availData=await apiRequest(API_ENDPOINTS.availability);setAvailability(availData.data||[]);setShowAvailabilityModal(false);showToast(`${successCount} slot${successCount!==1?'s':''} blocked${skippedCount>0?` (${skippedCount} already blocked)`:''}.`);}} />}
+      {viewingClientId&&<ClientDetailModal clientId={viewingClientId} onClose={()=>setViewingClientId(null)} />}
     </div>
   );
 }

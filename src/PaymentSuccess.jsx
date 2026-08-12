@@ -3,8 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import emailjs from '@emailjs/browser';
 import './ConfirmationPopup.css';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '') || 'http://localhost:3000';
+import { API_BASE_URL, authFetch } from './lib/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const policyHighlights = new Set([0, 1, 5, 7, 10, 11, 12]);
@@ -233,17 +232,10 @@ const PaymentSuccess = () => {
     // ────────────────────────────────────────────────────────────────────────────
     if (final.loyaltyPointsRedeemed && final.loyaltyPointsRedeemed > 0) {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) throw new Error('No auth token');
-        
-        console.log('[PAYMENT SUCCESS] Redeeming loyalty points:', final.loyaltyPointsRedeemed);
-        
-        const redeemRes = await fetch(`${API_BASE_URL}/loyalty/redeem-on-payment`, {
+        if (!localStorage.getItem('token')) throw new Error('No auth token');
+
+        const redeemRes = await authFetch('/loyalty/redeem-on-payment', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
           body: JSON.stringify({
             appointmentId: final.appointmentId,
             pointsToRedeem: final.loyaltyPointsRedeemed
@@ -251,10 +243,7 @@ const PaymentSuccess = () => {
         });
 
         const redeemData = await redeemRes.json();
-        
-        if (redeemRes.ok && redeemData.success) {
-          console.log('[PAYMENT SUCCESS] ✅ Points redeemed successfully!', redeemData.data);
-        } else {
+        if (!redeemRes.ok || !redeemData.success) {
           console.error('[PAYMENT SUCCESS] Points redemption failed:', redeemData.error);
         }
       } catch (err) {
@@ -266,15 +255,11 @@ const PaymentSuccess = () => {
     setLoading(false);
 
     // ── Fire verify in background ─────────────────────────────────────────────────
-    if (appointmentId) {
-      const token = localStorage.getItem('token');
-      if (token) {
-        fetch(`${API_BASE_URL}/payments/verify`, {
-          method:'POST',
-          headers:{'Content-Type':'application/json', Authorization:`Bearer ${token}`},
-          body: JSON.stringify({ appointmentId }),
-        }).catch(() => {});
-      }
+    if (appointmentId && localStorage.getItem('token')) {
+      authFetch('/payments/verify', {
+        method:'POST',
+        body: JSON.stringify({ appointmentId }),
+      }).catch(() => {});
     }
 
     // ── Send confirmation email ───────────────────────────────────────────────────

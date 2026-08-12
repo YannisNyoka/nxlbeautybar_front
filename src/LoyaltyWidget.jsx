@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import './LoyaltyWidget.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './lib/api';
 
 const TIER_CONFIG = {
   bronze:   { label: 'Bronze',   color: '#c97c2e', bg: '#fff8f0', icon: '🥉', next: 500,  nextLabel: 'Silver' },
@@ -17,13 +16,10 @@ export default function LoyaltyWidget({ activeTab = 'loyalty' }) {
   const [showTxns, setShowTxns] = useState(false);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { setLoading(false); return; }
+    if (!localStorage.getItem('token')) { setLoading(false); return; }
     setLoading(true);
     setError('');
-    fetch(`${API_BASE_URL}/loyalty/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    authFetch('/loyalty/me')
       .then(r => r.json())
       .then(d => { if (d.success) setData(d.data); else setError(d.error); })
       .catch(() => setError('Could not load loyalty data.'))

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 import './SignIn.css';
+import { API_BASE_URL } from './lib/api';
 
 function SignIn({ onSignIn }) {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -20,8 +21,6 @@ function SignIn({ onSignIn }) {
   const { login }  = useAuth();
   const navigate   = useNavigate();
   const location   = useLocation();
-
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
   const validate = () => {
     const newErrors = {};

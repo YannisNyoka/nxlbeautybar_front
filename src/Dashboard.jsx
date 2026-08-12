@@ -3,6 +3,7 @@ import './Dashboard.css';
 import BookingSummary from './BookingSummary';
 import { useAuth } from './AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { authFetch, API_BASE_URL } from './lib/api';
 
 const decimalToFloat = (value) => {
   if (value == null) return 0;
@@ -38,24 +39,16 @@ const isOffPeakSlot = (time) => {
 };
 
 // ─── Token-aware fetch helper ─────────────────────────────────────────────────
-// Automatically redirects to /login on 401/403 (expired or invalid token)
+// Retries once via refresh token on 401/403; redirects to /login if the
+// session still can't be established.
 async function apiFetch(url, options = {}) {
-  const token = localStorage.getItem('token');
-  const res = await fetch(url, {
-    ...options,
-    headers: {
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers || {}),
-    },
-  });
-
+  const res = await authFetch(url, options);
   if (res.status === 401 || res.status === 403) {
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
     window.location.href = '/login';
     return null; // prevent further processing
   }
-
   return res;
 }
 
@@ -83,7 +76,7 @@ function Dashboard() {
   const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [employeeError, setEmployeeError] = useState('');
   const [servicesError, setServicesError] = useState('');
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+  const apiBase = API_BASE_URL;
 
   const [collapsedPanels, setCollapsedPanels] = useState({ services: false, date: false, time: false, employee: false });
 

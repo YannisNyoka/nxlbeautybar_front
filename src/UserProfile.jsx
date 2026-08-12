@@ -5,25 +5,7 @@ import './UserProfile.css';
 import LoyaltyWidget from './LoyaltyWidget';
 import ReferralWidget from './ReferralWidget';
 import NotificationBell from './NotificationBell';
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-
-function authHeaders() {
-  const token = localStorage.getItem('token');
-  return token
-    ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-    : { 'Content-Type': 'application/json' };
-}
-
-async function apiFetch(path, options = {}) {
-  const res  = await fetch(`${API_BASE}${path}`, {
-    headers: { ...authHeaders(), ...(options.headers || {}) },
-    ...options,
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
-  return data;
-}
+import { apiRequest as apiFetch } from './lib/api';
 
 function normalizePrice(val) {
   if (val && typeof val === 'object' && '$numberDecimal' in val)

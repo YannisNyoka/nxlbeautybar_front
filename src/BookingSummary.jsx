@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import './BookingSummary.css';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-
-const DEPOSIT = 100;
+import { authFetch, API_BASE_URL } from './lib/api';
+import { DEPOSIT_AMOUNT as DEPOSIT } from './lib/pricing';
 
 // ─── BookingSummary ───────────────────────────────────────────────────────────
 const BookingSummary = ({
@@ -35,7 +35,6 @@ const BookingSummary = ({
 
   const navigate = useNavigate();
   const { user, triggerAppointmentRefresh } = useAuth();
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
   // Resolve display name
   let displayName = name;
@@ -56,30 +55,6 @@ const BookingSummary = ({
     return `${d.slice(0,3)} ${d.slice(3,6)} ${d.slice(6)}`;
   };
   const validatePhone = (val) => { const d = val.replace(/\D/g,''); return d.length >= 9; };
-
-  const refreshToken = async () => {
-    const rt = localStorage.getItem('refreshToken');
-    if (!rt) return null;
-    try {
-      const r = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ refreshToken: rt }),
-      });
-      const d = await r.json();
-      if (d.success && d.token) { localStorage.setItem('token', d.token); return d.token; }
-    } catch {}
-    return null;
-  };
-
-  const authFetch = async (url, opts = {}, retry = true) => {
-    let token = localStorage.getItem('token');
-    let res = await fetch(url, { ...opts, headers: { ...(opts.headers||{}), Authorization:`Bearer ${token}` } });
-    if (res.status === 401 && retry) {
-      token = await refreshToken();
-      if (token) res = await fetch(url, { ...opts, headers: { ...(opts.headers||{}), Authorization:`Bearer ${token}` } });
-    }
-    return res;
-  };
 
   // ── STEP 1: Create appointment ─────────────────────────────────────────
   const handleConfirm = async () => {

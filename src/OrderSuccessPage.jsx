@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import './OrderSuccessPage.css';
 import { useSEO } from './useSEO';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './lib/api';
 
 export default function OrderSuccessPage() {
   const [searchParams]  = useSearchParams();
@@ -20,12 +19,10 @@ export default function OrderSuccessPage() {
     if (!orderId) { setError('No order found.'); setLoading(false); return; }
 
     const confirm = async () => {
-      const token = localStorage.getItem('token');
       try {
         // First verify / confirm the payment with the backend
-        const verifyRes  = await fetch(`${API_BASE_URL}/shop/orders/verify`, {
+        const verifyRes  = await authFetch('/shop/orders/verify', {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body:    JSON.stringify({ orderId }),
         });
         const verifyData = await verifyRes.json();
@@ -37,9 +34,7 @@ export default function OrderSuccessPage() {
         }
 
         // Then fetch the full order details to display
-        const orderRes  = await fetch(`${API_BASE_URL}/shop/orders/${orderId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const orderRes  = await authFetch(`/shop/orders/${orderId}`);
         const orderData = await orderRes.json();
 
         if (orderData.success) setOrder(orderData.data);

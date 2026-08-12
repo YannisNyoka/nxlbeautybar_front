@@ -6,8 +6,8 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useSEO } from './useSEO';
 import './ClientGallery.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { API_BASE_URL, authFetch } from './lib/api';
+import LazyImage from './LazyImage';
 const CLOUDINARY   = 'https://api.cloudinary.com/v1_1/djjxu9yg9/image/upload';
 const PRESET       = 'NXLBEAUTYBAR';
 
@@ -83,10 +83,8 @@ export default function ClientGallery() {
         beforeFile ? uploadToCloudinary(beforeFile) : Promise.resolve(null),
       ]);
 
-      const token = localStorage.getItem('token');
-      const res   = await fetch(`${API_BASE_URL}/client-gallery`, {
+      const res   = await authFetch('/client-gallery', {
         method:  'POST',
-        headers: { 'Content-Type':'application/json', ...(token ? { Authorization:`Bearer ${token}` } : {}) },
         body: JSON.stringify({ afterImageUrl:afterUrl, beforeImageUrl:beforeUrl, caption, rating }),
       });
       const data = await res.json();
@@ -99,8 +97,7 @@ export default function ClientGallery() {
   const handleLike = async (postId) => {
     if (liked.includes(postId)) return;
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`${API_BASE_URL}/client-gallery/${postId}/like`, { method:'POST', headers:{ Authorization:`Bearer ${token}` } });
+      await authFetch(`/client-gallery/${postId}/like`, { method:'POST' });
       const newLiked = [...liked, postId];
       setLiked(newLiked);
       localStorage.setItem('nxl_liked_posts', JSON.stringify(newLiked));
@@ -211,7 +208,7 @@ export default function ClientGallery() {
                     <BeforeAfterCard post={post} />
                   ) : (
                     <div className="cg-img-wrap">
-                      <img src={post.afterImageUrl} alt={post.caption || 'Nail transformation'} className="cg-img" loading="lazy" />
+                      <LazyImage src={post.afterImageUrl} alt={post.caption || 'Nail transformation'} className="cg-img" />
                     </div>
                   )}
                   <div className="cg-card-body">
@@ -254,7 +251,7 @@ function BeforeAfterCard({ post }) {
   const [showAfter, setShowAfter] = useState(true);
   return (
     <div className="cg-ba-wrap">
-      <img src={showAfter ? post.afterImageUrl : post.beforeImageUrl} alt={showAfter ? 'After' : 'Before'} className="cg-img" loading="lazy" />
+      <LazyImage src={showAfter ? post.afterImageUrl : post.beforeImageUrl} alt={showAfter ? 'After' : 'Before'} className="cg-img" />
       <div className="cg-ba-toggle">
         <button className={!showAfter?'active':''} onClick={() => setShowAfter(false)}>Before</button>
         <button className={showAfter?'active':''} onClick={() => setShowAfter(true)}>After</button>

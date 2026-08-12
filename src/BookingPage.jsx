@@ -7,8 +7,8 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useSEO, serviceSchema, breadcrumbSchema } from './useSEO';
 import './BookingPage.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { API_BASE_URL } from './lib/api';
+import { DEPOSIT_AMOUNT } from './lib/pricing';
 
 function StarRow({ count = 5 }) {
   return <span style={{color:'#c9a96e',fontSize:'0.75rem',letterSpacing:'2px'}}>{'★'.repeat(count)}</span>;
@@ -377,7 +377,7 @@ export default function BookingPage() {
                 <strong>R{totalPrice.toFixed(2)}</strong>
               </div>
               <p className="bp-confirm-deposit">
-                A R{Number(import.meta.env.VITE_DEPOSIT_AMOUNT || 100).toFixed(2)} deposit is required to confirm your booking.
+                A R{DEPOSIT_AMOUNT.toFixed(2)} deposit is required to confirm your booking.
               </p>
             </div>
 
@@ -395,7 +395,7 @@ export default function BookingPage() {
                 {submitting ? 'Booking…' : '✅ Confirm Booking'}
               </button>
             </div>
-            <p className="bp-terms">By booking you agree to our cancellation policy. A non-refundable deposit of R{Number(import.meta.env.VITE_DEPOSIT_AMOUNT || 100)} is required.</p>
+            <p className="bp-terms">By booking you agree to our cancellation policy. A non-refundable deposit of R{DEPOSIT_AMOUNT} is required.</p>
           </div>
         )}
 

@@ -3,8 +3,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import './OrdersPage.css';
 import { useSEO } from './useSEO';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './lib/api';
 
 const STATUS_CONFIG = {
   pending:    { label: 'Pending',    color: '#e07a2e', bg: 'rgba(224,122,46,0.12)',  icon: '⏳' },
@@ -236,14 +235,11 @@ export default function OrdersPage() {
   const [filter,   setFilter]   = useState('all');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/login', { state: { from: '/orders' } }); return; }
+    if (!localStorage.getItem('token')) { navigate('/login', { state: { from: '/orders' } }); return; }
 
     const fetchOrders = async () => {
       try {
-        const res  = await fetch(`${API_BASE_URL}/shop/orders`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const res  = await authFetch('/shop/orders');
         const data = await res.json();
         if (data.success) {
           setOrders(data.data);

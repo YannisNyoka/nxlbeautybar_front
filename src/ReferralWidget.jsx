@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import './ReferralWidget.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './lib/api';
 
 export default function ReferralWidget() {
   const [data,     setData]    = useState(null);
@@ -10,9 +9,8 @@ export default function ReferralWidget() {
   const [shareTab, setShareTab]= useState('link');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) { setLoading(false); return; }
-    fetch(`${API_BASE_URL}/referrals/my`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!localStorage.getItem('token')) { setLoading(false); return; }
+    authFetch('/referrals/my')
       .then(r => r.json())
       .then(d => { if (d.success) setData(d.data); })
       .catch(() => {})

@@ -8,6 +8,8 @@ import eyelashesImage from './assets/images/EyeLashesImage.jpg';
 import nxlDesignBg    from './assets/images/nxl_design1.jpeg';
 import { useSEO, LOCAL_BUSINESS_SCHEMA } from './useSEO';
 import NotificationBell from './NotificationBell';
+import { API_BASE_URL } from './lib/api';
+import LazyImage from './LazyImage';
 
 const SALON_ADDRESS = 'NXLBEAUTYBAR, 1948 Mahalefele Rd, Dube, Soweto, 1800';
 
@@ -58,7 +60,7 @@ function ServiceCard({ label, desc, image, backItems, flipped, onFlip }) {
       <div className={`hp-service-inner ${flipped ? 'hp-flipped' : ''}`}>
         <div className="hp-service-face hp-service-front">
           <div className="hp-service-img">
-            <img src={image} alt={label} />
+            <LazyImage src={image} alt={label} />
           </div>
           <h3>{label}</h3>
           <p>{desc}</p>
@@ -129,7 +131,7 @@ function GallerySection({ apiBase }) {
           <div key={item._id} className="hp-gallery-item" onClick={() => setLightbox(item)}>
             {item.imageUrl.match(/\.(mp4|webm|mov)$/i)
               ? <div className="hp-gallery-video"><video src={item.imageUrl} muted /><span className="hp-play">▶</span></div>
-              : <img src={item.imageUrl} alt={item.clientName || 'Gallery'} />
+              : <LazyImage src={item.imageUrl} alt={item.clientName || 'Gallery'} />
             }
             <div className="hp-gallery-caption">
               {item.clientName && <strong>{item.clientName}</strong>}
@@ -375,7 +377,7 @@ export default function HomePage() {
       <StatsBar />
 
       {/* ── Gallery ─────────────────────────────────────────────────────── */}
-      <GallerySection apiBase={import.meta.env.VITE_API_BASE_URL || ''} />
+      <GallerySection apiBase={API_BASE_URL} />
 
       {/* ── Services ────────────────────────────────────────────────────── */}
       <section id="hp-services" className="hp-services">

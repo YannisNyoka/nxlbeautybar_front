@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import { useSEO } from './useSEO';
 import './OrderTrackingPage.css';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './lib/api';
 
 const STEPS = [
   { status: 'pending',    icon: '📋', label: 'Order Placed',    desc: 'We received your order' },
@@ -58,17 +57,13 @@ export default function OrderTrackingPage() {
   const loadOrder = async (orderId, emailAddress) => {
     setLoading(true); setError('');
     try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const res  = await fetch(`${API_BASE_URL}/shop/orders/${orderId}`, { headers });
+      const res  = await authFetch(`/shop/orders/${orderId}`);
       const data = await res.json();
 
       if (!res.ok || !data.success) { setError('Order not found.'); return; }
 
       // Verify email matches if not logged in
-      if (!token && emailAddress) {
+      if (!localStorage.getItem('token') && emailAddress) {
         const orderEmail = data.data.shippingAddress?.email || data.data.customer?.email;
         if (orderEmail?.toLowerCase() !== emailAddress.toLowerCase()) {
           setError('Order not found or email does not match.'); return;

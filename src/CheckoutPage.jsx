@@ -4,8 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useCart } from './hooks/useCart';
 import './CheckoutPage.css';
 import { useSEO } from './useSEO';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from './lib/api';
 
 const PROVINCES = [
   'Eastern Cape', 'Free State', 'Gauteng', 'KwaZulu-Natal',
@@ -51,9 +50,8 @@ export default function CheckoutPage() {
   const [loyaltyError,   setLoyaltyError]   = useState('');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    fetch(`${API_BASE_URL}/loyalty/me`, { headers: { Authorization: `Bearer ${token}` } })
+    if (!localStorage.getItem('token')) return;
+    authFetch('/loyalty/me')
       .then(r => r.json())
       .then(d => { if (d.success) setLoyalty(d.data); })
       .catch(() => {});
@@ -64,11 +62,9 @@ export default function CheckoutPage() {
       setLoyaltyError(`Minimum ${loyalty?.config?.minRedemption || 100} points to redeem.`); return;
     }
     setLoyaltyError('');
-    const token = localStorage.getItem('token');
     try {
-      const res  = await fetch(`${API_BASE_URL}/loyalty/redeem`, {
+      const res  = await authFetch('/loyalty/redeem', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ pointsToRedeem: loyaltyRedeem, orderSubtotal: subtotal }),
       });
       const data = await res.json();
@@ -125,11 +121,9 @@ export default function CheckoutPage() {
     setDiscountLoading(true);
     setDiscountError('');
     setDiscountResult(null);
-    const token = localStorage.getItem('token');
     try {
-      const res  = await fetch(`${API_BASE_URL}/discount-codes/validate`, {
+      const res  = await authFetch('/discount-codes/validate', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ code: discountInput.trim().toUpperCase(), subtotal }),
       });
       const data = await res.json();
@@ -152,14 +146,12 @@ export default function CheckoutPage() {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
-    const token = localStorage.getItem('token');
-    if (!token) { navigate('/login', { state: { from: '/checkout' } }); return; }
+    if (!localStorage.getItem('token')) { navigate('/login', { state: { from: '/checkout' } }); return; }
 
     setLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/shop/orders`, {
+      const res  = await authFetch('/shop/orders', {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           items: items.map(i => ({ productId: i.productId, quantity: i.quantity })),
           fulfillmentType,

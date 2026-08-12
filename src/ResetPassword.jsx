@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import './SignIn.css'; // reuses the same luxury sign-in stylesheet
+import { API_BASE_URL } from './lib/api';
 
 /**
  * ResetPassword
@@ -29,8 +30,6 @@ function ResetPassword() {
   const [tokenMissing,  setTokenMissing]  = useState(false);
   const [showPassword,  setShowPassword]  = useState(false);
   const [showConfirm,   setShowConfirm]   = useState(false);
-
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
   // Extract token from query string on mount
   useEffect(() => {

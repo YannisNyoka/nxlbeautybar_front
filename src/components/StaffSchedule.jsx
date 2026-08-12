@@ -3,8 +3,7 @@
  * Used inside AdminDashboard as the "Staff Schedule" section.
  */
 import { useState, useEffect, useCallback } from 'react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+import { authFetch } from '../lib/api';
 
 const HOUR_SLOTS = Array.from({ length: 22 }, (_, i) => {
   const h = Math.floor(i / 2) + 7; // 07:00 – 17:30
@@ -25,11 +24,6 @@ function pad2(n) { return String(n).padStart(2,'0'); }
 function todayISO() { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
 function addDays(iso, n) { const d = new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
 function fmtDate(iso) { return new Date(iso+'T00:00:00').toLocaleDateString('en-ZA', { weekday:'short', day:'numeric', month:'short' }); }
-
-const authHeaders = () => {
-  const token = localStorage.getItem('token');
-  return token ? { Authorization:`Bearer ${token}`, 'Content-Type':'application/json' } : {};
-};
 
 export default function StaffSchedule({ staff = [], services = [] }) {
   const [view,       setView]       = useState('daily');   // 'daily' | 'per-staff'
@@ -53,7 +47,7 @@ export default function StaffSchedule({ staff = [], services = [] }) {
   const loadOverview = useCallback(async (d = date) => {
     setLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/staff/overview?date=${d}`, { headers: authHeaders() });
+      const res  = await authFetch(`/staff/overview?date=${d}`);
       const data = await res.json();
       if (data.success) setOverview(data.data);
     } catch {}
@@ -64,7 +58,7 @@ export default function StaffSchedule({ staff = [], services = [] }) {
     setEmpLoading(true);
     const end = addDays(start, 6);
     try {
-      const res  = await fetch(`${API_BASE_URL}/employees/${empId}/schedule?start=${start}&end=${end}`, { headers: authHeaders() });
+      const res  = await authFetch(`/employees/${empId}/schedule?start=${start}&end=${end}`);
       const data = await res.json();
       if (data.success) setEmpSchedule(data.data);
     } catch {}
@@ -80,9 +74,8 @@ export default function StaffSchedule({ staff = [], services = [] }) {
     if (!editingHours) return;
     setSavingHours(true);
     try {
-      await fetch(`${API_BASE_URL}/employees/${editingHours}/working-hours`, {
+      await authFetch(`/employees/${editingHours}/working-hours`, {
         method: 'PUT',
-        headers: authHeaders(),
         body: JSON.stringify({ workingHours }),
       });
       setEditingHours(null);

@@ -2,14 +2,8 @@ import React, { useState, useEffect } from 'react';
 import './PaymentPage.css';
 import { useAuth } from './AuthContext';
 import { useLocation, useNavigate } from 'react-router-dom';
-
-const DEPOSIT = Number(import.meta.env.VITE_BOOKING_FEE ?? 100);
-
-const LOYALTY_CONFIG = {
-  minRedemption: 100,
-  pointValue: 0.10,
-  maxRedemptionPct: 50,
-};
+import { authFetch as fetchWithAuth, API_BASE_URL as API_ROOT } from './lib/api';
+import { DEPOSIT_AMOUNT as DEPOSIT } from './lib/pricing';
 
 const PaymentPage = () => {
   const { user } = useAuth();
@@ -47,46 +41,6 @@ const PaymentPage = () => {
   const appointmentDate  = location.state?.appointmentDate  ?? '';
   const appointmentTime  = location.state?.appointmentTime  ?? '';
   const contactNumber    = location.state?.contactNumber    ?? '';
-
-  const RAW_API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-  const API_ROOT = RAW_API_BASE
-    ? `${RAW_API_BASE.replace(/\/api$/, '')}/api`
-    : '/api';
-
-  const refreshAccessToken = async () => {
-    const rt = localStorage.getItem('refreshToken');
-    if (!rt) return null;
-    try {
-      const res = await fetch(`${API_ROOT}/auth/refresh-token`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: rt }),
-      });
-      const result = await res.json();
-      if (result.success && result.token) {
-        localStorage.setItem('token', result.token);
-        return result.token;
-      }
-    } catch {}
-    return null;
-  };
-
-  const fetchWithAuth = async (url, options = {}, retry = true) => {
-    let token = localStorage.getItem('token');
-    let res = await fetch(url, {
-      ...options,
-      headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
-    });
-    if (res.status === 401 && retry) {
-      token = await refreshAccessToken();
-      if (token) {
-        res = await fetch(url, {
-          ...options,
-          headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` },
-        });
-      }
-    }
-    return res;
-  };
 
   // ── Load loyalty preview for this appointment ────────────────────────────
   useEffect(() => {
@@ -421,8 +375,7 @@ const PaymentPage = () => {
               </button>
 
               <p className="pp-terms">
-                By completing this payment you agree to our{' '}
-                <a href="#">Terms & Conditions</a>.
+                By completing this payment you agree to our cancellation policy.
                 This deposit is non-refundable.
               </p>
             </form>
