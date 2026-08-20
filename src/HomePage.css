@@ -1349,11 +1349,27 @@
   .hp-gallery-caption { padding: 0.6rem 0.75rem; }
   .hp-gallery-caption strong { font-size: 0.78rem; }
 
-  /* Services */
-  .hp-services { padding: 3rem 1rem; }
-  .hp-services-grid { grid-template-columns: 1fr; max-width: 320px; margin-left: auto; margin-right: auto; }
-  .hp-service-card { height: 270px; }
+  /* Services — swipeable row instead of a stacked column, to save vertical space */
+  .hp-services { padding: 3rem 0; }
+  .hp-services-grid {
+    display: flex;
+    grid-template-columns: none;
+    max-width: 100%;
+    margin: 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 1rem;
+    padding: 0.25rem 1.25rem 1rem;
+  }
+  .hp-services-grid::-webkit-scrollbar { display: none; }
+  .hp-service-card { flex: 0 0 78vw; max-width: 260px; height: 270px; scroll-snap-align: start; }
   .hp-service-img { width: 90px; height: 90px; }
+  .hp-services .hp-section-label,
+  .hp-services .hp-section-title,
+  .hp-services .hp-section-sub { padding: 0 1.25rem; }
+  .hp-services-cta { padding: 0 1.25rem; }
 
   /* Shop CTA */
   .hp-shop-cta { margin: 2rem 0.75rem; border-radius: var(--radius-sm); }
@@ -1370,10 +1386,24 @@
   .hp-booking-cta { padding: 3rem 1rem; }
   .hp-booking-cta h2 { font-size: 1.6rem; }
 
-  /* Contact */
-  .hp-contact-section { padding: 3rem 1rem; }
-  .hp-contact-grid { grid-template-columns: 1fr; gap: 0.875rem; }
-  .hp-contact-card { padding: 1.4rem 1.25rem; }
+  /* Contact — swipeable row instead of a stacked column, to save vertical space */
+  .hp-contact-section { padding: 3rem 0; }
+  .hp-contact-section .hp-section-label,
+  .hp-contact-section .hp-section-title { padding: 0 1.25rem; }
+  .hp-contact-grid {
+    display: flex;
+    grid-template-columns: none;
+    max-width: 100%;
+    margin: 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: 0.875rem;
+    padding: 0.25rem 1.25rem 1rem;
+  }
+  .hp-contact-grid::-webkit-scrollbar { display: none; }
+  .hp-contact-card { flex: 0 0 72vw; max-width: 240px; scroll-snap-align: start; padding: 1.4rem 1.25rem; }
   .hp-contact-card > span { font-size: 1.4rem; margin-bottom: 0.6rem; }
 
   /* Footer */
