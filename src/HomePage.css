@@ -900,88 +900,93 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   BOOKING CTA
+   FEATURED PRODUCTS
+   Horizontal scroll-snap row at every breakpoint (same pattern as the
+   gallery track above) — deliberately never collapses to a stacked column.
 ══════════════════════════════════════════════════════════════════════ */
-.hp-booking-cta {
-  padding: 5rem 2rem;
+.hp-featured-section {
+  padding: 4.5rem 0 4rem;
   background: var(--c-surface);
   text-align: center;
 }
 
-.hp-booking-cta-inner { max-width: 640px; margin: 0 auto; }
-
-.hp-booking-cta h2 {
-  font-family: 'Cormorant Garamond', serif;
-  font-size: clamp(1.8rem, 4vw, 2.6rem);
-  font-weight: 700;
-  color: var(--c-brown);
-  margin: 0 0 0.875rem;
-}
-
-.hp-booking-cta p {
-  font-size: 0.9rem;
-  color: var(--c-muted);
-  line-height: 1.65;
-  margin: 0 0 2rem;
-}
-
-.hp-booking-cta-btns {
+.hp-featured-track {
   display: flex;
-  gap: 0.875rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 1.75rem;
+  gap: 1.25rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 1rem 2rem 1.5rem;
+  cursor: grab;
 }
 
-.hp-book-btn-primary {
-  display: inline-block;
-  background: linear-gradient(135deg, var(--c-brown), var(--c-accent));
-  color: var(--c-cream);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 700;
-  padding: 0.9rem 2.25rem;
-  border-radius: 50px;
+.hp-featured-track::-webkit-scrollbar { display: none; }
+
+.hp-featured-item {
+  flex: 0 0 220px;
+  scroll-snap-align: start;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--c-border);
+  box-shadow: var(--shadow-sm);
   text-decoration: none;
-  transition: all 0.22s;
-  box-shadow: 0 4px 20px rgba(61,31,21,0.28);
+  color: inherit;
+  display: block;
+  transition: transform 0.22s, box-shadow 0.22s;
 }
 
-.hp-book-btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(61,31,21,0.38);
+.hp-featured-item:hover {
+  transform: translateY(-6px);
+  box-shadow: var(--shadow-md);
 }
 
-.hp-book-btn-outline {
-  display: inline-block;
-  background: transparent;
-  color: var(--c-mid);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 0.9rem;
+.hp-featured-img-wrap {
+  position: relative;
+  width: 100%;
+  height: 220px;
+  background: var(--c-bg);
+}
+
+.hp-featured-img-wrap img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.hp-featured-img-placeholder {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem;
+}
+
+.hp-featured-badge {
+  position: absolute;
+  top: 0.6rem; left: 0.6rem;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 50px;
+}
+
+.hp-featured-badge-out { left: auto; right: 0.6rem; background: #6b7280; }
+
+.hp-featured-body { padding: 0.9rem 1rem 1.1rem; text-align: left; }
+
+.hp-featured-name {
+  font-size: 0.85rem;
   font-weight: 600;
-  padding: 0.9rem 2.25rem;
-  border-radius: 50px;
-  border: 1.5px solid var(--c-light);
-  text-decoration: none;
-  transition: all 0.22s;
+  color: var(--c-brown);
+  margin: 0 0 0.4rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.hp-book-btn-outline:hover {
-  background: var(--c-brown);
-  color: var(--c-cream);
-  border-color: transparent;
-  transform: translateY(-2px);
-}
+.hp-featured-price-row { display: flex; align-items: baseline; gap: 0.5rem; }
+.hp-featured-price   { font-size: 0.95rem; font-weight: 700; color: var(--c-accent); }
+.hp-featured-compare { font-size: 0.78rem; color: var(--c-muted); text-decoration: line-through; }
 
-.hp-booking-meta {
-  display: flex;
-  justify-content: center;
-  gap: 1.5rem;
-  flex-wrap: wrap;
-  font-size: 0.78rem;
-  color: var(--c-muted);
-  font-weight: 500;
-}
+.hp-featured-cta { margin-top: 0.5rem; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    CONTACT
@@ -1208,7 +1213,7 @@
 .hp-gallery-section { animation: hp-fade-up 0.5s 0.15s ease both; }
 .hp-services     { animation: hp-fade-up 0.5s 0.2s ease both; }
 .hp-shop-cta     { animation: hp-fade-up 0.5s 0.25s ease both; }
-.hp-booking-cta  { animation: hp-fade-up 0.5s 0.3s ease both; }
+.hp-featured-section { animation: hp-fade-up 0.5s 0.3s ease both; }
 
 /* ═══════════════════════════════════════════════════════════════════════
    LEGACY classes kept for compatibility
@@ -1292,12 +1297,11 @@
   .hp-float3 { display: none; }
   .hp-shop-cta-btns { justify-content: flex-start; }
 
-  /* Booking CTA */
-  .hp-booking-cta { padding: 3.5rem 1.25rem; }
-  .hp-booking-cta-btns { flex-direction: column; align-items: center; gap: 0.75rem; }
-  .hp-book-btn-primary,
-  .hp-book-btn-outline { width: 100%; max-width: 300px; text-align: center; }
-  .hp-booking-meta { flex-direction: column; gap: 0.4rem; align-items: center; font-size: 0.74rem; }
+  /* Featured Products */
+  .hp-featured-section { padding: 3.5rem 0 3rem; }
+  .hp-featured-track { padding: 0.75rem 1.25rem 1rem; gap: 1rem; }
+  .hp-featured-item { flex: 0 0 190px; }
+  .hp-featured-img-wrap { height: 190px; }
 
   /* Contact */
   .hp-contact-section { padding: 3.5rem 1.25rem; }
@@ -1382,9 +1386,11 @@
   .hp-shop-cta-pills { gap: 0.4rem; }
   .hp-shop-cta-pills span { font-size: 0.68rem; padding: 0.25rem 0.6rem; }
 
-  /* Booking CTA */
-  .hp-booking-cta { padding: 3rem 1rem; }
-  .hp-booking-cta h2 { font-size: 1.6rem; }
+  /* Featured Products */
+  .hp-featured-section { padding: 3rem 0 2.5rem; }
+  .hp-featured-item { flex: 0 0 165px; }
+  .hp-featured-img-wrap { height: 165px; }
+  .hp-featured-cta { padding: 0 1.25rem; }
 
   /* Contact — swipeable row instead of a stacked column, to save vertical space */
   .hp-contact-section { padding: 3rem 0; }
@@ -1440,5 +1446,4 @@
 .hp-root * { box-sizing: border-box; }
 .hp-section-title,
 .hp-hero-title,
-.hp-shop-cta-text h2,
-.hp-booking-cta h2 { overflow-wrap: break-word; }
+.hp-shop-cta-text h2 { overflow-wrap: break-word; }

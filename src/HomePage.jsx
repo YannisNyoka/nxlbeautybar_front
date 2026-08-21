@@ -197,28 +197,66 @@ function ShopCTA() {
   );
 }
 
-// ── Booking CTA ────────────────────────────────────────────────────────────
-function BookingCTA() {
-  const isLoggedIn = !!localStorage.getItem('token');
+// ── Featured Products ────────────────────────────────────────────────────
+function FeaturedProducts({ apiBase }) {
+  const [products, setProducts] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const trackRef = useRef(null);
+
+  useEffect(() => {
+    fetch(`${apiBase}/shop/products/featured`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setProducts(d.data || []); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [apiBase]);
+
+  if (loading) return <div className="hp-gallery-loading">Loading products…</div>;
+  if (!products.length) return null;
+
   return (
-    <section className="hp-booking-cta">
-      <div className="hp-booking-cta-inner">
-        <h2>Ready for Your Next Look?</h2>
-        <p>Book your appointment online in minutes. We're open Mon–Sat, 9AM–5PM.</p>
-        <div className="hp-booking-cta-btns">
-          {isLoggedIn
-            ? <Link to="/dashboard" className="hp-book-btn-primary">Book Appointment →</Link>
-            : <>
-                <Link to="/signup" className="hp-book-btn-primary">Create Account &amp; Book</Link>
-                <Link to="/login" className="hp-book-btn-outline">Sign In</Link>
-              </>
-          }
-        </div>
-        <div className="hp-booking-meta">
-          <span>📍 1948 Mahalefele Rd, Dube, Soweto</span>
-          <span>📞 068 511 3394</span>
-          <span>🕐 Tue–Sun 9AM–5PM</span>
-        </div>
+    <section className="hp-featured-section" id="hp-featured">
+      <div className="hp-section-label">Now Online</div>
+      <h2 className="hp-section-title">Featured Products</h2>
+      <p className="hp-section-sub">Swipe to browse — same products we use in salon</p>
+
+      <div className="hp-featured-track" ref={trackRef}
+        onMouseDown={e => {
+          const el = trackRef.current; el.style.cursor = 'grabbing';
+          const startX = e.pageX - el.offsetLeft; const sl = el.scrollLeft;
+          const onMove = ev => { el.scrollLeft = sl - (ev.pageX - el.offsetLeft - startX); };
+          const onUp = () => { el.style.cursor = 'grab'; window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
+          window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
+        }}
+      >
+        {products.map(product => {
+          const discount = product.comparePrice && product.comparePrice > product.price
+            ? Math.round((1 - product.price / product.comparePrice) * 100)
+            : null;
+          return (
+            <Link key={product._id} to={`/shop/product/${product._id}`} className="hp-featured-item">
+              <div className="hp-featured-img-wrap">
+                {product.images?.[0]
+                  ? <LazyImage src={product.images[0]} alt={product.name} />
+                  : <div className="hp-featured-img-placeholder">💅</div>
+                }
+                {discount && <span className="hp-featured-badge">−{discount}%</span>}
+                {product.stock === 0 && <span className="hp-featured-badge hp-featured-badge-out">Sold Out</span>}
+              </div>
+              <div className="hp-featured-body">
+                <p className="hp-featured-name">{product.name}</p>
+                <div className="hp-featured-price-row">
+                  <span className="hp-featured-price">R{product.price.toFixed(2)}</span>
+                  {product.comparePrice && <span className="hp-featured-compare">R{product.comparePrice.toFixed(2)}</span>}
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+      <p className="hp-gallery-scroll-hint">← swipe to see more →</p>
+      <div className="hp-featured-cta">
+        <Link to="/shop" className="hp-services-book-btn">Shop All Products →</Link>
       </div>
     </section>
   );
@@ -397,8 +435,8 @@ export default function HomePage() {
       {/* ── Shop CTA ────────────────────────────────────────────────────── */}
       <ShopCTA />
 
-      {/* ── Booking CTA ─────────────────────────────────────────────────── */}
-      <BookingCTA />
+      {/* ── Featured Products ───────────────────────────────────────────── */}
+      <FeaturedProducts apiBase={API_BASE_URL} />
 
       {/* ── Contact / Social ────────────────────────────────────────────── */}
       <section id="hp-contact" className="hp-contact-section">
