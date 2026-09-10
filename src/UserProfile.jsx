@@ -5,7 +5,7 @@ import './UserProfile.css';
 import LoyaltyWidget from './LoyaltyWidget';
 import ReferralWidget from './ReferralWidget';
 import NotificationBell from './NotificationBell';
-import { apiRequest as apiFetch } from './lib/api';
+import { apiRequest as apiFetch, API_BASE_URL } from './lib/api';
 
 function normalizePrice(val) {
   if (val && typeof val === 'object' && '$numberDecimal' in val)
@@ -80,6 +80,7 @@ export default function UserProfile() {
   const [savingReschedule, setSavingReschedule] = useState(false);
   const [rescheduleError,  setRescheduleError]  = useState('');
   const [rescheduleBlockedMsg, setRescheduleBlockedMsg] = useState(null); // { appt, hoursUntil }
+  const [rescheduleTakenSlots, setRescheduleTakenSlots] = useState([]); // slots blocked/booked on the chosen date
 
   // ── Edit profile state ──────────────────────────────────────────────────
   const [activeTab,      setActiveTab]      = useState('appointments'); // 'appointments' | 'profile' | 'password'
@@ -360,25 +361,58 @@ export default function UserProfile() {
     setRescheduleError('');
   };
 
+  // ── Fetch blocked/booked slots for the currently chosen reschedule date ──
+  // so the time dropdown can't even offer an admin-blocked slot.
+  useEffect(() => {
+    if (!rescheduleAppt || !rescheduleForm.date) { setRescheduleTakenSlots([]); return; }
+    const empId = typeof rescheduleAppt.employeeId === 'object'
+      ? (rescheduleAppt.employeeId._id || rescheduleAppt.employeeId.$oid)
+      : rescheduleAppt.employeeId;
+    if (!empId) { setRescheduleTakenSlots([]); return; }
+    fetch(`${API_BASE_URL}/availability/slots?date=${rescheduleForm.date}&employeeId=${empId}`)
+      .then(r => r.json())
+      .then(d => setRescheduleTakenSlots(d.data || []))
+      .catch(() => setRescheduleTakenSlots([]));
+  }, [rescheduleAppt, rescheduleForm.date]);
+
   const saveReschedule = async () => {
     if (!rescheduleForm.date || !rescheduleForm.time) {
-      setRescheduleError('Please select both a date and time.'); return;
-    }
-    if (rescheduleForm.date < todayISO()) {
-      setRescheduleError('Please choose a future date.'); return;
+      setRescheduleError('Please select both a date and a time.');
+      return;
     }
     setSavingReschedule(true);
     setRescheduleError('');
     try {
       const appt = rescheduleAppt;
-      const serviceIds = (appt.serviceIds || []).map(s =>
+      const serviceIds = (appt?.serviceIds || []).map(s =>
         typeof s === 'object' ? (s._id || s.$oid) : s
       ).filter(Boolean);
-      const empId = typeof appt.employeeId === 'object'
+      const empId = typeof appt?.employeeId === 'object'
         ? (appt.employeeId._id || appt.employeeId.$oid)
-        : appt.employeeId;
+        : appt?.employeeId;
 
-      await apiFetch(`/appointments/${appt._id}`, {
+      // ── Step 1: Check the new slot is available (catches admin-blocked
+      // and just-taken slots the dropdown's snapshot may have missed) ──
+      const checkResult = await apiFetch('/appointments/check-availability', {
+        method: 'POST',
+        body: JSON.stringify({
+          date:          rescheduleForm.date,
+          time:          rescheduleForm.time,
+          employeeId:    empId,
+          appointmentId: appt._id,
+          serviceIds,
+        }),
+      });
+
+      if (!checkResult.available) {
+        setRescheduleError(checkResult.message || 'This time slot is not available. Please choose a different time.');
+        setSavingReschedule(false);
+        return;
+      }
+
+      // ── Step 2: Slot is free — save the reschedule. The server re-checks
+      // blocked/overlapping slots itself, so this is never trusted blindly. ──
+      const result = await apiFetch(`/appointments/${appt._id}`, {
         method: 'PUT',
         body: JSON.stringify({
           date: rescheduleForm.date,
@@ -387,10 +421,18 @@ export default function UserProfile() {
           serviceIds,
         }),
       });
+
+      setAppointments(prev => prev.map(a =>
+        a._id === appt._id
+          ? { ...a, ...result.data, totalPrice: normalizePrice(result.data?.totalPrice ?? a.totalPrice) }
+          : a
+      ));
       setRescheduleAppt(null);
-      await fetchAppointments();
+      setRescheduleForm({ date: '', time: '' });
+      setRescheduleError('');
+      setSlotTakenId(null);
     } catch (e) {
-      setRescheduleError(e.message || 'Failed to reschedule.');
+      setRescheduleError(e.message || 'Failed to reschedule appointment');
     } finally {
       setSavingReschedule(false);
     }
@@ -791,7 +833,15 @@ export default function UserProfile() {
               <select value={rescheduleForm.time}
                 onChange={e => setRescheduleForm(f => ({ ...f, time: e.target.value }))}>
                 <option value="">Choose a time</option>
-                {PRESET_TIMES.map(t => <option key={t} value={t}>{t}</option>)}
+                {PRESET_TIMES.map(t => {
+                  const isOwnCurrentSlot = rescheduleForm.date === toDateInput(rescheduleAppt.date) && t === rescheduleAppt.time;
+                  const isUnavailable = rescheduleTakenSlots.includes(t) && !isOwnCurrentSlot;
+                  return (
+                    <option key={t} value={t} disabled={isUnavailable}>
+                      {t}{isUnavailable ? ' — unavailable' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             {rescheduleError && (
