@@ -133,7 +133,7 @@ function Dashboard() {
     window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  useEffect(() => { if (appointmentRefreshTrigger > 0) fetchAppointments(); }, [appointmentRefreshTrigger]);
+  useEffect(() => { if (appointmentRefreshTrigger > 0) fetchAppointments(); }, [appointmentRefreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     async function fetchServices() {
@@ -152,7 +152,7 @@ function Dashboard() {
     fetchServices();
   }, [apiBase]);
 
-  useEffect(() => { if (services.length > 0) fetchAppointments(); }, [services, apiBase]);
+  useEffect(() => { fetchAppointments(); }, [apiBase, currentMonth, selectedEmployee, employees]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const calculateRequiredSlots = (startTime, durationMinutes) => {
     const startIndex = allTimeSlots.indexOf(startTime); if (startIndex === -1) return [];
@@ -160,84 +160,39 @@ function Dashboard() {
     return allTimeSlots.slice(startIndex, startIndex + slotsNeeded);
   };
 
+  // Which slots are already taken, for the visible month + chosen stylist.
+  //
+  // This intentionally does NOT call GET /appointments: that route only ever
+  // returns a non-admin caller's own bookings (by design — customers must
+  // not be able to list each other's names/phone numbers), so it can't tell
+  // a customer that a slot belongs to someone else. /availability/month is
+  // the public, PII-free counterpart that returns bare occupied times for
+  // everyone's bookings, which is exactly what the calendar needs.
   const fetchAppointments = async () => {
     try {
       setLoadingAppointments(true);
-      const response = await apiFetch(`${apiBase}/appointments`);
-      if (!response) return; // redirected due to auth failure
+      const year = currentMonth.getFullYear();
+      const month = currentMonth.getMonth();
+      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      const selectedEmp = employees.find(e => e.name === selectedEmployee);
+      const employeeIdParam = selectedEmp ? selectedEmp._id : 'any';
+
+      const response = await fetch(`${apiBase}/availability/month?start=${startDate}&end=${endDate}&employeeId=${employeeIdParam}`);
       const result = await response.json();
-      if (result.success) {
-        const formattedSlots = result.data
-          .map(appointment => {
-            // Accept ANY booked appointment, regardless of userName
-            if (
-              appointment.status === 'cancelled' ||
-              appointment.status === 'pending' ||
-              appointment.paymentStatus === 'unpaid'
-            ) return null;
-            
-            const isoDate = appointment.date.match(/^\d{4}-\d{2}-\d{2}$/) 
-              ? appointment.date 
-              : new Date(appointment.date).toISOString().split('T')[0];
-            const time12Hour = convertTo12Hour(appointment.time);
-
-            // Use populated services array from API response first
-            let totalDuration = 0;
-            if (Array.isArray(appointment.services) && appointment.services.length > 0) {
-              totalDuration = appointment.services.reduce(
-                (sum, svc) => sum + (svc?.durationMinutes || 0), 0
-              );
-            }
-            // Fallback: match by stringified _id
-            if (!totalDuration && Array.isArray(appointment.serviceIds)) {
-              totalDuration = appointment.serviceIds.reduce((sum, serviceId) => {
-                const idStr = typeof serviceId === 'object'
-                  ? (serviceId.$oid || String(serviceId))
-                  : String(serviceId);
-                const service = services.find(s => String(s._id) === idStr);
-                return sum + (service ? service.duration : 0);
-              }, 0);
-            }
-            // Final fallback
-            if (!totalDuration) totalDuration = appointment.totalDuration || 60;
-
-            // Better fallback for userName - handle all undefined cases
-            let displayName = 'Booked'; // default fallback
-            
-            // Try userName first
-            if (appointment.userName && 
-                appointment.userName !== 'undefined' && 
-                appointment.userName !== 'undefined undefined' &&
-                appointment.userName.trim() !== '') {
-              displayName = appointment.userName;
-            }
-            // Try user object
-            else if (appointment.user?.firstName && appointment.user?.lastName) {
-              displayName = `${appointment.user.firstName} ${appointment.user.lastName}`;
-            }
-            // Try services
-            else if (Array.isArray(appointment.services) && appointment.services.length > 0) {
-              displayName = appointment.services.map(s => s.name).join(', ');
-            }
-
-            return { 
-              date: isoDate, 
-              time: time12Hour, 
-              userName: displayName, 
-              serviceType: 'Service', 
-              appointmentId: appointment._id, 
-              duration: totalDuration 
-            };
-          })
-          .filter(slot => slot !== null && slot.time); // Remove null but keep slots regardless of userName
+      if (result.success && result.data) {
+        const formattedSlots = Object.entries(result.data).flatMap(([date, times]) =>
+          times.map(time24 => ({ date, time: convertTo12Hour(time24), userName: 'Booked', duration: 30 }))
+        );
         setBookedSlots(formattedSlots);
-      } else { 
-        setBookedSlots([]); 
+      } else {
+        setBookedSlots([]);
       }
-    } catch { 
-      setBookedSlots([]); 
-    } finally { 
-      setLoadingAppointments(false); 
+    } catch {
+      setBookedSlots([]);
+    } finally {
+      setLoadingAppointments(false);
     }
   };
 
