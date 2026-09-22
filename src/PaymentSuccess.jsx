@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import emailjs from '@emailjs/browser';
 import './ConfirmationPopup.css';
 import { API_BASE_URL, authFetch } from './lib/api';
+import { DEPOSIT_AMOUNT } from './lib/pricing';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const policyHighlights = new Set([0, 1, 5, 7, 10, 11, 12]);
@@ -144,69 +145,64 @@ const PaymentSuccess = () => {
     const params        = new URLSearchParams(location.search);
     const appointmentId = params.get('appointmentId');
 
-    // ── STEP 1: localStorage (set by UserProfile before redirect — most reliable) ──
+    // The database is the source of truth for what was actually booked and
+    // paid — localStorage can be empty, stale, or set in a different
+    // browser/session than the one Yoco redirects back to, so it's only ever
+    // used as a last resort below, never as the primary source.
     let data = null;
-    try {
-      const raw = localStorage.getItem('pendingBooking');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        // Use it if it matches this appointmentId, or if there's no appointmentId to check against
-        if (parsed && (
-          !appointmentId ||
-          !parsed.appointmentId ||
-          String(parsed.appointmentId) === String(appointmentId)
-        )) {
-          // Only trust it if it has real data, not just placeholders
-          if (parsed.name && parsed.name !== 'Client' && parsed.appointmentDate) {
-            data = parsed;
-          }
-        }
-      }
-    } catch {}
 
-    // ── STEP 2: API fetch with current token ──────────────────────────────────────
-    if (appointmentId && !data) {
+    if (appointmentId) {
+      // ── STEP 1: fetch straight from the appointment record (authenticated) ──
       data = await fetchFromAPI(appointmentId, localStorage.getItem('token'));
-    }
 
-    // ── STEP 3: Refresh token then retry API ──────────────────────────────────────
-    if (appointmentId && !data) {
-      try {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (refreshToken) {
-          const rRes  = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
-            method:'POST', headers:{'Content-Type':'application/json'},
-            body: JSON.stringify({ refreshToken }),
-          });
-          const rData = await rRes.json();
-          if (rData.success && rData.token) {
-            localStorage.setItem('token', rData.token);
-            data = await fetchFromAPI(appointmentId, rData.token);
+      // ── STEP 2: token may have expired during the Yoco round-trip — refresh and retry ──
+      if (!data) {
+        try {
+          const refreshToken = localStorage.getItem('refreshToken');
+          if (refreshToken) {
+            const rRes  = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ refreshToken }),
+            });
+            const rData = await rRes.json();
+            if (rData.success && rData.token) {
+              localStorage.setItem('token', rData.token);
+              data = await fetchFromAPI(appointmentId, rData.token);
+            }
           }
-        }
-      } catch {}
-    }
+        } catch {}
+      }
 
-    // ── STEP 4: Public receipt endpoint (no token needed — verified by email) ─────
-    if (appointmentId && !data) {
-      try {
-        const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
-        const email    = userInfo?.email || '';
-        if (email) {
-          const res  = await fetch(`${API_BASE_URL}/appointments/${appointmentId}/receipt?email=${encodeURIComponent(email)}`);
-          const json = await res.json();
-          if (json.success && json.data?.appointmentDate) {
-            data = json.data;
+      // ── STEP 3: no usable session — fall back to the public, email-verified
+      // receipt endpoint. Still a direct database fetch, just a different
+      // route to the same record. ──
+      if (!data) {
+        try {
+          const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+          const email    = userInfo?.email || '';
+          if (email) {
+            const res  = await fetch(`${API_BASE_URL}/appointments/${appointmentId}/receipt?email=${encodeURIComponent(email)}`);
+            const json = await res.json();
+            if (json.success && json.data?.appointmentDate) {
+              data = json.data;
+            }
           }
-        }
-      } catch {}
+        } catch {}
+      }
     }
 
-    // ── STEP 5: Use localStorage even if name is 'Client' (better than nothing) ──
+    // ── Last resort: locally-cached booking details, only when every direct
+    // database lookup above was impossible (no appointmentId in the URL) or
+    // came back empty. This never overrides real database data. ──
     if (!data) {
       try {
         const raw = localStorage.getItem('pendingBooking');
-        if (raw) data = JSON.parse(raw);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && (!appointmentId || !parsed.appointmentId || String(parsed.appointmentId) === String(appointmentId))) {
+            data = parsed;
+          }
+        }
       } catch {}
     }
 
@@ -282,7 +278,7 @@ const PaymentSuccess = () => {
         appointmentId,
         name:             (appt.user?.firstName && appt.user?.lastName)
                             ? `${appt.user.firstName} ${appt.user.lastName}`.trim()
-                            : appt.userName || 'Client',
+                            : appt.userName || '',
         email:            appt.user?.email || '',
         appointmentDate:  appt.date || '',
         appointmentTime:  appt.time || '',
@@ -292,6 +288,7 @@ const PaymentSuccess = () => {
         totalDuration:    appt.totalDuration
                             || (appt.services || []).reduce((sum, s) => sum + (s?.durationMinutes || 0), 0)
                             || 60,
+        depositAmount:          Number(appt.depositAmount || DEPOSIT_AMOUNT),
         loyaltyPointsRedeemed:  appt.loyaltyPointsRedeemed || 0,
         loyaltyBalanceDiscount: parseFloat(appt.loyaltyBalanceDiscount?.toString() || 0),
         discountCode:           appt.discountCode || null,
@@ -431,11 +428,11 @@ const PaymentSuccess = () => {
           <div className="cp-pricing">
             <div className="cp-pricing-row">
               <span className="cp-pricing-label">Total Service Price</span>
-              <span style={{ fontSize:'0.88rem', color:'#6b3528', fontWeight:600 }}>R{Number(d.totalPrice || 0).toFixed(2)}</span>
+              <span style={{ fontSize:'0.88rem', color:'#ffe8d6', fontWeight:600 }}>R{Number(d.totalPrice || 0).toFixed(2)}</span>
             </div>
             <div className="cp-pricing-row">
               <span className="cp-pricing-label">Deposit Paid</span>
-              <span className="cp-pricing-paid">R100.00 ✓</span>
+              <span className="cp-pricing-paid">R{Number(d.depositAmount || DEPOSIT_AMOUNT).toFixed(2)} ✓</span>
             </div>
             {Number(d.loyaltyBalanceDiscount) > 0 && (
               <div className="cp-pricing-row">
