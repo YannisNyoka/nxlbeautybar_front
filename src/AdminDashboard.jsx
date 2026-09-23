@@ -855,7 +855,7 @@ function AdminDashboard() {
       <div className="table-responsive"><table>
         <thead><tr><th>Name</th><th>Email</th><th className="hide-mobile">Phone</th><th>Bookings</th><th>Last Booking</th><th>Loyalty</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
-          {clients.filter(c=>c.email?.toLowerCase().includes(filters.client.toLowerCase())||`${c.firstName} ${c.lastName}`.toLowerCase().includes(filters.client.toLowerCase())).map(client=>{
+          {clients.filter(c=>c.email?.toLowerCase().includes(filters.client.toLowerCase())||`${c.firstName} ${c.lastName}`.toLowerCase().includes(filters.client.toLowerCase())).sort((a,b)=>`${a.firstName||''} ${a.lastName||''}`.trim().localeCompare(`${b.firstName||''} ${b.lastName||''}`.trim(),undefined,{sensitivity:'base'})).map(client=>{
             const stats=clientStats[String(client._id)]||{total:0,last:null}; const active=client.isActive!==false;
             return (<tr key={client._id}>
               <td style={{fontWeight:600,cursor:'pointer',color:'#a0502e'}} onClick={()=>setViewingClientId(client._id)} title="View full client profile">{client.firstName} {client.lastName}</td><td>{client.email}</td>
