@@ -41,9 +41,12 @@
 }
 
 .bp-inner {
+  width: 100%;
+  min-width: 0;
   max-width: 760px;
   margin: 0 auto;
   padding: 0 1.5rem;
+  box-sizing: border-box;
 }
 
 /* ── Loading ────────────────────────────────────────────────────────────── */
