@@ -1,9 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import './Dashboard.css';
-import BookingSummary from './BookingSummary';
+import './BookingPage.css';
 import { useAuth } from './AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { authFetch, API_BASE_URL } from './lib/api';
+
+const DAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const DEFAULT_DAY_HOURS = { open: '07:00', close: '18:00', closed: false };
 
 const decimalToFloat = (value) => {
   if (value == null) return 0;
@@ -12,31 +15,26 @@ const decimalToFloat = (value) => {
   return isNaN(num) ? 0 : num;
 };
 
-const convertTo12Hour = (time24) => {
-  if (!time24) return '';
-  const [hours, minutes] = time24.split(':').map(Number);
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  const ampm = hours < 12 ? 'am' : 'pm';
-  return `${hour12.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-};
+function generateTimeSlots(start = '07:00', end = '18:00', step = 30) {
+  const slots = []; let [h, m] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  while (h < eh || (h === eh && m < em)) {
+    slots.push(`${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`);
+    m += step; if (m >= 60) { h++; m -= 60; }
+  }
+  return slots;
+}
 
-const convertTo24Hour = (time12) => {
-  if (!time12) return '';
-  const match = time12.match(/(\d+):(\d+)\s*(am|pm)/i);
-  if (!match) return time12;
-  let [, hours, minutes, period] = match;
-  hours = parseInt(hours, 10); minutes = parseInt(minutes, 10);
-  if (period.toLowerCase() === 'pm' && hours !== 12) hours += 12;
-  else if (period.toLowerCase() === 'am' && hours === 12) hours = 0;
-  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-};
-
-const isOffPeakSlot = (time) => {
-  if (!time) return false;
-  const time24 = convertTo24Hour(time);
-  const [h] = time24.split(':').map(Number);
-  return h < 9 || h >= 17; // before 09:00 or 17:00 and later
-};
+function pad2(n) { return String(n).padStart(2,'0'); }
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function addDays(iso, n) { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
+function getDayKey(iso) { return DAY_KEYS[new Date(iso + 'T00:00:00').getDay()]; }
+function isOffPeakSlot(time) { if (!time) return false; const [h] = time.split(':').map(Number); return h < 9 || h >= 17; }
+function formatDateTime(dateISO, time) {
+  if (!dateISO || !time) return '';
+  const d = new Date(dateISO + 'T00:00:00');
+  return `${d.toLocaleDateString('en-ZA', { day:'numeric', month:'long', year:'numeric' })}, ${time}`;
+}
 
 // ─── Token-aware fetch helper ─────────────────────────────────────────────────
 // Retries once via refresh token on 401/403; redirects to /login if the
@@ -52,421 +50,170 @@ async function apiFetch(url, options = {}) {
   return res;
 }
 
-function Dashboard() {
-  const defaultServices = [
-    { name: 'Manicure', duration: 45, price: 150 },
-    { name: 'Pedicure', duration: 30, price: 100 },
-    { name: 'Lashes',   duration: 30, price: 120 },
-    { name: 'Tinting',  duration: 30, price: 80  }
-  ];
+const STEP_LABELS = ['Services', 'Staff', 'Date & Time', 'Details', 'Review'];
 
-  const [selectedPedicureType, setSelectedPedicureType] = useState('');
-  const [selectedManicureType, setSelectedManicureType] = useState('');
-  const { user, logout, appointmentRefreshTrigger } = useAuth();
+function Dashboard() {
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [selectedServices, setSelectedServices] = useState([]);
-  const today = new Date();
-  const [selectedDate, setSelectedDate] = useState(today.getDate());
-  const [selectedTime, setSelectedTime] = useState('');
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [showSummary, setShowSummary] = useState(false);
-  const [cellNumber, setCellNumber] = useState(user?.contactNumber || '');
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  const [employees, setEmployees] = useState([]);
-  const [loadingEmployees, setLoadingEmployees] = useState(false);
-  const [employeeError, setEmployeeError] = useState('');
-  const [servicesError, setServicesError] = useState('');
   const apiBase = API_BASE_URL;
 
-  const [collapsedPanels, setCollapsedPanels] = useState({ services: false, date: false, time: false, employee: false });
+  const [step,        setStep]       = useState(0);
+  const [services,    setServices]   = useState([]);
+  const [staff,       setStaff]      = useState([]);
+  const [takenSlots,  setTakenSlots] = useState([]);
+  const [weeklyHours, setWeeklyHours] = useState(null); // from /salon-settings — real open/close + closed days
+  const [loading,     setLoading]    = useState(true);
+  const [servicesError, setServicesError] = useState('');
+  const [submitting,  setSubmitting] = useState(false);
+  const [error,       setError]      = useState('');
 
-  const [services, setServices] = useState(() => {
-    try {
-      const saved = localStorage.getItem('services');
-      if (saved) { const parsed = JSON.parse(saved); if (Array.isArray(parsed)) return parsed.map(s => ({ _id: s._id || s.id, name: s.name, duration: s.duration, price: s.price })); }
-    } catch {}
-    return defaultServices;
-  });
+  // Step 0 — service selection
+  const [selectedServices, setSelectedServices] = useState([]);
+  const [filterCat,        setFilterCat]        = useState('all');
 
-  useEffect(() => {
-    const onStorage = (e) => { if (e.key === 'services') { try { const parsed = JSON.parse(e.newValue || '[]'); if (Array.isArray(parsed)) setServices(parsed.map(s => ({ _id: s._id || s.id, name: s.name, duration: s.duration, price: s.price }))); } catch {} } };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  // Step 1 — staff
+  const [selectedStaff, setSelectedStaff] = useState('');
 
-  const generateTimeSlots = (start = '07:00', end = '19:00', interval = 30) => {
-    const slots = []; let [h, m] = start.split(':').map(Number); const [endH, endM] = end.split(':').map(Number);
-    while (h < endH || (h === endH && m <= endM)) {
-      const hour12 = h % 12 === 0 ? 12 : h % 12; const ampm = h < 12 ? 'am' : 'pm';
-      slots.push(`${hour12.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')} ${ampm}`);
-      m += interval; if (m >= 60) { h += 1; m -= 60; }
-    }
-    return slots;
-  };
+  // Step 2 — date/time
+  const [selectedDate,  setSelectedDate]  = useState(addDays(todayISO(), 1));
+  const [dateWindowStart, setDateWindowStart] = useState(addDays(todayISO(), 1));
+  const [selectedTime,  setSelectedTime]  = useState('');
 
-  const allTimeSlots = generateTimeSlots('07:00', '18:00', 30); // Cutoff at 6 PM (18:00)
-  const timeSlots = {
-    morning:   allTimeSlots.filter(t => { const h = parseInt(t.split(':')[0], 10); return t.includes('am') && h < 12; }),
-    afternoon: allTimeSlots.filter(t => t.includes('pm')),
-  };
+  // Step 3 — details
+  const [notes, setNotes] = useState('');
 
-  const [bookedSlots, setBookedSlots] = useState([]);
-  const [loadingAppointments, setLoadingAppointments] = useState(true);
-  const [unavailableSlots, setUnavailableSlots] = useState([]);
-
-  const parseSlotDateTime = (slot) => {
-    try {
-      const dateStr = String(slot?.date || '').trim(); const parts = dateStr.split(' ');
-      if (parts.length < 3) return new Date(0);
-      const [month, year, day] = parts; const base = new Date(`${month} ${day}, ${year}`);
-      if (isNaN(base.getTime())) return new Date(0);
-      base.setHours(23, 59, 59, 999); return base;
-    } catch { return new Date(0); }
-  };
-
-  const pruneExpiredUnavailableSlots = (slots) => { const now = new Date(); return (Array.isArray(slots) ? slots : []).filter(s => parseSlotDateTime(s) >= now); };
-
-  useEffect(() => { let initial = []; try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; } setUnavailableSlots(pruneExpiredUnavailableSlots(initial)); }, []);
+  // Step 4 — review
+  const [contactNumber, setContactNumber] = useState('');
+  const [phoneError,    setPhoneError]    = useState('');
 
   useEffect(() => {
-    const onStorage = (e) => { if (e.key === 'unavailableSlots') { try { setUnavailableSlots(pruneExpiredUnavailableSlots(JSON.parse(e.newValue || '[]'))); } catch {} } };
-    window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage);
-  }, []);
-
-  useEffect(() => { if (appointmentRefreshTrigger > 0) fetchAppointments(); }, [appointmentRefreshTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    async function fetchServices() {
+    async function loadInitialData() {
       try {
-        setServicesError('');
-        const response = await apiFetch(`${apiBase}/services`);
-        if (!response) return; // redirected due to auth failure
-        const result = await response.json();
-        if (response.ok && result.success && Array.isArray(result.data)) {
-          const active = result.data.filter(s => s.isActive !== false).map(s => ({ _id: s._id || s.id, name: s.name, duration: s.durationMinutes, price: decimalToFloat(s.price), category: s.category || '' }));
-          if (active.length > 0) { setServices(active); return; }
+        const [svcRes, empRes, settingsRes] = await Promise.all([
+          apiFetch(`${apiBase}/services`),
+          apiFetch(`${apiBase}/employees`),
+          fetch(`${apiBase}/salon-settings`).then(r => r.json()).catch(() => ({ data: null })),
+        ]);
+        setWeeklyHours(settingsRes.data?.weeklyHours || null);
+
+        if (svcRes) {
+          const svcResult = await svcRes.json();
+          if (svcRes.ok && svcResult.success && Array.isArray(svcResult.data)) {
+            setServices(svcResult.data
+              .filter(s => s.isActive !== false)
+              .map(s => ({ _id: s._id, name: s.name, durationMinutes: s.durationMinutes, price: decimalToFloat(s.price), category: s.category || '' })));
+          } else {
+            setServicesError('Could not load services from the server.');
+          }
         }
-        setServices(defaultServices); setServicesError('Showing default services (could not load from server).');
-      } catch { setServices(defaultServices); setServicesError('Showing default services (could not load from server).'); }
-    }
-    fetchServices();
-  }, [apiBase]);
-
-  useEffect(() => { fetchAppointments(); }, [apiBase, currentMonth, selectedEmployee, employees]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const calculateRequiredSlots = (startTime, durationMinutes) => {
-    const startIndex = allTimeSlots.indexOf(startTime); if (startIndex === -1) return [];
-    const slotsNeeded = Math.ceil(durationMinutes / 30);
-    return allTimeSlots.slice(startIndex, startIndex + slotsNeeded);
-  };
-
-  // Which slots are already taken, for the visible month + chosen stylist.
-  //
-  // This intentionally does NOT call GET /appointments: that route only ever
-  // returns a non-admin caller's own bookings (by design — customers must
-  // not be able to list each other's names/phone numbers), so it can't tell
-  // a customer that a slot belongs to someone else. /availability/month is
-  // the public, PII-free counterpart that returns bare occupied times for
-  // everyone's bookings, which is exactly what the calendar needs.
-  const fetchAppointments = async () => {
-    try {
-      setLoadingAppointments(true);
-      const year = currentMonth.getFullYear();
-      const month = currentMonth.getMonth();
-      const startDate = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-      const lastDay = new Date(year, month + 1, 0).getDate();
-      const endDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-      const selectedEmp = employees.find(e => e.name === selectedEmployee);
-      const employeeIdParam = selectedEmp ? selectedEmp._id : 'any';
-
-      const response = await fetch(`${apiBase}/availability/month?start=${startDate}&end=${endDate}&employeeId=${employeeIdParam}`);
-      const result = await response.json();
-      if (result.success && result.data) {
-        const formattedSlots = Object.entries(result.data).flatMap(([date, times]) =>
-          times.map(time24 => ({ date, time: convertTo12Hour(time24), userName: 'Booked', duration: 30 }))
-        );
-        setBookedSlots(formattedSlots);
-      } else {
-        setBookedSlots([]);
+        if (empRes) {
+          const empResult = await empRes.json();
+          if (empRes.ok && empResult.success && Array.isArray(empResult.data)) {
+            setStaff(empResult.data.filter(e => e.isActive !== false));
+          }
+        }
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      setBookedSlots([]);
-    } finally {
-      setLoadingAppointments(false);
     }
-  };
+    loadInitialData();
+  }, [apiBase]);
 
   useEffect(() => {
-    async function fetchUnavailableSlots() {
-      try {
-        const response = await apiFetch(`${apiBase}/availability`);
-        if (!response) return; // redirected due to auth failure
-        const result = await response.json();
-        if (result.success && Array.isArray(result.data)) setUnavailableSlots(result.data);
-      } catch {
-        let initial = []; try { initial = JSON.parse(localStorage.getItem('unavailableSlots') || '[]'); } catch { initial = []; }
-        setUnavailableSlots(pruneExpiredUnavailableSlots(initial));
-      }
-    }
-    fetchUnavailableSlots();
-  }, [apiBase]);
+    if (!selectedDate || !selectedStaff) return;
+    fetch(`${apiBase}/availability/slots?date=${selectedDate}&employeeId=${selectedStaff}`)
+      .then(r => r.json())
+      .then(d => setTakenSlots(d.data || []))
+      .catch(() => {});
+  }, [apiBase, selectedDate, selectedStaff]);
 
   const handleLogout = () => { try { localStorage.removeItem('token'); localStorage.removeItem('refreshToken'); } catch {} logout(); navigate('/login'); };
-  const togglePanel = (panelName) => setCollapsedPanels(prev => ({ ...prev, [panelName]: !prev[panelName] }));
 
-  const getDaysInMonth = (date) => {
-    const year = date.getFullYear(); const month = date.getMonth();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const startingDay = (new Date(year, month, 1).getDay() + 6) % 7;
-    const days = [];
-    for (let i = 0; i < startingDay; i++) days.push(null);
-    for (let i = 1; i <= daysInMonth; i++) days.push(i);
-    return days;
+  // Category values in the database are inconsistently cased/spaced
+  // ("Manicure", "manicure", "Manicure " all exist as separate stored
+  // strings) — group and filter by a normalized key so those don't show
+  // up as duplicate pills, without rewriting the underlying data.
+  const normalizeCat = (c) => c?.trim().toLowerCase() || '';
+  const categories = ['all', ...new Set(services.map(s => normalizeCat(s.category)).filter(Boolean))];
+  const filteredServices = filterCat === 'all' ? services : services.filter(s => normalizeCat(s.category) === filterCat);
+  const selectedSvcObjs  = selectedServices.map(id => services.find(s => s._id === id)).filter(Boolean);
+  const totalDuration    = selectedSvcObjs.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+  const totalPrice       = selectedSvcObjs.reduce((sum, s) => sum + parseFloat(s.price || 0), 0);
+
+  // Real operating hours from /salon-settings, not a hardcoded guess.
+  const getHoursForDate = (iso) => (weeklyHours && weeklyHours[getDayKey(iso)]) || DEFAULT_DAY_HOURS;
+  const isDayClosed = (iso) => getHoursForDate(iso).closed;
+  const daySlots = selectedDate ? generateTimeSlots(getHoursForDate(selectedDate).open, getHoursForDate(selectedDate).close) : [];
+
+  const toggleService = (id) => {
+    setSelectedServices(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
 
-  const getMonthName = (date) => date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-
-  const dayToISO = (day) => {
-    const year = currentMonth.getFullYear(); const month = currentMonth.getMonth();
-    return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  };
-
-  const getTodayISO = () => new Date().toISOString().split('T')[0];
-  const isDayInPast = (day) => { if (!day) return false; return dayToISO(day) < getTodayISO(); };
-
-  const isTimePast = (time) => {
-    const year = currentMonth.getFullYear(); const month = currentMonth.getMonth();
-    const selectedFullDate = new Date(year, month, selectedDate);
-    const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0); selectedFullDate.setHours(0,0,0,0);
-    if (selectedFullDate.getTime() !== todayMidnight.getTime()) return false;
-    const time24 = convertTo24Hour(time); const [h, m] = time24.split(':').map(Number);
-    const slotDate = new Date(); slotDate.setHours(h, m, 0, 0); return slotDate < new Date();
-  };
-
-  const handleMonthChange = (direction) => {
-    const newMonth = new Date(currentMonth);
-    if (direction === 'next') { newMonth.setMonth(newMonth.getMonth() + 1); }
-    else {
-      newMonth.setMonth(newMonth.getMonth() - 1);
-      const now = new Date();
-      if (newMonth.getFullYear() < now.getFullYear() || (newMonth.getFullYear() === now.getFullYear() && newMonth.getMonth() < now.getMonth())) return;
-    }
-    setCurrentMonth(newMonth);
-  };
-
-  const handleDateSelect = (day) => {
-    if (!day) return;
-    if (isDayInPast(day)) { alert('You cannot book an appointment in the past.'); return; }
-    if (isDateFullyBooked(day)) { alert('This date is fully booked. Please select another date.'); return; }
-    setSelectedDate(day); setSelectedTime('');
-  };
-
-  const handleServiceSelect = (service) => {
-    setSelectedServices(prev => {
-      if (prev.includes(service.name)) {
-        if (service.name === 'Manicure') setSelectedManicureType('');
-        if (service.name === 'Pedicure') setSelectedPedicureType('');
-        setSelectedTime(''); return prev.filter(s => s !== service.name);
-      } else { setSelectedTime(''); return [...prev, service.name]; }
+  // Date-scroll window navigation — lets the user page forward/backward
+  // through future dates instead of being stuck on a fixed 21-day range.
+  const DATE_WINDOW_SIZE = 21;
+  const earliestWindowStart = addDays(todayISO(), 1);
+  const goToPrevDates = () => {
+    setDateWindowStart(prev => {
+      const shifted = addDays(prev, -DATE_WINDOW_SIZE);
+      return shifted < earliestWindowStart ? earliestWindowStart : shifted;
     });
   };
+  const goToNextDates = () => setDateWindowStart(prev => addDays(prev, DATE_WINDOW_SIZE));
 
- const handleBookAppointment = () => {
-  if (selectedServices.length && selectedDate && selectedTime) {
-    if (isOffPeakSlot(selectedTime)) {
-      const confirmed = window.confirm(
-        '⚠️ Off-Peak Surcharge\n\nThis time slot is before 09:00 or after 17:00.\nAn additional R50 will be added to your total.\n\nDo you want to continue?'
-      );
-      if (!confirmed) return;
-    }
-    setShowSummary(true);
-  } else {
-    alert('Please select a service, date, and time');
-  }
-};
+  const validateContactNumber = () => {
+    const digits = contactNumber.replace(/\D/g, '');
+    if (!contactNumber.trim() || digits.length < 9) { setPhoneError('Valid phone number required'); return false; }
+    setPhoneError(''); return true;
+  };
 
-  const handleCloseSummary = () => setShowSummary(false);
-  const handleEditDateTime = () => setShowSummary(false);
-
-  const handleBookingConfirmed = (bookingInfo) => {
-    const totalDuration = getTotalServiceDuration();
-    const requiredSlots = calculateRequiredSlots(selectedTime, totalDuration);
-    const isoDate = dayToISO(selectedDate);
-    const newBookings = requiredSlots.map(slot => ({
-      date: isoDate, time: slot,
-      userName: bookingInfo.userName || `${user?.firstName} ${user?.lastName}`,
-      serviceType: bookingInfo.serviceType || 'Service',
-      duration: totalDuration, isMainSlot: slot === selectedTime,
-      appointmentId: bookingInfo.appointmentId || bookingInfo._id
-    }));
-    setBookedSlots(prev => [...prev, ...newBookings]);
-    setSelectedTime(''); setShowSummary(false);
-    navigate('/payment', {
-      state: {
-        appointmentId: bookingInfo.appointmentId || bookingInfo._id,
-        name: `${user?.firstName} ${user?.lastName}`,
-        dateTime: `${getMonthName(currentMonth)} ${selectedDate}, ${selectedTime}`,
-        appointmentDate: isoDate, appointmentTime: selectedTime,
-        selectedServices, selectedEmployee,
-        totalPrice: selectedServices.reduce((acc, s) => { const svc = services.find(x => x.name === s); return acc + (svc ? svc.price : 0); }, 0),
-        totalDuration: getTotalServiceDuration(), contactNumber: cellNumber,
-        selectedManicureType, selectedPedicureType,
+  const handleContinueToPayment = async () => {
+    if (!validateContactNumber()) return;
+    setSubmitting(true); setError('');
+    try {
+      const res = await authFetch(`${apiBase}/appointments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate, time: selectedTime,
+          employeeId: selectedStaff, serviceIds: selectedServices,
+          userName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim(),
+          contactNumber, notes,
+          totalPrice, totalDuration,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const msg = data.error || 'Booking failed. Please try again.';
+        setError(msg.toLowerCase().includes('overlap') || msg.toLowerCase().includes('unavailable')
+          ? 'This time slot is no longer available. Please go back and pick another time.'
+          : msg);
+        return;
       }
-    });
-  };
-
-  const occupiedSlotsByDate = useMemo(() => {
-    const map = {};
-    bookedSlots.forEach(booking => {
-      if (!map[booking.date]) map[booking.date] = new Set();
-      calculateRequiredSlots(booking.time, booking.duration || 15).forEach(slot => map[booking.date].add(slot));
-    });
-    return map;
-  }, [bookedSlots]);
-
-  const isSlotRangeUnavailable = (day, startTime, durationMinutes = 15) => {
-    const isoDate = dayToISO(day);
-    const requiredSlots = calculateRequiredSlots(startTime, durationMinutes);
-    const selectedEmp = employees.find(e => e.name === selectedEmployee);
-    
-    // Check if appointment extends beyond 18:00 (6 PM)
-    // Slots are in 30-min increments: 05:30pm, 06:00pm, 06:30pm, etc.
-    // If any required slot is AFTER 18:00, block it
-    if (requiredSlots.length > 0) {
-      const lastSlot = requiredSlots[requiredSlots.length - 1];
-      const lastSlot24 = convertTo24Hour(lastSlot);
-      const [lastHour, lastMin] = lastSlot24.split(':').map(Number);
-      // Block if last slot is after 18:00 (6 PM)
-      if (lastHour > 18 || (lastHour === 18 && lastMin > 0)) return true;
-    }
-    
-    return requiredSlots.some(slot => {
-      const slot24 = convertTo24Hour(slot);
-      return unavailableSlots.some(s => {
-        const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
-        const matchesDate = s.date === isoDate;
-        const matchesTime = sTime === slot24;
-        const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
-        return matchesDate && matchesTime && matchesEmployee;
+      const appointmentId = data.data?._id || data.data?.id;
+      const selectedEmployeeName = staff.find(s => s._id === selectedStaff)?.name || 'Any Available';
+      navigate('/payment', {
+        state: {
+          appointmentId,
+          name: `${user?.firstName || ''} ${user?.lastName || ''}`.trim(),
+          dateTime: formatDateTime(selectedDate, selectedTime),
+          appointmentDate: selectedDate, appointmentTime: selectedTime,
+          selectedServices: selectedSvcObjs.map(s => s.name),
+          selectedEmployee: selectedEmployeeName,
+          totalPrice, totalDuration, contactNumber,
+        },
       });
-    });
+    } catch { setError('Network error. Please check your connection.'); }
+    finally { setSubmitting(false); }
   };
 
-  const isDateFullyBooked = (day) => {
-    const isoDate = dayToISO(day);
-    const selectedEmp = employees.find(e => e.name === selectedEmployee);
-    return allTimeSlots.every(slot => {
-      const slot24 = convertTo24Hour(slot);
-      const isBlocked = unavailableSlots.some(s => {
-        const sTime = s.time?.length === 5 ? s.time : convertTo24Hour(s.time);
-        const matchesEmployee = s.employeeId === 'ALL' || (selectedEmp && String(s.employeeId) === String(selectedEmp._id));
-        return s.date === isoDate && sTime === slot24 && matchesEmployee;
-      });
-      const isBooked = bookedSlots.some(booking => {
-        if (booking.date !== isoDate) return false;
-        return calculateRequiredSlots(booking.time, booking.duration || 15).includes(slot);
-      });
-      return isBooked || isBlocked;
-    });
-  };
-
-  const getTotalServiceDuration = () => selectedServices.reduce((total, serviceName) => { const service = services.find(s => s.name === serviceName); return total + (service ? service.duration : 0); }, 0);
-  const isPartOfBookedRange = (date, time) => { const isoDate = dayToISO(date); return occupiedSlotsByDate[isoDate]?.has(time) || false; };
-  const isInSelectedRange = (time) => { if (!selectedTime) return false; return calculateRequiredSlots(selectedTime, getTotalServiceDuration()).includes(time); };
-
-  const getSlotPositionInRange = (time) => {
-    if (!selectedTime) return null;
-    const requiredSlots = calculateRequiredSlots(selectedTime, getTotalServiceDuration());
-    const index = requiredSlots.indexOf(time); if (index === -1) return null;
-    return { isFirst: index === 0, isLast: index === requiredSlots.length - 1, position: index + 1, total: requiredSlots.length };
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    async function fetchEmployees() {
-      setLoadingEmployees(true); setEmployeeError('');
-      try {
-        const res = await apiFetch(`${apiBase}/employees`, { signal: controller.signal });
-        if (!res) return; // redirected due to auth failure
-        const result = await res.json();
-        if (!res.ok || !result.success) throw new Error(result.error || 'Failed to fetch employees');
-        const list = Array.isArray(result.data) ? result.data : [];
-        setEmployees(list);
-        if (!selectedEmployee && list.length > 0) setSelectedEmployee(list[0].name);
-      } catch (err) { if (err.name !== 'AbortError') setEmployeeError(err.message || 'Failed to fetch employees'); }
-      finally { setLoadingEmployees(false); }
-    }
-    fetchEmployees(); return () => controller.abort();
-  }, [apiBase]);
-
-  const selectedServiceIds = selectedServices.map(name => services.find(s => s.name === name)?._id).filter(Boolean);
-
-  const renderTimeSlot = (time, index) => {
-    const totalDuration = selectedServices.length > 0 ? getTotalServiceDuration() : 15;
-    const isOccupied = isPartOfBookedRange(selectedDate, time);
-    const isBlocked = isSlotRangeUnavailable(selectedDate, time, totalDuration);
-    const inSelectedRange = isInSelectedRange(time);
-    const slotPosition = getSlotPositionInRange(time);
-    const isPastSlot = isTimePast(time);
-    const isUnavailableBooked = isOccupied || isBlocked || isPastSlot;
-    const isClickable = selectedServices.length > 0 && !isUnavailableBooked;
-
-    const getStatusLabel = () => {
-      if (isPastSlot) return 'Passed'; if (isUnavailableBooked) return 'Booked';
-      if (inSelectedRange && slotPosition) {
-        if (slotPosition.isFirst) return '▼ START'; if (slotPosition.isLast && slotPosition.total > 1) return '▲ END';
-        return `${slotPosition.position}/${slotPosition.total}`;
-      }
-      return null;
-    };
-
-    const slotStyle = isUnavailableBooked
-      ? { background: isPastSlot ? '#f5ece8' : '#ffe5e5', borderLeft: isPastSlot ? '3px solid #e0ccc4' : '3px solid #e05252', color: isPastSlot ? '#c4a898' : '#c0392b', opacity: 0.75, pointerEvents: 'none', cursor: 'not-allowed' }
-      : inSelectedRange ? { background: 'linear-gradient(135deg, #fce8db 0%, #f9c8a8 100%)', borderLeft: '3px solid #a0502e', color: '#3d1f15', fontWeight: 700, boxShadow: '0 2px 10px rgba(160, 80, 46, 0.25)' }
-     : isOffPeakSlot(time) ? { background: '#fffbeb', borderLeft: '3px solid #f59e0b', color: '#92400e' }
-: selectedServices.length === 0 ? { opacity: 0.5, cursor: 'default' } : {};
-    return (
-      <div key={index} className="time-slot-stack">
-        <div
-          className={`time-slot ${isUnavailableBooked ? 'unavailable' : ''} ${inSelectedRange ? 'selected' : ''}`}
-          style={{ minHeight: '48px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', ...slotStyle }}
-          onClick={() => isClickable && setSelectedTime(time)}
-          onMouseEnter={(e) => { if (isClickable && !inSelectedRange) e.currentTarget.style.background = 'linear-gradient(135deg, #fdf6f0 0%, #fce8db 100%)'; }}
-          onMouseLeave={(e) => { if (isClickable && !inSelectedRange) e.currentTarget.style.background = ''; }}
-        >
-          <span style={{ fontSize: '0.78rem', textDecoration: isUnavailableBooked ? 'line-through' : 'none' }}>{time}</span>
-          {getStatusLabel() && <div style={{ fontSize: '0.6rem', marginTop: '2px', fontWeight: 700, color: 'inherit', opacity: 0.85 }}>{getStatusLabel()}</div>}
-        </div>
-      </div>
-    );
-  };
+  const canProceed0 = selectedServices.length > 0;
+  const canProceed1 = !!selectedStaff;
+  const canProceed2 = selectedDate && selectedTime;
+  const fullyBooked  = selectedDate && !isDayClosed(selectedDate) && daySlots.length > 0 && daySlots.every(slot => takenSlots.includes(slot));
 
   return (
     <div className="dashboard-container">
-      <BookingSummary
-        open={showSummary}
-        onClose={handleCloseSummary}
-        service={selectedServices.map(s => { const svc = services.find(x => x.name === s); return svc ? `${svc.name} (${svc.duration} min, R${svc.price})` : s; }).join(', ')}
-        totalDuration={selectedServices.reduce((acc, s) => { const svc = services.find(x => x.name === s); return acc + (svc ? svc.duration : 0); }, 0)}
-        totalPrice={selectedServices.reduce((acc, s) => { const svc = services.find(x => x.name === s); return acc + (svc ? svc.price : 0); }, 0)}
-        dateTime={selectedDate && selectedTime ? `${getMonthName(currentMonth)} ${selectedDate}, ${selectedTime}` : ''}
-        appointmentDate={selectedDate ? dayToISO(selectedDate) : ''}
-        appointmentTime={selectedTime}
-        name={`${user?.firstName} ${user?.lastName}`}
-        email={user?.email}
-        contactNumber={cellNumber}
-        onEdit={handleEditDateTime}
-        onContactNumberChange={setCellNumber}
-        selectedServices={selectedServices}
-        servicesList={services}
-        selectedServiceIds={selectedServiceIds}
-        selectedEmployee={selectedEmployee}
-        employeesList={employees}
-        selectedManicureType={selectedManicureType}
-        selectedPedicureType={selectedPedicureType}
-        onBookingConfirmed={handleBookingConfirmed}
-      />
-
       <div className="dashboard-header">
         <div className="header-left"><h1>NXL Beauty Bar</h1></div>
         <div className="header-right">
@@ -477,123 +224,255 @@ function Dashboard() {
         </div>
       </div>
 
-      <div className="welcome-section">
-        <h2>Welcome back!</h2>
-        <p>Book your appointment in a few simple steps — choose a service, pick your date and time. See you soon!</p>
-      </div>
-
-      <div className="db-slots-label">Time slots for: <span>{getMonthName(currentMonth)} {selectedDate}</span></div>
-
-      <div className="booking-interface">
-        <div className="booking-panel">
-          <div className="panel-header" onClick={() => togglePanel('services')}>
-            <h3>Services</h3>
-            <span className={`dropdown-arrow ${collapsedPanels.services ? 'collapsed' : ''}`}>▼</span>
+      {loading ? (
+        <div className="bp-root bp-loading" style={{ minHeight: '300px' }}>
+          <div className="bp-spinner" />
+          <p>Loading…</p>
+        </div>
+      ) : (
+        <div className="bp-inner" style={{ padding: 0 }}>
+          <div className="welcome-section">
+            <h2>Welcome back!</h2>
+            <p>Book your appointment in a few simple steps — choose a service, pick your date and time. See you soon!</p>
           </div>
-          {!collapsedPanels.services && (
-            <div className="panel-content">
-              {servicesError && <div style={{ color: '#c07a5a', marginBottom: '0.5rem', fontSize: '0.78rem' }}>{servicesError}</div>}
-              {(() => {
-                const categoryOrder = ['Manicure', 'Pedicure', 'Eyelashes', 'Extras'];
-                const grouped = {};
-                services.forEach(service => {
-                  const rawCat = (service.category || '').trim().toLowerCase();
-                  const cat = rawCat ? rawCat.charAt(0).toUpperCase() + rawCat.slice(1) : 'Extras';
-                  if (!grouped[cat]) grouped[cat] = [];
-                  grouped[cat].push(service);
-                });
-                const allCats = [...categoryOrder.filter(c => grouped[c]), ...Object.keys(grouped).filter(c => !categoryOrder.includes(c))];
-                return allCats.map(category => <ServiceCategory key={category} category={category} services={grouped[category] || []} selectedServices={selectedServices} onSelect={handleServiceSelect} />);
-              })()}
+
+          {/* Step indicator */}
+          <div className="bp-steps">
+            {STEP_LABELS.map((label, i) => (
+              <div key={i} className={`bp-step ${i === step ? 'current' : i < step ? 'done' : ''}`}>
+                <div className="bp-step-dot">{i < step ? '✓' : i + 1}</div>
+                <span className="bp-step-label">{label}</span>
+                {i < STEP_LABELS.length - 1 && <div className="bp-step-connector" />}
+              </div>
+            ))}
+          </div>
+
+          {/* ── STEP 0: Services ───────────────────────────────────────── */}
+          {step === 0 && (
+            <div className="bp-section">
+              <h2 className="bp-section-title">Choose Your Services</h2>
+              {servicesError && <div className="bp-error-msg">{servicesError}</div>}
+
+              <div className="bp-cat-filter">
+                {categories.map(cat => (
+                  <button key={cat} className={`bp-cat-btn ${filterCat === cat ? 'active' : ''}`}
+                    onClick={() => setFilterCat(cat)}>
+                    {cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="bp-services-grid">
+                {filteredServices.map(svc => {
+                  const selected = selectedServices.includes(svc._id);
+                  return (
+                    <div key={svc._id} className={`bp-service-card ${selected ? 'selected' : ''}`}
+                      onClick={() => toggleService(svc._id)}>
+                      <div className="bp-svc-check">{selected ? '✓' : ''}</div>
+                      <div className="bp-svc-info">
+                        <p className="bp-svc-name">{svc.name}</p>
+                        <p className="bp-svc-meta">{svc.durationMinutes} min · <strong>R{parseFloat(svc.price).toFixed(2)}</strong></p>
+                      </div>
+                    </div>
+                  );
+                })}
+                {!filteredServices.length && <p className="bp-empty">No services available in this category.</p>}
+              </div>
+
+              {canProceed0 && (
+                <div className="bp-selection-bar">
+                  <div>
+                    <p className="bp-sel-label">{selectedServices.length} service{selectedServices.length > 1 ? 's' : ''} selected</p>
+                    <p className="bp-sel-meta">{totalDuration} min · R{totalPrice.toFixed(2)}</p>
+                  </div>
+                  <button className="bp-btn-gold" onClick={() => setStep(1)}>Next: Choose Staff →</button>
+                </div>
+              )}
             </div>
           )}
-        </div>
 
-        <div className="booking-panel">
-          <div className="panel-header" onClick={() => togglePanel('date')}>
-            <h3>Select Date</h3>
-            <div className="date-navigation" onClick={e => e.stopPropagation()}>
-              <button onClick={() => handleMonthChange('prev')}>‹</button>
-              <span>{getMonthName(currentMonth)}</span>
-              <button onClick={() => handleMonthChange('next')}>›</button>
-            </div>
-            <span className={`dropdown-arrow ${collapsedPanels.date ? 'collapsed' : ''}`}>▼</span>
-          </div>
-          {!collapsedPanels.date && (
-            <div className="panel-content">
-              <div className="calendar">
-                <div className="calendar-header">{['Mo','Tu','We','Th','Fr','Sa','Su'].map(d => <span key={d}>{d}</span>)}</div>
-                <div className="calendar-grid" style={{ position: 'relative' }}>
-                  {loadingAppointments && <div style={{ position:'absolute', inset:0, background:'rgba(253,248,245,0.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:10, borderRadius:8 }}><span style={{ fontSize:'0.8rem', color:'#9e7060' }}>Loading...</span></div>}
-                  {getDaysInMonth(currentMonth).map((day, index) => {
-                    const fullyBooked = day && isDateFullyBooked(day); const isPast = day && isDayInPast(day);
-                    return (
-                      <div key={index}
-                        className={`calendar-day ${day ? 'available' : 'empty'} ${selectedDate === day && !isPast ? 'selected' : ''} ${fullyBooked && !isPast ? 'fully-booked' : ''}`}
-                        onClick={() => day && handleDateSelect(day)}
-                        style={{ ...(isPast ? { opacity: 0.3, cursor: 'not-allowed', textDecoration: 'line-through', color: '#b08070' } : fullyBooked ? { background: '#ffe5e5', cursor: 'not-allowed', color: '#c07a5a', fontSize: '0.7rem' } : {}) }}
-                        title={isPast ? 'Past date' : fullyBooked ? 'Fully Booked' : day ? 'Select date' : ''}
-                      >
-                        {day}
-                        {fullyBooked && !isPast && <div style={{ fontSize: '0.5rem', color: '#c07a5a', lineHeight: 1 }}>FULL</div>}
-                      </div>
-                    );
-                  })}
+          {/* ── STEP 1: Staff ──────────────────────────────────────────── */}
+          {step === 1 && (
+            <div className="bp-section">
+              <h2 className="bp-section-title">Choose Your Staff</h2>
+
+              <div className="bp-staff-grid">
+                {staff.map(emp => (
+                  <div key={emp._id} className={`bp-staff-card ${selectedStaff === emp._id ? 'selected' : ''}`}
+                    onClick={() => setSelectedStaff(emp._id)}>
+                    <div className="bp-staff-avatar">{emp.name?.[0] || '💅'}</div>
+                    <p className="bp-staff-name">{emp.name}</p>
+                    {emp.role && <p className="bp-staff-role">{emp.role}</p>}
+                  </div>
+                ))}
+                <div className={`bp-staff-card ${selectedStaff === 'any' ? 'selected' : ''}`}
+                  onClick={() => setSelectedStaff('any')}>
+                  <div className="bp-staff-avatar" style={{background:'#f1f5f9',color:'#64748b'}}>🎲</div>
+                  <p className="bp-staff-name">Any Available</p>
                 </div>
+                {!staff.length && <p className="bp-empty">No stylists available.</p>}
+              </div>
+
+              <div className="bp-nav-row">
+                <button className="bp-btn-outline" onClick={() => setStep(0)}>← Back</button>
+                {canProceed1 && (
+                  <button className="bp-btn-gold" onClick={() => setStep(2)}>Next: Date & Time →</button>
+                )}
               </div>
             </div>
           )}
-        </div>
 
-        <div className="booking-panel">
-          <div className="panel-header" onClick={() => togglePanel('time')}>
-            <h3>Time Slots</h3>
-            <span className={`dropdown-arrow ${collapsedPanels.time ? 'collapsed' : ''}`}>▼</span>
-          </div>
-          {!collapsedPanels.time && (
-            <div className="panel-content">
-              {selectedServices.length > 0 && (
-  <div style={{ padding:'0.5rem 0.7rem', marginBottom:'0.6rem', background:'linear-gradient(135deg, #fdf6f0, #fce8db)', borderRadius:8, fontSize:'0.78rem', border:'1px solid #e0ccc4' }}>
-    <strong style={{ color:'#3d1f15' }}>{getTotalServiceDuration()} min</strong>
-    <span style={{ color:'#9e7060' }}> · {Math.ceil(getTotalServiceDuration() / 30)} slots</span>
-  </div>
-)}
-{selectedTime && isOffPeakSlot(selectedTime) && (
-  <div style={{ padding:'0.5rem 0.7rem', marginBottom:'0.6rem', background:'#fffbeb', borderRadius:8, fontSize:'0.78rem', border:'1px solid #f59e0b', display:'flex', alignItems:'center', gap:'0.4rem' }}>
-    <span>⚠️</span>
-    <span style={{ color:'#92400e', fontWeight:600 }}>Early/late slot — R50 surcharge applies (before 09:00 or after 17:00)</span>
-  </div>
-)}
-              <div className="time-section"><h4>Morning</h4><div className="time-slots">{timeSlots.morning.map((time, index) => renderTimeSlot(time, index))}</div></div>
-              <div className="time-section"><h4>Afternoon</h4><div className="time-slots">{timeSlots.afternoon.map((time, index) => renderTimeSlot(time, index))}</div></div>
-            </div>
-          )}
-        </div>
+          {/* ── STEP 2: Date & Time ────────────────────────────────────── */}
+          {step === 2 && (
+            <div className="bp-section">
+              <h2 className="bp-section-title">Pick a Date & Time</h2>
 
-        <div className="booking-panel">
-          <div className="panel-header" onClick={() => togglePanel('employee')}>
-            <h3>Select Stylist</h3>
-            <span className={`dropdown-arrow ${collapsedPanels.employee ? 'collapsed' : ''}`}>▼</span>
-          </div>
-          {!collapsedPanels.employee && (
-            <div className="panel-content">
-              {loadingEmployees && <div style={{ color:'#9e7060', fontSize:'0.82rem' }}>Loading stylists...</div>}
-              {employeeError && <div style={{ color:'#c0392b', fontSize:'0.82rem' }}>{employeeError}</div>}
-              {!loadingEmployees && !employeeError && employees.map((emp, idx) => (
-                <div key={idx} className={`employee-item ${selectedEmployee === emp.name ? 'selected' : ''}`} onClick={() => setSelectedEmployee(emp.name)}>
-                  <span style={{ fontSize:'1.1rem' }}>👩‍💼</span>
-                  <div><div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{emp.name}</div>{emp.position && <div style={{ fontSize: '0.75rem', opacity: 0.75 }}>{emp.position}</div>}</div>
+              <div className="bp-date-nav-row">
+                <h3 className="bp-subsection" style={{ margin: 0 }}>Select Date</h3>
+                <div className="bp-date-nav-controls">
+                  <button type="button" className="bp-date-nav-btn" onClick={goToPrevDates}
+                    disabled={dateWindowStart <= earliestWindowStart}>
+                    ‹ Prev
+                  </button>
+                  <span className="bp-date-nav-label">
+                    {new Date(dateWindowStart + 'T00:00:00').toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })}
+                  </span>
+                  <button type="button" className="bp-date-nav-btn" onClick={goToNextDates}>
+                    Next ›
+                  </button>
                 </div>
-              ))}
-              {!loadingEmployees && !employeeError && employees.length === 0 && <div style={{ color:'#9e7060', fontSize:'0.82rem' }}>No stylists available</div>}
+              </div>
+              <div className="bp-date-scroll">
+                {Array.from({ length: DATE_WINDOW_SIZE }, (_, i) => {
+                  const iso  = addDays(dateWindowStart, i);
+                  const d    = new Date(iso + 'T00:00:00');
+                  const day  = d.toLocaleDateString('en-ZA', { weekday: 'short' });
+                  const date = d.getDate();
+                  const isSelected = iso === selectedDate;
+                  const closed = isDayClosed(iso);
+                  return (
+                    <button key={iso} disabled={closed}
+                      className={`bp-date-btn ${isSelected ? 'selected' : ''} ${closed ? 'disabled' : ''}`}
+                      onClick={() => { setSelectedDate(iso); setSelectedTime(''); }}>
+                      <span className="bp-date-day">{day}</span>
+                      <span className="bp-date-num">{date}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {selectedDate && (
+                <>
+                  <h3 className="bp-subsection">Select Time</h3>
+                  {isDayClosed(selectedDate) ? (
+                    <p className="bp-empty">We're closed on this day — please pick another date.</p>
+                  ) : fullyBooked ? (
+                    <p className="bp-empty">This date is fully booked — please pick another date.</p>
+                  ) : (
+                    <div className="bp-slots-grid">
+                      {daySlots.map(slot => {
+                        const taken = takenSlots.includes(slot);
+                        return (
+                          <button key={slot} disabled={taken}
+                            className={`bp-slot ${selectedTime === slot ? 'selected' : ''} ${taken ? 'taken' : ''}`}
+                            onClick={() => !taken && setSelectedTime(slot)}>
+                            {slot}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+
+              {selectedTime && isOffPeakSlot(selectedTime) && (
+                <div className="bp-offpeak-note">
+                  ⚠️ Early/late slot — a R50 surcharge applies for bookings before 09:00 or after 17:00.
+                </div>
+              )}
+
+              <div className="bp-nav-row">
+                <button className="bp-btn-outline" onClick={() => setStep(1)}>← Back</button>
+                {canProceed2 && (
+                  <button className="bp-btn-gold" onClick={() => setStep(3)}>Next: Your Details →</button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 3: Details ────────────────────────────────────────── */}
+          {step === 3 && (
+            <div className="bp-section">
+              <h2 className="bp-section-title">Your Details</h2>
+
+              <p className="bp-logged-in-note">✅ Booking as <strong>{user?.firstName} {user?.lastName}</strong> ({user?.email})</p>
+
+              <div className="bp-form-grid">
+                <div className="bp-field bp-field-full">
+                  <label>Special Requests (optional)</label>
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any notes for the technician…" rows={3} />
+                </div>
+              </div>
+
+              <div className="bp-nav-row">
+                <button className="bp-btn-outline" onClick={() => setStep(2)}>← Back</button>
+                <button className="bp-btn-gold" onClick={() => setStep(4)}>Next: Review →</button>
+              </div>
+            </div>
+          )}
+
+          {/* ── STEP 4: Review ─────────────────────────────────────────── */}
+          {step === 4 && (
+            <div className="bp-section">
+              <h2 className="bp-section-title">Review Your Booking</h2>
+
+              <div className="bp-confirm-card">
+                <div className="bp-confirm-row"><span>📅 Date</span><strong>{selectedDate}</strong></div>
+                <div className="bp-confirm-row"><span>🕐 Time</span><strong>{selectedTime}</strong></div>
+                <div className="bp-confirm-row"><span>👩‍💼 Staff</span><strong>{staff.find(s => s._id === selectedStaff)?.name || 'Any Available'}</strong></div>
+                <div className="bp-confirm-divider" />
+                {selectedSvcObjs.map(svc => (
+                  <div key={svc._id} className="bp-confirm-row">
+                    <span>{svc.name}</span>
+                    <strong>R{parseFloat(svc.price).toFixed(2)}</strong>
+                  </div>
+                ))}
+                <div className="bp-confirm-divider" />
+                <div className="bp-confirm-row bp-confirm-total">
+                  <span>Estimated Total</span>
+                  <strong>R{totalPrice.toFixed(2)}</strong>
+                </div>
+                {selectedTime && isOffPeakSlot(selectedTime) && (
+                  <div className="bp-offpeak-note">
+                    ⚠️ Early/late slot — a R50 surcharge applies for bookings before 09:00 or after 17:00.
+                  </div>
+                )}
+                <p className="bp-confirm-deposit">
+                  A deposit is required to confirm your booking. Final price and deposit are confirmed at checkout.
+                </p>
+              </div>
+
+              <div className="bp-form-grid">
+                <div className="bp-field bp-field-full">
+                  <label>Contact Number *</label>
+                  <input type="tel" value={contactNumber} onChange={e => setContactNumber(e.target.value)} placeholder="e.g. 071 234 5678" />
+                  {phoneError && <span className="bp-err">{phoneError}</span>}
+                </div>
+              </div>
+
+              {error && <div className="bp-error-msg">{error}</div>}
+
+              <div className="bp-nav-row">
+                <button className="bp-btn-outline" onClick={() => setStep(3)}>← Back</button>
+                <button className="bp-btn-gold" onClick={handleContinueToPayment} disabled={submitting}>
+                  {submitting ? 'Processing…' : 'Continue to Payment →'}
+                </button>
+              </div>
+              <p className="bp-terms">By continuing you agree to our cancellation policy. A non-refundable deposit is required to secure your appointment.</p>
             </div>
           )}
         </div>
-      </div>
-
-      <div className="booking-actions" style={{ position: 'relative', zIndex: 10 }}>
-        <button className="book-appointment-btn" onClick={handleBookAppointment} style={{ position: 'relative', zIndex: 10, pointerEvents: 'auto', cursor: 'pointer' }}>Book Appointment</button>
-      </div>
+      )}
 
       <div className="dashboard-navigation">
         <button onClick={handleLogout} className="logout-button">Sign Out</button>
@@ -602,36 +481,6 @@ function Dashboard() {
         )}
         <Link to="/" className="back-home-link">← Back to Home</Link>
       </div>
-    </div>
-  );
-}
-
-function ServiceCategory({ category, services, selectedServices, onSelect }) {
-  const [open, setOpen] = useState(true);
-  const hasSelected = services.some(s => selectedServices.includes(s.name));
-  const categoryIcons = { Manicure: '💅', Pedicure: '🦶', Eyelashes: '👁️', Extras: '✨' };
-
-  return (
-    <div style={{ marginBottom: '0.5rem' }}>
-      <div onClick={() => setOpen(prev => !prev)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.7rem', background: hasSelected ? 'linear-gradient(135deg, #3d1f15, #6b3528)' : 'linear-gradient(135deg, #fdf6f0, #fce8db)', borderRadius: '8px', cursor: 'pointer', border: '1px solid #e0ccc4', marginBottom: open ? '0.4rem' : 0, transition: 'all 0.2s ease' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <span style={{ fontSize: '1rem' }}>{categoryIcons[category] || '💄'}</span>
-          <span style={{ fontSize: '0.82rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: hasSelected ? '#ffe8d6' : '#3d1f15' }}>{category}</span>
-          {hasSelected && <span style={{ fontSize: '0.65rem', background: 'rgba(255,179,128,0.3)', color: '#ffb380', padding: '0.1rem 0.5rem', borderRadius: '20px', fontWeight: 600 }}>{services.filter(s => selectedServices.includes(s.name)).length} selected</span>}
-        </div>
-        <span style={{ fontSize: '0.7rem', color: hasSelected ? 'rgba(255,232,214,0.7)' : '#9e7060', transition: 'transform 0.2s', transform: open ? 'rotate(0deg)' : 'rotate(-90deg)', display: 'inline-block' }}>▼</span>
-      </div>
-      {open && (
-        <div style={{ paddingLeft: '0.3rem' }}>
-          {services.map((service, index) => (
-            <div key={index} className={`service-item ${selectedServices.includes(service.name) ? 'selected' : ''}`} onClick={() => onSelect(service)} style={{ marginBottom: '0.25rem' }}>
-              <span className="service-name">{service.name}</span>
-              <span className="service-duration">{service.duration} min</span>
-              <span className="service-price">R{(Number(service.price) || 0).toFixed(0)}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
