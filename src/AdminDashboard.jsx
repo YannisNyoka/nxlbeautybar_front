@@ -471,6 +471,8 @@ function AdminDashboard() {
   const [analyticsData,  setAnalyticsData]  = useState(null);
   const [analyticsRange, setAnalyticsRange] = useState('30');
   const [analyticsLoad,  setAnalyticsLoad]  = useState(false);
+  const [growthData,     setGrowthData]     = useState(null);
+  const [growthView,     setGrowthView]     = useState('week');
 
   // ── Inventory state ───────────────────────────────────────────────────
   const [inventory,    setInventory]    = useState(null);
@@ -486,8 +488,12 @@ function AdminDashboard() {
     const r = range || '30';
     setAnalyticsLoad(true);
     try {
-      const data = await apiRequest(`${API_BASE_URL}/analytics?range=${r}`);
+      const [data, growth] = await Promise.all([
+        apiRequest(`${API_BASE_URL}/analytics?range=${r}`),
+        apiRequest(`${API_BASE_URL}/analytics/growth`),
+      ]);
       setAnalyticsData(data.data);
+      setGrowthData(growth.data);
     } catch (e) { showToast(e.message, 'error'); }
     finally { setAnalyticsLoad(false); }
   }, [showToast]);
@@ -641,7 +647,10 @@ function AdminDashboard() {
   function computeReportMeta(apptList, payList) {
     const today=new Date();
     const sameDay=(d1,d2)=>d1.getFullYear()===d2.getFullYear()&&d1.getMonth()===d2.getMonth()&&d1.getDate()===d2.getDate();
-    const withinDays=(date,n)=>(today-new Date(date))/(1000*60*60*24)<n;
+    // Week starts on Monday; month starts on the 1st
+    const weekStart=new Date(today.getFullYear(),today.getMonth(),today.getDate()-((today.getDay()+6)%7));
+    const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
+    const since=(date,start)=>new Date(date)>=start&&new Date(date)<=today;
     setReportMeta({
       bookingsToday:    apptList.filter(a=>sameDay(new Date(a.date),today)).length,
       upcomingBookings: apptList.filter(a=>new Date(a.date)>=today).length,
@@ -649,8 +658,8 @@ function AdminDashboard() {
       noShows:          apptList.filter(a=>a.status==='no-show').length,
       unpaidCount:      apptList.filter(a=>a.paymentStatus==='unpaid').length,
       totalRevenueToday: payList.filter(p=>sameDay(new Date(p.createdAt),today)&&p.status==='paid').reduce((s,p)=>s+decimalToFloat(p.amount),0),
-      totalRevenueWeek:  payList.filter(p=>withinDays(p.createdAt,7)&&p.status==='paid').reduce((s,p)=>s+decimalToFloat(p.amount),0),
-      totalRevenueMonth: payList.filter(p=>withinDays(p.createdAt,30)&&p.status==='paid').reduce((s,p)=>s+decimalToFloat(p.amount),0),
+      totalRevenueWeek:  payList.filter(p=>since(p.createdAt,weekStart)&&p.status==='paid').reduce((s,p)=>s+decimalToFloat(p.amount),0),
+      totalRevenueMonth: payList.filter(p=>since(p.createdAt,monthStart)&&p.status==='paid').reduce((s,p)=>s+decimalToFloat(p.amount),0),
     });
   }
 
@@ -1426,8 +1435,8 @@ function AdminDashboard() {
       { icon:'🛒', label:'Total Orders',     value:shopStats.totalOrders,     color:'#f59e0b' },
       { icon:'⏳', label:'Pending Orders',   value:shopStats.pendingOrders,   color:shopStats.pendingOrders>0?'#f59e0b':'#10b981' },
       { icon:'📅', label:'Orders Today',     value:shopStats.todayOrders,     color:'#3b82f6' },
-      { icon:'💰', label:'Revenue (7 days)', value:`R${Number(shopStats.revenueWeek).toFixed(2)}`,  color:'#10b981' },
-      { icon:'📈', label:'Revenue (30 days)',value:`R${Number(shopStats.revenueMonth).toFixed(2)}`, color:'#6366f1' },
+      { icon:'💰', label:'Revenue (Week)', value:`R${Number(shopStats.revenueWeek).toFixed(2)}`,  color:'#10b981' },
+      { icon:'📈', label:'Revenue (Month)',value:`R${Number(shopStats.revenueMonth).toFixed(2)}`, color:'#6366f1' },
     ] : [];
     return (
       <div style={{display:'flex',flexDirection:'column',gap:'1.5rem'}}>
@@ -1607,6 +1616,74 @@ function AdminDashboard() {
 
         {!analyticsLoad && d && (
           <>
+            {/* Growth: week-over-week / month-over-month */}
+            {growthData && (() => {
+              const isWeek = growthView === 'week';
+              const isYear = growthView === 'year';
+              const unit = growthView;
+              const cmp = growthData[unit];
+              const trend = growthData[{ week:'weekly', month:'monthly', year:'yearly' }[unit]];
+              const prevName = `last ${unit}`;
+              const fmtDay = s => new Date(`${s}T00:00:00`).toLocaleDateString('en-ZA', { day:'numeric', month:'short' });
+              const trendLabel = p => isWeek ? fmtDay(p.start) : isYear ? p.start.slice(0, 4) : new Date(`${p.start}T00:00:00`).toLocaleDateString('en-ZA', { month:'short' });
+              const metrics = [
+                { key:'revenue',      label:'Revenue',       color:'#10b981', fmt:v => `R${Number(v).toFixed(0)}` },
+                { key:'bookings',     label:'Bookings',      color:'#3b82f6', fmt:v => v },
+                { key:'newCustomers', label:'New Customers', color:'#8b5cf6', fmt:v => v },
+              ];
+              const badge = g => g === null
+                ? <span style={{fontSize:'0.72rem',color:'#94a3b8'}}>no {prevName} data</span>
+                : <span style={{fontSize:'0.78rem',fontWeight:700,color:g>=0?'#059669':'#dc2626'}}>{g>=0?'▲':'▼'} {Math.abs(g)}%</span>;
+              return (
+                <section className="panel">
+                  <header>
+                    <h3>📈 Business Growth</h3>
+                    <div className="button-row">
+                      <button className={`btn ${isWeek?'primary':'ghost'}`} onClick={() => setGrowthView('week')}>Weekly</button>
+                      <button className={`btn ${growthView==='month'?'primary':'ghost'}`} onClick={() => setGrowthView('month')}>Monthly</button>
+                      <button className={`btn ${isYear?'primary':'ghost'}`} onClick={() => setGrowthView('year')}>Yearly</button>
+                    </div>
+                  </header>
+                  <p style={{margin:'0 0 1rem',fontSize:'0.75rem',color:'#94a3b8'}}>
+                    {isWeek ? 'This week (Mon–today)' : isYear ? 'This year (1 Jan–today)' : 'This month (1st–today)'} compared with the same stretch of {prevName}. Growth is shown against that like-for-like period.
+                  </p>
+                  <div className="grid grid-responsive" style={{marginBottom:'1.5rem'}}>
+                    {metrics.map(m => (
+                      <div key={m.key} style={{background:`${m.color}11`,border:`1px solid ${m.color}44`,borderRadius:'14px',padding:'1.25rem 1.5rem'}}>
+                        <p style={{margin:0,fontSize:'0.72rem',color:'#64748b',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.06em'}}>{m.label}</p>
+                        <h3 style={{margin:'0.2rem 0',fontSize:'1.6rem',fontWeight:800,color:m.color}}>{m.fmt(cmp.current[m.key])}</h3>
+                        <div>{badge(cmp.growth[m.key])}</div>
+                        <p style={{margin:'0.35rem 0 0',fontSize:'0.7rem',color:'#94a3b8'}}>
+                          {m.fmt(cmp.previous[m.key])} same point {prevName} · {m.fmt(cmp.previousFull[m.key])} full {unit}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))',gap:'1.5rem'}}>
+                    {metrics.map(m => {
+                      const max = Math.max(...trend.map(p => p[m.key]), 1);
+                      return (
+                        <div key={m.key} style={{background:'#f8fafc',borderRadius:'12px',padding:'1.25rem',border:'1px solid #e2e8f0'}}>
+                          <p style={{margin:'0 0 0.75rem',fontWeight:700,fontSize:'0.88rem',color:'#1e293b'}}>{m.label} · last {trend.length} {unit}s</p>
+                          <div style={{display:'flex',alignItems:'flex-end',gap:'6px',height:'110px'}}>
+                            {trend.map((p, i) => (
+                              <div key={p.start} title={`${trendLabel(p)}: ${m.fmt(p[m.key])}`} style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'flex-end',alignItems:'center',height:'100%'}}>
+                                <span style={{fontSize:'0.6rem',color:'#64748b'}}>{m.fmt(p[m.key])}</span>
+                                <div style={{width:'100%',height:`${Math.max(2,(p[m.key]/max)*80)}%`,background:m.color,opacity:i===trend.length-1?1:0.55,borderRadius:'3px 3px 0 0'}} />
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{display:'flex',gap:'6px',marginTop:'4px'}}>
+                            {trend.map(p => <span key={p.start} style={{flex:1,textAlign:'center',fontSize:'0.58rem',color:'#94a3b8'}}>{trendLabel(p)}</span>)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })()}
+
             {/* Services + Staff */}
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.5rem'}}>
               <section className="panel">
