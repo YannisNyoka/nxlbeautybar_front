@@ -76,7 +76,7 @@ function Dashboard() {
 
   // Step 2 — date/time
   const [selectedDate,  setSelectedDate]  = useState(addDays(todayISO(), 1));
-  const [dateWindowStart, setDateWindowStart] = useState(addDays(todayISO(), 1));
+  const [viewMonth, setViewMonth] = useState(addDays(todayISO(), 1).slice(0, 7) + '-01'); // first day of the month being viewed
   const [selectedTime,  setSelectedTime]  = useState('');
 
   // Step 3 — details
@@ -149,17 +149,28 @@ function Dashboard() {
     setSelectedServices(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]);
   };
 
-  // Date-scroll window navigation — lets the user page forward/backward
-  // through future dates instead of being stuck on a fixed 21-day range.
-  const DATE_WINDOW_SIZE = 21;
-  const earliestWindowStart = addDays(todayISO(), 1);
-  const goToPrevDates = () => {
-    setDateWindowStart(prev => {
-      const shifted = addDays(prev, -DATE_WINDOW_SIZE);
-      return shifted < earliestWindowStart ? earliestWindowStart : shifted;
-    });
+  // Date picker is paged by calendar month: only dates belonging to the viewed
+  // month are shown (starting from tomorrow in the current month).
+  const earliestDate = addDays(todayISO(), 1);
+  const earliestMonth = earliestDate.slice(0, 7) + '-01';
+  const monthDates = (() => {
+    const [y, m] = viewMonth.split('-').map(Number);
+    const daysInMonth = new Date(y, m, 0).getDate();
+    return Array.from({ length: daysInMonth }, (_, i) => `${y}-${pad2(m)}-${pad2(i + 1)}`)
+      .filter(iso => iso >= earliestDate);
+  })();
+  const shiftMonth = (delta) => {
+    const [y, m] = viewMonth.split('-').map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    const next = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-01`;
+    if (next < earliestMonth) return;
+    setViewMonth(next);
+    // A date picked in another month is no longer visible — clear it so the
+    // time slots below never belong to a date the customer can't see.
+    if (selectedDate && !selectedDate.startsWith(next.slice(0, 7))) { setSelectedDate(''); setSelectedTime(''); }
   };
-  const goToNextDates = () => setDateWindowStart(prev => addDays(prev, DATE_WINDOW_SIZE));
+  const goToPrevDates = () => shiftMonth(-1);
+  const goToNextDates = () => shiftMonth(1);
 
   const validateContactNumber = () => {
     const digits = contactNumber.replace(/\D/g, '');
@@ -331,11 +342,11 @@ function Dashboard() {
                 <h3 className="bp-subsection" style={{ margin: 0 }}>Select Date</h3>
                 <div className="bp-date-nav-controls">
                   <button type="button" className="bp-date-nav-btn" onClick={goToPrevDates}
-                    disabled={dateWindowStart <= earliestWindowStart}>
+                    disabled={viewMonth <= earliestMonth}>
                     ‹ Prev
                   </button>
                   <span className="bp-date-nav-label">
-                    {new Date(dateWindowStart + 'T00:00:00').toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })}
+                    {new Date(viewMonth + 'T00:00:00').toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })}
                   </span>
                   <button type="button" className="bp-date-nav-btn" onClick={goToNextDates}>
                     Next ›
@@ -343,8 +354,7 @@ function Dashboard() {
                 </div>
               </div>
               <div className="bp-date-scroll">
-                {Array.from({ length: DATE_WINDOW_SIZE }, (_, i) => {
-                  const iso  = addDays(dateWindowStart, i);
+                {monthDates.map(iso => {
                   const d    = new Date(iso + 'T00:00:00');
                   const day  = d.toLocaleDateString('en-ZA', { weekday: 'short' });
                   const date = d.getDate();
