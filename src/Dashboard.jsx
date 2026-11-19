@@ -30,6 +30,12 @@ function todayISO() { const d = new Date(); return `${d.getFullYear()}-${pad2(d.
 function addDays(iso, n) { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`; }
 function getDayKey(iso) { return DAY_KEYS[new Date(iso + 'T00:00:00').getDay()]; }
 function isOffPeakSlot(time) { if (!time) return false; const [h] = time.split(':').map(Number); return h < 9 || h >= 17; }
+// December only: bookings starting before 07:00 (06:00/06:30) carry a R100 surcharge; other off-peak slots stay R50.
+function offPeakSurcharge(dateISO, time) {
+  if (!isOffPeakSlot(time)) return 0;
+  const [h] = time.split(':').map(Number);
+  return dateISO?.slice(5, 7) === '12' && h < 7 ? 100 : 50;
+}
 function formatDateTime(dateISO, time) {
   if (!dateISO || !time) return '';
   const d = new Date(dateISO + 'T00:00:00');
@@ -138,10 +144,16 @@ function Dashboard() {
   const filteredServices = filterCat === 'all' ? services : services.filter(s => normalizeCat(s.category) === filterCat);
   const selectedSvcObjs  = selectedServices.map(id => services.find(s => s._id === id)).filter(Boolean);
   const totalDuration    = selectedSvcObjs.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
-  const totalPrice       = selectedSvcObjs.reduce((sum, s) => sum + parseFloat(s.price || 0), 0);
+  const servicesTotal    = selectedSvcObjs.reduce((sum, s) => sum + parseFloat(s.price || 0), 0);
+  const surcharge        = offPeakSurcharge(selectedDate, selectedTime);
+  const totalPrice       = servicesTotal + surcharge; // what the customer is charged (server recalculates)
 
   // Real operating hours from /salon-settings, not a hardcoded guess.
-  const getHoursForDate = (iso) => (weeklyHours && weeklyHours[getDayKey(iso)]) || DEFAULT_DAY_HOURS;
+  // December: open days run 06:00–20:00 (mirrors getHoursForDate on the server).
+  const getHoursForDate = (iso) => {
+    const hours = (weeklyHours && weeklyHours[getDayKey(iso)]) || DEFAULT_DAY_HOURS;
+    return !hours.closed && iso.slice(5, 7) === '12' ? { ...hours, open: '06:00', close: '20:00' } : hours;
+  };
   const isDayClosed = (iso) => getHoursForDate(iso).closed;
   const daySlots = selectedDate ? generateTimeSlots(getHoursForDate(selectedDate).open, getHoursForDate(selectedDate).close) : [];
 
@@ -294,7 +306,7 @@ function Dashboard() {
                 <div className="bp-selection-bar">
                   <div>
                     <p className="bp-sel-label">{selectedServices.length} service{selectedServices.length > 1 ? 's' : ''} selected</p>
-                    <p className="bp-sel-meta">{totalDuration} min · R{totalPrice.toFixed(2)}</p>
+                    <p className="bp-sel-meta">{totalDuration} min · R{servicesTotal.toFixed(2)}</p>
                   </div>
                   <button className="bp-btn-gold" onClick={() => setStep(1)}>Next: Choose Staff →</button>
                 </div>
@@ -397,7 +409,9 @@ function Dashboard() {
 
               {selectedTime && isOffPeakSlot(selectedTime) && (
                 <div className="bp-offpeak-note">
-                  ⚠️ Early/late slot — a R50 surcharge applies for bookings before 09:00 or after 17:00.
+                  {offPeakSurcharge(selectedDate, selectedTime) === 100
+                    ? '⚠️ Early slot — a R100 surcharge is added to your total for bookings starting before 07:00.'
+                    : '⚠️ Early/late slot — a R50 surcharge is added to your total for bookings before 09:00 or after 17:00.'}
                 </div>
               )}
 
@@ -447,14 +461,22 @@ function Dashboard() {
                     <strong>R{parseFloat(svc.price).toFixed(2)}</strong>
                   </div>
                 ))}
+                {surcharge > 0 && (
+                  <div className="bp-confirm-row">
+                    <span>Early/late slot surcharge</span>
+                    <strong>R{surcharge.toFixed(2)}</strong>
+                  </div>
+                )}
                 <div className="bp-confirm-divider" />
                 <div className="bp-confirm-row bp-confirm-total">
-                  <span>Estimated Total</span>
+                  <span>Total</span>
                   <strong>R{totalPrice.toFixed(2)}</strong>
                 </div>
                 {selectedTime && isOffPeakSlot(selectedTime) && (
                   <div className="bp-offpeak-note">
-                    ⚠️ Early/late slot — a R50 surcharge applies for bookings before 09:00 or after 17:00.
+                    {offPeakSurcharge(selectedDate, selectedTime) === 100
+                      ? '⚠️ Early slot — a R100 surcharge is added to your total for bookings starting before 07:00.'
+                      : '⚠️ Early/late slot — a R50 surcharge is added to your total for bookings before 09:00 or after 17:00.'}
                   </div>
                 )}
                 <p className="bp-confirm-deposit">
